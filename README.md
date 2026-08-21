@@ -1,6 +1,6 @@
 # WorkflowHQ
 
-WorkflowHQ is a focused project and task workspace for planning work, moving tasks through a Kanban flow, and keeping recent progress visible.
+**Plan the work. See what’s moving. Ship what matters.** WorkflowHQ brings projects, tasks, deadlines, and delivery progress into one clear workspace.
 
 ## Live Demo
 
@@ -8,7 +8,7 @@ Public deployment will be added after the local production preview is approved.
 
 ## Overview
 
-The application combines a React TypeScript interface with an Express REST API and PostgreSQL. Users get a private workspace with projects, task search and filtering, workflow statistics, and a lightweight activity history.
+The application combines a React TypeScript interface with an Express REST API and PostgreSQL. Users get a private editorial-style workspace with projects, a Kanban flow, a searchable task register, a deadline calendar, workflow statistics, and lightweight activity history.
 
 ## Product Preview
 
@@ -25,11 +25,11 @@ The application combines a React TypeScript interface with an Express REST API a
 
 ## Tech Stack
 
-| Layer | Technologies |
-| --- | --- |
-| Frontend | React, TypeScript, Vite, Axios, CSS |
-| Backend | Node.js, Express, Zod, JWT, bcrypt |
-| Database | PostgreSQL, raw SQL migrations |
+| Layer    | Technologies                          |
+| -------- | ------------------------------------- |
+| Frontend | React, TypeScript, Vite, Axios, CSS   |
+| Backend  | Node.js, Express, Zod, JWT, bcrypt    |
+| Database | PostgreSQL, raw SQL migrations        |
 | Delivery | Docker Compose, Nginx, GitHub Actions |
 
 ## Key Features
@@ -37,6 +37,8 @@ The application combines a React TypeScript interface with an Express REST API a
 - Short-lived access tokens with rotating refresh tokens in `HttpOnly` cookies
 - User-owned projects and tasks with authorization enforced in every query
 - Kanban board with drag-and-drop and accessible status controls
+- Searchable all-task register with inline status editing
+- Month calendar with project filtering, upcoming work, and date-aware task creation
 - Bounded pagination, search, project/priority filters, and sorting
 - Dashboard counts for status, priority, and overdue work
 - Focused activity history for important task and project changes
@@ -63,6 +65,16 @@ docker compose up --build
 ```
 
 Open `http://localhost:4173`. The API health route is `http://localhost:5000/api/health`.
+
+To load a presentation-ready workspace with four projects, eighteen tasks, and recent activity:
+
+```bash
+docker compose run --rm backend npm run seed:demo
+```
+
+Sign in with `demo@workflowhq.local` and `WorkflowHQ!2026`. The command resets only this local
+demo account, so it is safe to rerun when you want a clean showcase workspace. Override the
+`DEMO_USER_*` environment variables if you need different local credentials.
 
 For development without Docker, use Node.js 22.13+ and PostgreSQL 16+:
 

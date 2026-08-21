@@ -1,6 +1,6 @@
-import { ChevronDown, Plus, RefreshCw } from "lucide-react";
+import { ChevronDown, FolderKanban, Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useOutletContext, useSearchParams } from "react-router-dom";
+import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
@@ -155,13 +155,17 @@ function Workspace() {
     <main className="workspace-page">
       <header className="workspace-header">
         <div>
-          <span className="overline">{selectedProject?.name || "Personal workspace"}</span>
-          <h1>
-            {greeting()}, {user.name.split(" ")[0]}.
-          </h1>
-          <p>Here’s what is moving and what needs your attention.</p>
+          <span className="overline">{selectedProject?.name || "Workflow / 02"}</span>
+          <h1>Workflow board.</h1>
+          <p>
+            {greeting()}, {user.name.split(" ")[0]}. Move work from ready to shipped without losing
+            the delivery signal.
+          </p>
         </div>
         <div className="header-actions">
+          <Link className="button secondary" to="/projects">
+            <FolderKanban size={16} /> Projects
+          </Link>
           <button
             className="button secondary refresh-button"
             disabled={isLoading}
@@ -181,9 +185,9 @@ function Workspace() {
       <section className="board-section">
         <div className="board-title-row">
           <div>
-            <span className="overline">Current workflow</span>
+            <span className="overline">Current workflow / live</span>
             <h2>
-              Task board <ChevronDown size={17} />
+              Delivery board <ChevronDown size={17} />
             </h2>
           </div>
           <span className="task-count">{tasks.length} visible tasks</span>

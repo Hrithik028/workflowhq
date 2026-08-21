@@ -92,4 +92,20 @@ describe("authentication API", () => {
     expect(logout.status).toBe(204);
     expect(afterLogout.status).toBe(401);
   });
+
+  it("consumes each refresh token only once", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      name: "Single Use Session",
+      email: "single-use@example.com",
+      password: "secure-password"
+    });
+    const originalCookie = registration.headers["set-cookie"][0].split(";")[0];
+
+    const firstRefresh = await request(app).post("/api/auth/refresh").set("Cookie", originalCookie);
+    const replay = await request(app).post("/api/auth/refresh").set("Cookie", originalCookie);
+
+    expect(firstRefresh.status).toBe(200);
+    expect(replay.status).toBe(401);
+    expect(replay.body.error.code).toBe("REFRESH_INVALID");
+  });
 });

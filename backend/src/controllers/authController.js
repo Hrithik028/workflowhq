@@ -121,22 +121,30 @@ const refresh = async (req, res, next) => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    const result = await client.query(
-      `SELECT rs.id AS session_id, u.id, u.name, u.email, u.role, u.created_at
-       FROM refresh_sessions rs
-       JOIN users u ON u.id = rs.user_id
-       WHERE rs.token_hash = $1 AND rs.expires_at > CURRENT_TIMESTAMP`,
+    const sessionResult = await client.query(
+      `DELETE FROM refresh_sessions
+       WHERE token_hash = $1 AND expires_at > CURRENT_TIMESTAMP
+       RETURNING user_id`,
       [hashRefreshToken(token)]
     );
 
-    if (result.rows.length === 0) {
+    if (sessionResult.rows.length === 0) {
       await client.query("ROLLBACK");
       clearRefreshCookie(res, config);
       return next(new AppError(401, "REFRESH_INVALID", "Your session is no longer valid."));
     }
 
-    const user = result.rows[0];
-    await client.query("DELETE FROM refresh_sessions WHERE id = $1", [user.session_id]);
+    const userResult = await client.query(
+      "SELECT id, name, email, role, created_at FROM users WHERE id = $1",
+      [sessionResult.rows[0].user_id]
+    );
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      clearRefreshCookie(res, config);
+      return next(new AppError(401, "REFRESH_INVALID", "Your session is no longer valid."));
+    }
+
+    const user = userResult.rows[0];
     const nextRefreshToken = await createRefreshSession(client, user.id, req);
     await client.query("COMMIT");
 

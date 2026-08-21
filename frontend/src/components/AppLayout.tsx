@@ -1,4 +1,15 @@
-import { FolderKanban, LayoutDashboard, LogOut, Sparkles } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  Columns3,
+  FileText,
+  Inbox,
+  LayoutDashboard,
+  ListTodo,
+  LogOut,
+  PieChart,
+  Settings
+} from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import type { User } from "../types";
@@ -21,29 +32,54 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
     <div className="product-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="brand-mark">W</span>
+          <span className="sidebar-wordmark brand-mark" aria-label="WorkflowHQ">
+            <b aria-hidden="true">W</b>
+            <b aria-hidden="true">HQ</b>
+          </span>
           <div>
             <strong>WorkflowHQ</strong>
-            <span>Personal workspace</span>
+            <span>Work management / 01</span>
           </div>
         </div>
 
         <nav className="sidebar-nav" aria-label="Main navigation">
-          <NavLink aria-label="Workspace" to="/app">
+          <NavLink aria-label="Overview" to="/app">
             <LayoutDashboard size={18} strokeWidth={2} />
-            <span>Workspace</span>
+            <span>Overview</span>
           </NavLink>
-          <NavLink aria-label="Projects" to="/projects">
-            <FolderKanban size={18} strokeWidth={2} />
-            <span>Projects</span>
+          <NavLink aria-label="Workflow" to="/workflow">
+            <Columns3 size={18} strokeWidth={2} />
+            <span>Workflow</span>
+          </NavLink>
+          <NavLink aria-label="Calendar" to="/calendar">
+            <CalendarDays size={18} strokeWidth={2} />
+            <span>Calendar</span>
+          </NavLink>
+          <NavLink aria-label="Tasks" to="/tasks">
+            <ListTodo size={18} strokeWidth={2} />
+            <span>Tasks</span>
+          </NavLink>
+          <NavLink aria-label="Content" to="/content">
+            <FileText size={18} strokeWidth={2} />
+            <span>Content</span>
+          </NavLink>
+          <NavLink aria-label="Analytics" to="/analytics">
+            <BarChart3 size={18} strokeWidth={2} />
+            <span>Analytics</span>
+          </NavLink>
+          <NavLink aria-label="Reports" to="/reports">
+            <PieChart size={18} strokeWidth={2} />
+            <span>Reports</span>
+          </NavLink>
+          <NavLink aria-label="Inbox" to="/inbox">
+            <Inbox size={18} strokeWidth={2} />
+            <span>Inbox</span>
+          </NavLink>
+          <NavLink aria-label="Settings" to="/settings">
+            <Settings size={18} strokeWidth={2} />
+            <span>Settings</span>
           </NavLink>
         </nav>
-
-        <div className="sidebar-focus-card">
-          <Sparkles size={18} />
-          <strong>Focus for today</strong>
-          <p>Move one important task to done before adding more work.</p>
-        </div>
 
         <div className="sidebar-account">
           <span className="avatar">{user.name.charAt(0).toUpperCase()}</span>

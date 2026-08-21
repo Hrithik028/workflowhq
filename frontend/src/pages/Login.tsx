@@ -43,7 +43,7 @@ function Login({ onDemo, onSuccess }: LoginProps) {
     <AuthLayout
       eyebrow="Welcome back"
       title="Sign in to your workspace"
-      copy="Pick up where you left off and keep the important work moving."
+      copy="WorkflowHQ brings projects, tasks, deadlines, and delivery progress into one clear workspace."
     >
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>

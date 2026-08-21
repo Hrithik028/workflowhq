@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { Project, Task, TaskInput, TaskPriority, TaskStatus } from "../types";
 
 interface TaskModalProps {
+  initialDueDate?: string | null;
   initialStatus?: TaskStatus;
   isSaving: boolean;
   onClose: () => void;
@@ -13,13 +14,13 @@ interface TaskModalProps {
   task: Task | null;
 }
 
-const emptyTask = (status: TaskStatus): TaskInput => ({
+const emptyTask = (status: TaskStatus, dueDate: string | null = null): TaskInput => ({
   title: "",
   description: "",
   projectId: null,
   status,
   priority: "medium",
-  dueDate: null
+  dueDate
 });
 
 const taskToInput = (task: Task): TaskInput => ({
@@ -32,6 +33,7 @@ const taskToInput = (task: Task): TaskInput => ({
 });
 
 function TaskModal({
+  initialDueDate = null,
   initialStatus = "todo",
   isSaving,
   onClose,
@@ -41,7 +43,7 @@ function TaskModal({
   task
 }: TaskModalProps) {
   const [form, setForm] = useState<TaskInput>(() =>
-    task ? taskToInput(task) : emptyTask(initialStatus)
+    task ? taskToInput(task) : emptyTask(initialStatus, initialDueDate)
   );
   const [error, setError] = useState("");
 
@@ -129,9 +131,9 @@ function TaskModal({
                 onChange={(event) => setForm({ ...form, status: event.target.value as TaskStatus })}
                 value={form.status}
               >
-                <option value="todo">To do</option>
-                <option value="in_progress">In progress</option>
-                <option value="completed">Completed</option>
+                <option value="todo">Ready</option>
+                <option value="in_progress">In motion</option>
+                <option value="completed">Shipped</option>
               </select>
             </label>
           </div>

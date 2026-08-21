@@ -9,9 +9,9 @@ const columns: Array<{
   icon: typeof Circle;
   accent: string;
 }> = [
-  { status: "todo", title: "To do", icon: Circle, accent: "slate" },
-  { status: "in_progress", title: "In progress", icon: Timer, accent: "amber" },
-  { status: "completed", title: "Completed", icon: CircleCheck, accent: "green" }
+  { status: "todo", title: "Ready", icon: Circle, accent: "slate" },
+  { status: "in_progress", title: "In motion", icon: Timer, accent: "amber" },
+  { status: "completed", title: "Shipped", icon: CircleCheck, accent: "green" }
 ];
 
 interface KanbanBoardProps {

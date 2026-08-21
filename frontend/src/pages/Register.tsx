@@ -36,7 +36,7 @@ function Register({ onDemo, onSuccess }: RegisterProps) {
     <AuthLayout
       eyebrow="Start with clarity"
       title="Create your workspace"
-      copy="Set up a focused home for projects, tasks, and the work that matters now."
+      copy="Bring projects, tasks, deadlines, and delivery progress into one clear workspace."
     >
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>

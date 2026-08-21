@@ -20,9 +20,9 @@ export const formatRelativeTime = (value: string) => {
 };
 
 export const statusLabel: Record<TaskStatus, string> = {
-  todo: "To do",
-  in_progress: "In progress",
-  completed: "Completed"
+  todo: "Ready",
+  in_progress: "In motion",
+  completed: "Shipped"
 };
 
 export const activityCopy = (activity: Activity) => {

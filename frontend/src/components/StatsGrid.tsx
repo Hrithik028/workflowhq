@@ -4,9 +4,9 @@ import type { TaskStats } from "../types";
 
 const stats = [
   { key: "totalTasks", label: "Total tasks", icon: ListTodo, tone: "navy" },
-  { key: "todoTasks", label: "To do", icon: CircleDot, tone: "slate" },
-  { key: "inProgressTasks", label: "In progress", icon: Timer, tone: "amber" },
-  { key: "completedTasks", label: "Completed", icon: CheckCircle2, tone: "green" },
+  { key: "todoTasks", label: "Ready", icon: CircleDot, tone: "slate" },
+  { key: "inProgressTasks", label: "In motion", icon: Timer, tone: "amber" },
+  { key: "completedTasks", label: "Shipped", icon: CheckCircle2, tone: "green" },
   { key: "highPriorityTasks", label: "High priority", icon: Zap, tone: "coral" },
   { key: "overdueTasks", label: "Overdue", icon: AlertCircle, tone: "red" }
 ] as const;

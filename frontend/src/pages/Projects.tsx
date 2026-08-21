@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, FolderKanban, Plus } from "lucide-react";
+import { ArrowUpRight, FolderKanban, PencilLine, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
@@ -78,13 +78,20 @@ function Projects() {
     }
   };
 
+  const totalTasks = projects.reduce((sum, project) => sum + project.taskCount, 0);
+  const completedTasks = projects.reduce((sum, project) => sum + project.completedCount, 0);
+  const activeProjects = projects.filter(
+    (project) => project.taskCount === 0 || project.completedCount < project.taskCount
+  ).length;
+  const overallProgress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
   return (
-    <main className="workspace-page projects-page">
-      <header className="workspace-header">
+    <main className="workspace-page projects-page editorial-page">
+      <header className="workspace-header editorial-page-header">
         <div>
-          <span className="overline">Portfolio view</span>
-          <h1>Projects</h1>
-          <p>Keep outcomes, progress, and the work behind them connected.</p>
+          <span className="overline">Workflow / project index</span>
+          <h1>Project register.</h1>
+          <p>Define each outcome, group the work, and track progress without losing the signal.</p>
         </div>
         <button
           className="button primary"
@@ -99,13 +106,30 @@ function Projects() {
       </header>
 
       {error ? <p className="form-alert error">{error}</p> : null}
-      {isLoading ? (
-        <div className="project-grid loading">
-          <span />
-          <span />
-          <span />
+
+      <section className="project-register-summary" aria-label="Project portfolio summary">
+        <div>
+          <span>Projects</span>
+          <strong>{projects.length}</strong>
         </div>
-      ) : null}
+        <div>
+          <span>Active</span>
+          <strong>{activeProjects}</strong>
+        </div>
+        <div>
+          <span>Tasks shipped</span>
+          <strong>
+            {completedTasks}
+            <small>/{totalTasks}</small>
+          </strong>
+        </div>
+        <div className="signal">
+          <span>Portfolio progress</span>
+          <strong>{overallProgress}%</strong>
+        </div>
+      </section>
+
+      {isLoading ? <p className="register-loading">Updating project register…</p> : null}
       {!isLoading && projects.length === 0 ? (
         <div className="workspace-empty">
           <FolderKanban size={28} />
@@ -116,50 +140,66 @@ function Projects() {
           </button>
         </div>
       ) : null}
-      <section className="project-grid">
-        {projects.map((project, index) => {
-          const percent = project.taskCount
-            ? Math.round((project.completedCount / project.taskCount) * 100)
-            : 0;
-          return (
-            <article className="project-card" key={project.id}>
-              <header>
-                <span className={`project-symbol tone-${(index % 3) + 1}`}>
-                  <FolderKanban size={19} />
-                </span>
+
+      {projects.length > 0 ? (
+        <section className="project-register" aria-label="Projects">
+          <header className="project-register-head" aria-hidden="true">
+            <span>Ref.</span>
+            <span>Project / outcome</span>
+            <span>Delivery</span>
+            <span>State</span>
+            <span>Board</span>
+            <span>Edit</span>
+          </header>
+          {projects.map((project, index) => {
+            const percent = project.taskCount
+              ? Math.round((project.completedCount / project.taskCount) * 100)
+              : 0;
+            const state =
+              project.taskCount === 0 ? "Planning" : percent === 100 ? "Shipped" : "Active";
+            return (
+              <article className="project-register-row" key={project.id}>
+                <span className="project-reference">PRJ-{String(index + 1).padStart(3, "0")}</span>
+                <div className="project-register-name">
+                  <strong>{project.name}</strong>
+                  <span>{project.description || "Outcome not defined yet."}</span>
+                </div>
+                <div className="project-register-progress">
+                  <div>
+                    <span>
+                      {project.completedCount}/{project.taskCount} tasks
+                    </span>
+                    <strong>{percent}%</strong>
+                  </div>
+                  <div className="progress-track">
+                    <span style={{ width: `${percent}%` }} />
+                  </div>
+                </div>
+                <span className={`project-register-state ${state.toLowerCase()}`}>{state}</span>
+                <Link
+                  className="project-register-open"
+                  to={`/app?project=${project.id}`}
+                  aria-label={`Open ${project.name} board`}
+                >
+                  <span>Open</span>
+                  <ArrowUpRight size={16} />
+                </Link>
                 <button
+                  className="project-register-edit"
                   type="button"
+                  aria-label={`Edit ${project.name}`}
                   onClick={() => {
                     setEditing(project);
                     setIsModalOpen(true);
                   }}
                 >
-                  Edit
+                  <PencilLine size={15} />
                 </button>
-              </header>
-              <h2>{project.name}</h2>
-              <p>{project.description || "No description yet."}</p>
-              <div className="project-progress-label">
-                <span>
-                  {project.completedCount} of {project.taskCount} complete
-                </span>
-                <strong>{percent}%</strong>
-              </div>
-              <div className="progress-track">
-                <span style={{ width: `${percent}%` }} />
-              </div>
-              <footer>
-                <span>
-                  <CheckCircle2 size={15} /> {project.completedCount} completed
-                </span>
-                <Link to={`/app?project=${project.id}`}>
-                  Open board <ArrowRight size={15} />
-                </Link>
-              </footer>
-            </article>
-          );
-        })}
-      </section>
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
 
       {isModalOpen ? (
         <ProjectModal

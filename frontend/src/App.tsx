@@ -4,10 +4,14 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { authApi } from "./api/auth";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Calendar from "./pages/Calendar";
 import Login from "./pages/Login";
+import Overview from "./pages/Overview";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
+import Tasks from "./pages/Tasks";
 import Workspace from "./pages/Workspace";
+import { Analytics, Content, Inbox, Reports, Settings } from "./pages/WorkspaceSections";
 import type { Session, User } from "./types";
 
 const demoUser: User = {
@@ -90,8 +94,16 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/app" element={<Workspace />} />
+        <Route path="/app" element={<Overview />} />
+        <Route path="/workflow" element={<Workspace />} />
         <Route path="/projects" element={<Projects />} />
+        <Route path="/tasks" element={<Tasks />} />
+        <Route path="/calendar" element={<Calendar />} />
+        <Route path="/content" element={<Content />} />
+        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/inbox" element={<Inbox />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate replace to={authenticated ? "/app" : "/login"} />} />
     </Routes>
