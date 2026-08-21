@@ -1,0 +1,57 @@
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: workflowhq
+      POSTGRES_USER: workflowhq
+      POSTGRES_PASSWORD: local_workflowhq_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workflowhq -d workflowhq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - workflowhq_postgres:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DATABASE_URL: postgresql://workflowhq:local_workflowhq_password@database:5432/workflowhq
+      DATABASE_SSL: "false"
+      JWT_SECRET: local_only_secret_change_before_any_public_deployment
+      CORS_ORIGIN: http://localhost:4173
+      COOKIE_SAME_SITE: lax
+      TRUST_PROXY: "false"
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:5000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 4s
+      retries: 8
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:5000/api
+        VITE_DEMO_MODE: "false"
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "4173:80"
+
+volumes:
+  workflowhq_postgres:

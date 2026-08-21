@@ -1,11 +1,21 @@
 {
-  "name": "task-workflow-platform-backend",
+  "name": "workflowhq-backend",
   "version": "1.0.0",
-  "description": "Backend API for the Full-Stack Task Workflow Platform portfolio project.",
+  "description": "REST API for WorkflowHQ.",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "migrate": "node src/db/migrate.js",
+    "seed:demo": "node src/db/seedDemo.js",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../.prettierignore",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "express",
@@ -17,13 +27,23 @@
   "license": "MIT",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.12.0"
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "eslint": "^10.8.1",
+    "globals": "^17.4.0",
+    "nodemon": "^3.1.10",
+    "pg-mem": "^3.0.5",
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4",
+    "vitest": "^4.1.11"
   }
 }

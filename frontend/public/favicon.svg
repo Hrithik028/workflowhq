@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="4" fill="#f3f0e8" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="3.25" fill="none" stroke="#111111" stroke-width="1.5" />
+  <text x="32" y="29" text-anchor="middle" fill="#111111" font-family="Arial Black, Arial, sans-serif" font-size="25" font-weight="900">W</text>
+  <text x="32" y="52" text-anchor="middle" fill="#ff4d00" font-family="Arial Black, Arial, sans-serif" font-size="21" font-weight="900">HQ</text>
+</svg>
