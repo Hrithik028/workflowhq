@@ -1,80 +1,144 @@
+const { createHash, randomBytes } = require("node:crypto");
+
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const pool = require("../config/db");
+const { AppError } = require("../lib/errors");
 
-const createToken = (user) =>
+const hashRefreshToken = (token) => createHash("sha256").update(token).digest("hex");
+
+const createAccessToken = (user, config) =>
   jwt.sign(
     {
-      id: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      type: "access"
     },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    config.jwtSecret,
+    { subject: String(user.id), expiresIn: config.accessTokenTtl }
   );
 
+const refreshCookieOptions = (config) => ({
+  httpOnly: true,
+  secure: config.secureCookies,
+  sameSite: config.cookieSameSite,
+  path: "/api/auth",
+  maxAge: config.refreshTokenDays * 24 * 60 * 60 * 1000
+});
+
+const clearRefreshCookie = (res, config) => {
+  const options = refreshCookieOptions(config);
+  delete options.maxAge;
+  res.clearCookie(config.refreshCookieName, options);
+};
+
+const createRefreshSession = async (db, userId, req) => {
+  const config = req.app.locals.config;
+  const token = randomBytes(48).toString("base64url");
+  const expiresAt = new Date(Date.now() + config.refreshTokenDays * 24 * 60 * 60 * 1000);
+
+  await db.query(
+    `INSERT INTO refresh_sessions (user_id, token_hash, user_agent, expires_at)
+     VALUES ($1, $2, $3, $4)`,
+    [userId, hashRefreshToken(token), req.get("user-agent")?.slice(0, 500) || null, expiresAt]
+  );
+
+  return token;
+};
+
+const sendSession = (res, req, status, user, refreshToken) => {
+  const config = req.app.locals.config;
+  res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions(config));
+  return res.status(status).json({
+    data: {
+      accessToken: createAccessToken(user, config),
+      user
+    }
+  });
+};
+
 const register = async (req, res, next) => {
-  const { name, email, password } = req.body;
-  const normalizedName = name?.trim();
-  const normalizedEmail = email?.trim().toLowerCase();
-
-  if (!normalizedName || !normalizedEmail || !password) {
-    return res.status(400).json({ message: "Name, email, and password are required." });
-  }
-
-  if (password.length < 6) {
-    return res.status(400).json({ message: "Password must be at least 6 characters long." });
-  }
+  const db = req.app.locals.db;
+  const client = await db.connect();
 
   try {
-    const existingUser = await pool.query("SELECT id FROM users WHERE email = $1", [normalizedEmail]);
-
-    if (existingUser.rows.length > 0) {
-      return res.status(409).json({ message: "An account with this email already exists." });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      `INSERT INTO users (name, email, password_hash, role)
-       VALUES ($1, $2, $3, $4)
+    await client.query("BEGIN");
+    const passwordHash = await bcrypt.hash(req.body.password, 12);
+    const result = await client.query(
+      `INSERT INTO users (name, email, password_hash)
+       VALUES ($1, $2, $3)
        RETURNING id, name, email, role, created_at`,
-      [normalizedName, normalizedEmail, passwordHash, "user"]
+      [req.body.name, req.body.email, passwordHash]
     );
-
     const user = result.rows[0];
-    const token = createToken(user);
-
-    return res.status(201).json({
-      message: "Registration successful.",
-      token,
-      user
-    });
+    const refreshToken = await createRefreshSession(client, user.id, req);
+    await client.query("COMMIT");
+    return sendSession(res, req, 201, user, refreshToken);
   } catch (error) {
+    await client.query("ROLLBACK");
+    if (error.code === "23505") {
+      return next(
+        new AppError(409, "EMAIL_ALREADY_EXISTS", "An account with this email already exists.")
+      );
+    }
     return next(error);
+  } finally {
+    client.release();
   }
 };
 
 const login = async (req, res, next) => {
-  const { email, password } = req.body;
+  const db = req.app.locals.db;
+  const result = await db.query("SELECT * FROM users WHERE email = $1", [req.body.email]);
+  const user = result.rows[0];
+  const passwordMatches = user
+    ? await bcrypt.compare(req.body.password, user.password_hash)
+    : false;
 
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required." });
+  if (!user || !passwordMatches) {
+    return next(new AppError(401, "INVALID_CREDENTIALS", "Invalid email or password."));
   }
 
+  const safeUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    created_at: user.created_at
+  };
+  const refreshToken = await createRefreshSession(db, user.id, req);
+  return sendSession(res, req, 200, safeUser, refreshToken);
+};
+
+const refresh = async (req, res, next) => {
+  const config = req.app.locals.config;
+  const token = req.cookies[config.refreshCookieName];
+  if (!token) {
+    return next(new AppError(401, "REFRESH_REQUIRED", "A valid session is required."));
+  }
+
+  const db = req.app.locals.db;
+  const client = await db.connect();
   try {
-    const result = await pool.query("SELECT * FROM users WHERE email = $1", [email.trim().toLowerCase()]);
+    await client.query("BEGIN");
+    const result = await client.query(
+      `SELECT rs.id AS session_id, u.id, u.name, u.email, u.role, u.created_at
+       FROM refresh_sessions rs
+       JOIN users u ON u.id = rs.user_id
+       WHERE rs.token_hash = $1 AND rs.expires_at > CURRENT_TIMESTAMP`,
+      [hashRefreshToken(token)]
+    );
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ message: "Invalid email or password." });
+      await client.query("ROLLBACK");
+      clearRefreshCookie(res, config);
+      return next(new AppError(401, "REFRESH_INVALID", "Your session is no longer valid."));
     }
 
     const user = result.rows[0];
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid email or password." });
-    }
+    await client.query("DELETE FROM refresh_sessions WHERE id = $1", [user.session_id]);
+    const nextRefreshToken = await createRefreshSession(client, user.id, req);
+    await client.query("COMMIT");
 
     const safeUser = {
       id: user.id,
@@ -83,36 +147,36 @@ const login = async (req, res, next) => {
       role: user.role,
       created_at: user.created_at
     };
-
-    return res.status(200).json({
-      message: "Login successful.",
-      token: createToken(safeUser),
-      user: safeUser
-    });
+    return sendSession(res, req, 200, safeUser, nextRefreshToken);
   } catch (error) {
+    await client.query("ROLLBACK");
     return next(error);
+  } finally {
+    client.release();
   }
+};
+
+const logout = async (req, res) => {
+  const config = req.app.locals.config;
+  const token = req.cookies[config.refreshCookieName];
+  if (token) {
+    await req.app.locals.db.query("DELETE FROM refresh_sessions WHERE token_hash = $1", [
+      hashRefreshToken(token)
+    ]);
+  }
+  clearRefreshCookie(res, config);
+  return res.status(204).send();
 };
 
 const getCurrentUser = async (req, res, next) => {
-  try {
-    const result = await pool.query(
-      "SELECT id, name, email, role, created_at FROM users WHERE id = $1",
-      [req.user.id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "User not found." });
-    }
-
-    return res.status(200).json(result.rows[0]);
-  } catch (error) {
-    return next(error);
+  const result = await req.app.locals.db.query(
+    "SELECT id, name, email, role, created_at FROM users WHERE id = $1",
+    [req.user.id]
+  );
+  if (result.rows.length === 0) {
+    return next(new AppError(404, "USER_NOT_FOUND", "User not found."));
   }
+  return res.status(200).json({ data: result.rows[0] });
 };
 
-module.exports = {
-  register,
-  login,
-  getCurrentUser
-};
+module.exports = { getCurrentUser, login, logout, refresh, register };

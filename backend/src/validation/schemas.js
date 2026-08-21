@@ -1,0 +1,96 @@
+const { z } = require("zod");
+
+const statusSchema = z.enum(["todo", "in_progress", "completed"]);
+const prioritySchema = z.enum(["low", "medium", "high"]);
+const idSchema = z.coerce.number().int().positive();
+const optionalDate = z
+  .union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date in YYYY-MM-DD format."),
+    z.literal(""),
+    z.null()
+  ])
+  .transform((value) => value || null);
+
+const authSchemas = {
+  register: z
+    .object({
+      name: z.string().trim().min(2).max(100),
+      email: z
+        .string()
+        .trim()
+        .email()
+        .max(255)
+        .transform((value) => value.toLowerCase()),
+      password: z.string().min(8).max(72)
+    })
+    .strict(),
+  login: z
+    .object({
+      email: z
+        .string()
+        .trim()
+        .email()
+        .max(255)
+        .transform((value) => value.toLowerCase()),
+      password: z.string().min(1).max(72)
+    })
+    .strict()
+};
+
+const projectSchemas = {
+  params: z.object({ id: idSchema }),
+  create: z
+    .object({
+      name: z.string().trim().min(1).max(120),
+      description: z.string().trim().max(1000).default("")
+    })
+    .strict(),
+  update: z
+    .object({
+      name: z.string().trim().min(1).max(120),
+      description: z.string().trim().max(1000).default("")
+    })
+    .strict()
+};
+
+const taskBodySchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(5000).default(""),
+    status: statusSchema.default("todo"),
+    priority: prioritySchema.default("medium"),
+    dueDate: optionalDate.optional().default(null),
+    projectId: z.union([idSchema, z.null()]).optional().default(null)
+  })
+  .strict();
+
+const taskSchemas = {
+  params: z.object({ id: idSchema }),
+  create: taskBodySchema,
+  update: taskBodySchema,
+  list: z.object({
+    page: z.coerce.number().int().positive().default(1),
+    limit: z.coerce.number().int().positive().max(100).default(20),
+    status: statusSchema.optional(),
+    priority: prioritySchema.optional(),
+    projectId: idSchema.optional(),
+    search: z.string().trim().max(100).optional(),
+    sort: z
+      .enum(["updated_at", "created_at", "due_date", "title", "priority"])
+      .default("updated_at"),
+    order: z.enum(["asc", "desc"]).default("desc")
+  })
+};
+
+const activitySchemas = {
+  list: z.object({
+    limit: z.coerce.number().int().positive().max(50).default(12)
+  })
+};
+
+module.exports = {
+  activitySchemas,
+  authSchemas,
+  projectSchemas,
+  taskSchemas
+};

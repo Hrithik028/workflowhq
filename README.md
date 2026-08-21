@@ -1,426 +1,111 @@
-# Full-Stack Task Workflow Platform
+# WorkflowHQ
 
-A full-stack task manager built for my software engineering portfolio. It covers the core product flow from account creation to authenticated task CRUD, filtering, and dashboard stats.
+WorkflowHQ is a focused project and task workspace for planning work, moving tasks through a Kanban flow, and keeping recent progress visible.
 
-## What This Project Does
+## Live Demo
 
-After signing up or logging in, a user can:
+Public deployment will be added after the local production preview is approved.
 
-- create tasks
-- update task title, description, status, priority, and due date
-- filter tasks by status and priority
-- delete tasks
-- view task stats in a dashboard
+## Overview
 
-Each user can only access their own tasks.
+The application combines a React TypeScript interface with an Express REST API and PostgreSQL. Users get a private workspace with projects, task search and filtering, workflow statistics, and a lightweight activity history.
+
+## Product Preview
+
+![WorkflowHQ task board](screenshots/dashboard.png)
+
+<details>
+<summary>More screens</summary>
+
+![WorkflowHQ projects](screenshots/projects.png)
+
+![WorkflowHQ task editor](screenshots/task-modal.png)
+
+</details>
 
 ## Tech Stack
 
-### Frontend
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React, TypeScript, Vite, Axios, CSS |
+| Backend | Node.js, Express, Zod, JWT, bcrypt |
+| Database | PostgreSQL, raw SQL migrations |
+| Delivery | Docker Compose, Nginx, GitHub Actions |
 
-- React
-- Vite
-- JavaScript
-- CSS
-- Axios
-- React Router
+## Key Features
 
-### Backend
+- Short-lived access tokens with rotating refresh tokens in `HttpOnly` cookies
+- User-owned projects and tasks with authorization enforced in every query
+- Kanban board with drag-and-drop and accessible status controls
+- Bounded pagination, search, project/priority filters, and sorting
+- Dashboard counts for status, priority, and overdue work
+- Focused activity history for important task and project changes
+- Responsive loading, empty, success, and error states
+- Integration tests for authentication, authorization, validation, CRUD, and queries
 
-- Node.js
-- Express.js
-- PostgreSQL
-- JWT
-- bcrypt
-- dotenv
-- cors
-- pg
+## Architecture
 
-## Features
-
-- user registration
-- user login
-- hashed passwords with bcrypt
-- JWT authentication
-- protected frontend routes
-- protected backend routes
-- token stored in `localStorage`
-- logout support
-- task CRUD
-- task filtering
-- task statistics
-- responsive dashboard UI
-
-## Folder Structure
-
-```text
-task-workflow-platform/
-|-- backend/
-|   |-- src/
-|   |   |-- config/
-|   |   |   `-- db.js
-|   |   |-- middleware/
-|   |   |   `-- authMiddleware.js
-|   |   |-- routes/
-|   |   |   |-- authRoutes.js
-|   |   |   `-- taskRoutes.js
-|   |   |-- controllers/
-|   |   |   |-- authController.js
-|   |   |   `-- taskController.js
-|   |   |-- schema.sql
-|   |   `-- server.js
-|   |-- package.json
-|   `-- .env.example
-|-- frontend/
-|   |-- src/
-|   |   |-- api/
-|   |   |   `-- api.js
-|   |   |-- components/
-|   |   |   |-- Navbar.jsx
-|   |   |   |-- ProtectedRoute.jsx
-|   |   |   |-- TaskCard.jsx
-|   |   |   `-- TaskForm.jsx
-|   |   |-- pages/
-|   |   |   |-- Login.jsx
-|   |   |   |-- Register.jsx
-|   |   |   `-- Dashboard.jsx
-|   |   |-- App.jsx
-|   |   |-- main.jsx
-|   |   `-- styles.css
-|   |-- index.html
-|   |-- package.json
-|   |-- vite.config.js
-|   `-- .env.example
-|-- screenshots/
-`-- README.md
+```mermaid
+flowchart LR
+  UI["React + TypeScript\nVite frontend"] -->|"HTTPS + REST"| API["Node.js + Express\nvalidation, auth, business logic"]
+  API -->|"parameterised SQL"| DB[(PostgreSQL)]
+  API -.->|"HttpOnly refresh cookie"| UI
+  CI["GitHub Actions"] -->|"lint, test, type-check, build"| UI
+  CI --> API
 ```
 
-## Database Schema
+## Running Locally
 
-Run the SQL file at `backend/src/schema.sql`.
-
-### `users`
-
-- `id`
-- `name`
-- `email`
-- `password_hash`
-- `role`
-- `created_at`
-
-### `tasks`
-
-- `id`
-- `user_id`
-- `title`
-- `description`
-- `status`
-- `priority`
-- `due_date`
-- `created_at`
-- `updated_at`
-
-### Allowed values
-
-Status:
-
-- `todo`
-- `in_progress`
-- `completed`
-
-Priority:
-
-- `low`
-- `medium`
-- `high`
-
-## API Routes
-
-### Auth
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-
-### Tasks
-
-- `GET /api/tasks`
-- `POST /api/tasks`
-- `GET /api/tasks/:id`
-- `PUT /api/tasks/:id`
-- `DELETE /api/tasks/:id`
-- `GET /api/tasks/stats`
-
-## API Testing Examples
-
-Use this header for protected routes:
-
-```http
-Authorization: Bearer <your_jwt_token>
-```
-
-### Register
-
-Request:
-
-```json
-{
-  "name": "Hrithik Jadhav",
-  "email": "hrithik@example.com",
-  "password": "securepass123"
-}
-```
-
-Response:
-
-```json
-{
-  "message": "Registration successful.",
-  "token": "<jwt_token>",
-  "user": {
-    "id": 1,
-    "name": "Hrithik Jadhav",
-    "email": "hrithik@example.com",
-    "role": "user",
-    "created_at": "2026-06-15T08:00:00.000Z"
-  }
-}
-```
-
-### Login
-
-Request:
-
-```json
-{
-  "email": "hrithik@example.com",
-  "password": "securepass123"
-}
-```
-
-Response:
-
-```json
-{
-  "message": "Login successful.",
-  "token": "<jwt_token>",
-  "user": {
-    "id": 1,
-    "name": "Hrithik Jadhav",
-    "email": "hrithik@example.com",
-    "role": "user",
-    "created_at": "2026-06-15T08:00:00.000Z"
-  }
-}
-```
-
-### Create Task
-
-Request:
-
-```json
-{
-  "title": "Build dashboard cards",
-  "description": "Show total, completed, in-progress, and high-priority counts.",
-  "status": "in_progress",
-  "priority": "high",
-  "due_date": "2026-06-20"
-}
-```
-
-Response:
-
-```json
-{
-  "message": "Task created successfully.",
-  "task": {
-    "id": 4,
-    "user_id": 1,
-    "title": "Build dashboard cards",
-    "description": "Show total, completed, in-progress, and high-priority counts.",
-    "status": "in_progress",
-    "priority": "high",
-    "due_date": "2026-06-20T00:00:00.000Z",
-    "created_at": "2026-06-15T08:10:00.000Z",
-    "updated_at": "2026-06-15T08:10:00.000Z"
-  }
-}
-```
-
-### Get Tasks
-
-Example request:
-
-```http
-GET /api/tasks?status=in_progress&priority=high
-```
-
-Response:
-
-```json
-[
-  {
-    "id": 4,
-    "user_id": 1,
-    "title": "Build dashboard cards",
-    "description": "Show total, completed, in-progress, and high-priority counts.",
-    "status": "in_progress",
-    "priority": "high",
-    "due_date": "2026-06-20T00:00:00.000Z",
-    "created_at": "2026-06-15T08:10:00.000Z",
-    "updated_at": "2026-06-15T08:10:00.000Z"
-  }
-]
-```
-
-### Update Task
-
-Example request:
-
-```http
-PUT /api/tasks/4
-```
-
-```json
-{
-  "title": "Build dashboard cards",
-  "description": "Finalize responsive stat cards and loading states.",
-  "status": "completed",
-  "priority": "high",
-  "due_date": "2026-06-20"
-}
-```
-
-Response:
-
-```json
-{
-  "message": "Task updated successfully.",
-  "task": {
-    "id": 4,
-    "user_id": 1,
-    "title": "Build dashboard cards",
-    "description": "Finalize responsive stat cards and loading states.",
-    "status": "completed",
-    "priority": "high",
-    "due_date": "2026-06-20T00:00:00.000Z",
-    "created_at": "2026-06-15T08:10:00.000Z",
-    "updated_at": "2026-06-15T08:22:00.000Z"
-  }
-}
-```
-
-### Delete Task
-
-Example request:
-
-```http
-DELETE /api/tasks/4
-```
-
-Response:
-
-```json
-{
-  "message": "Task deleted successfully."
-}
-```
-
-### Get Task Stats
-
-Example request:
-
-```http
-GET /api/tasks/stats
-```
-
-Response:
-
-```json
-{
-  "total_tasks": 8,
-  "completed_tasks": 3,
-  "in_progress_tasks": 2,
-  "todo_tasks": 3,
-  "high_priority_tasks": 2
-}
-```
-
-## Local Setup
-
-### 1. Clone the repo
+The simplest path starts the frontend, API, and PostgreSQL together:
 
 ```bash
-git clone <your-repo-url>
-cd task-workflow-platform
+docker compose up --build
 ```
 
-### 2. Set up the backend
+Open `http://localhost:4173`. The API health route is `http://localhost:5000/api/health`.
+
+For development without Docker, use Node.js 22.13+ and PostgreSQL 16+:
 
 ```bash
+# backend
 cd backend
-npm install
-```
-
-Create a `backend/.env` file from `backend/.env.example`:
-
-```env
-PORT=5000
-DATABASE_URL=postgresql://postgres:password@localhost:5432/task_workflow_platform
-JWT_SECRET=replace_with_a_long_random_secret
-CORS_ORIGIN=http://localhost:5173
-```
-
-### 3. Set up PostgreSQL
-
-Create a database named `task_workflow_platform`, then run:
-
-```bash
-psql -U postgres -d task_workflow_platform -f src/schema.sql
-```
-
-### 4. Start the backend
-
-```bash
+copy .env.example .env
+npm ci
+npm run migrate
 npm run dev
-```
 
-The backend will run on `http://localhost:5000`.
-
-### 5. Set up the frontend
-
-Open a new terminal:
-
-```bash
+# frontend, in a second terminal
 cd frontend
-npm install
-```
-
-Create a `frontend/.env` file from `frontend/.env.example`:
-
-```env
-VITE_API_BASE_URL=http://localhost:5000/api
-```
-
-### 6. Start the frontend
-
-```bash
+copy .env.example .env
+npm ci
 npm run dev
 ```
 
-The frontend will run on `http://localhost:5173`.
+The frontend development server runs at `http://localhost:5173`.
 
-## Notes For Local Testing
+## Testing
 
-- register a user first
-- log in to get a token
-- the frontend stores the token in `localStorage`
-- `/api/tasks` and `/api/tasks/stats` require authentication
+```bash
+cd backend && npm test
+cd frontend && npm run typecheck && npm test && npm run build
+```
 
-## Possible Next Improvements
+Backend tests use an isolated PostgreSQL-compatible database and exercise the HTTP API. The frontend tests cover protected routing and core task interactions.
 
-- add validation with a library like Zod or React Hook Form
-- add tests for auth and task routes
-- add pagination or search
-- add refresh tokens or cookie-based auth
-- add the optional AI task breakdown feature after the core app is fully deployed and stable
+## Deployment
+
+Both applications are containerised. Production requires a managed PostgreSQL database, HTTPS, a long random `JWT_SECRET`, the deployed frontend origin in `CORS_ORIGIN`, and `Secure` cross-site cookies when the frontend and API use different sites. Database TLS is controlled explicitly with `DATABASE_SSL`, and certificate verification remains enabled by default.
+
+## Engineering Decisions
+
+- Raw SQL keeps ownership rules and indexing decisions visible and interview-friendly.
+- Refresh tokens are hashed in PostgreSQL and rotated instead of being exposed to JavaScript.
+- Native drag-and-drop is paired with a status selector so task movement stays reliable on touch and keyboard workflows.
+- A 100-item maximum page size prevents unbounded task responses.
+- One CI workflow verifies both applications and runs migrations against PostgreSQL.
+
+## Future Improvements
+
+- Deploy the approved build and add verified live URLs and screenshots.
+- Add password reset and session-management controls.
+- Consider AI task breakdown only after the deployed core flow is stable.
