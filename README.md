@@ -12,14 +12,38 @@ The application combines a React TypeScript interface with an Express REST API a
 
 ## Product Preview
 
-![WorkflowHQ task board](screenshots/dashboard.png)
+![WorkflowHQ overview](screenshots/dashboard.png)
 
 <details>
-<summary>More screens</summary>
+<summary>Explore the full interface</summary>
+
+### Sign in
+
+![WorkflowHQ login](screenshots/login.png)
+
+### Workflow board
+
+![WorkflowHQ workflow board](screenshots/workflow.png)
+
+### Projects
 
 ![WorkflowHQ projects](screenshots/projects.png)
 
+### Calendar
+
+![WorkflowHQ delivery calendar](screenshots/calendar.png)
+
+### Tasks
+
+![WorkflowHQ task register](screenshots/tasks.png)
+
+### Task editor
+
 ![WorkflowHQ task editor](screenshots/task-modal.png)
+
+### Mobile overview
+
+![WorkflowHQ mobile workspace](screenshots/mobile-workspace.png)
 
 </details>
 
