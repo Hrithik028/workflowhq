@@ -10,7 +10,9 @@ const { AppError } = require("./lib/errors");
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 const { requestLogger } = require("./middleware/requestLogger");
 const activityRoutes = require("./routes/activityRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 const authRoutes = require("./routes/authRoutes");
+const githubIntegrationRoutes = require("./routes/githubIntegrationRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 
@@ -66,6 +68,8 @@ const createApp = ({ db = pool, config = loadConfig() } = {}) => {
   app.use("/api/auth/register", authLimiter);
   app.use("/api/auth/login", authLimiter);
   app.use("/api/auth", authRoutes);
+  app.use("/api/admin", adminRoutes);
+  app.use("/api/github", githubIntegrationRoutes);
   app.use("/api/projects", projectRoutes);
   app.use("/api/tasks", taskRoutes);
   app.use("/api/activity", activityRoutes);
