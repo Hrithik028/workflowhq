@@ -4,6 +4,7 @@ const permissionKeys = [
   "projects.create",
   "projects.edit",
   "projects.delete",
+  "projects.members",
   "tasks.create",
   "tasks.edit",
   "tasks.delete",

@@ -1,11 +1,8 @@
 import {
   CalendarDays,
-  CheckCircle2,
   ChevronDown,
   Eye,
   FolderKanban,
-  GitBranch,
-  Github,
   ListFilter,
   MoreHorizontal,
   Plus,
@@ -21,9 +18,10 @@ import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
 import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
-import { engineeringMetaFor, progressFor } from "../demo/engineeringMeta";
+import { progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, Task, TaskInput } from "../types";
+import { initialsFor } from "../utils/format";
 
 type BoardStage = "backlog" | "progress" | "review" | "released";
 
@@ -41,8 +39,6 @@ const stageMeta = [
 ];
 
 function EngineeringCard({ task }: { task: Task }) {
-  const meta = engineeringMetaFor(task);
-  const stage = stageFor(task);
   return (
     <Link className="engineering-card" to={`/tasks/${task.id}`}>
       <div className="engineering-card-top">
@@ -51,23 +47,8 @@ function EngineeringCard({ task }: { task: Task }) {
       </div>
       <strong>{task.title}</strong>
       <div className="engineering-card-signal">
-        <span className="mini-avatar">{meta.initials}</span>
-        {stage === "backlog" ? (
-          <span>
-            <GitBranch size={13} /> {meta.branch}
-          </span>
-        ) : null}
-        {stage === "progress" ? (
-          <span>
-            <Github size={13} /> CI {meta.checksFailed ? "failing" : "running"}
-          </span>
-        ) : null}
-        {stage === "review" ? <span className="pr-link">PR #{meta.pullRequest}</span> : null}
-        {stage === "released" ? (
-          <span className="deploy-ok">
-            <CheckCircle2 size={13} /> Deployed to {meta.environment}
-          </span>
-        ) : null}
+        <span className="mini-avatar">{initialsFor(task.assigneeName)}</span>
+        <span>{task.assigneeName || "Unassigned"}</span>
       </div>
       <footer>
         <span>
@@ -278,11 +259,6 @@ function WorkspaceEngineering() {
         <span className="low">
           ■ Low&nbsp;&nbsp;{tasks.filter((task) => task.priority === "low").length}
         </span>
-        <span>
-          CI status&nbsp;&nbsp;●{" "}
-          {tasks.filter((task) => !engineeringMetaFor(task).checksFailed).length}
-        </span>
-        <span>Last updated&nbsp;&nbsp;1 min ago</span>
       </footer>
 
       <button
@@ -294,6 +270,7 @@ function WorkspaceEngineering() {
       </button>
       {isModalOpen ? (
         <TaskModal
+          client={client}
           isSaving={isSaving}
           onClose={() => setIsModalOpen(false)}
           onDelete={async () => undefined}

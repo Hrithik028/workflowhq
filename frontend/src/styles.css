@@ -764,6 +764,12 @@ p {
   color: #9f3f3f;
 }
 
+.form-alert.notice {
+  border: 1px solid #cfe0d8;
+  background: #f2f8f4;
+  color: #3c6b52;
+}
+
 .or-divider {
   display: flex;
   align-items: center;

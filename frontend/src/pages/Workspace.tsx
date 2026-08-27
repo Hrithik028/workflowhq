@@ -140,7 +140,8 @@ function Workspace() {
         startDate: task.startDate,
         dueDate: task.dueDate,
         taskType: task.taskType,
-        parentId: task.parentId
+        parentId: task.parentId,
+        assigneeId: task.assigneeId
       });
       setNotice({ tone: "success", message: `Moved “${task.title}”.` });
       await loadWorkspace();
@@ -238,6 +239,7 @@ function Workspace() {
 
       {isTaskModalOpen ? (
         <TaskModal
+          client={client}
           initialStatus={newTaskStatus}
           isSaving={isSaving}
           onClose={() => {

@@ -5,6 +5,7 @@ const permissions = z
     "projects.create": z.boolean(),
     "projects.edit": z.boolean(),
     "projects.delete": z.boolean(),
+    "projects.members": z.boolean(),
     "tasks.create": z.boolean(),
     "tasks.edit": z.boolean(),
     "tasks.delete": z.boolean(),

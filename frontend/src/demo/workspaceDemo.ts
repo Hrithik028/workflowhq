@@ -2,16 +2,21 @@ import type {
   Activity,
   Project,
   ProjectInput,
+  ProjectMember,
+  ProjectRole,
   Task,
   TaskInput,
   TaskQuery,
   TaskStats,
   WorkspaceClient
 } from "../types";
+import { demoCredentials } from "./credentials";
 
 const now = new Date();
 const isoMinutesAgo = (minutes: number) => new Date(now.getTime() - minutes * 60_000).toISOString();
 const isoDaysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+
+const DEMO_USER = { id: 1, name: "WorkflowHQ Demo", email: demoCredentials.email };
 
 let projects: Project[] = [
   {
@@ -22,6 +27,7 @@ let projects: Project[] = [
     description: "Coordinate the final work for the WorkflowHQ public launch.",
     taskCount: 4,
     completedCount: 1,
+    myRole: "owner",
     createdAt: isoDaysAgo(18),
     updatedAt: isoMinutesAgo(8)
   },
@@ -33,6 +39,7 @@ let projects: Project[] = [
     description: "Refine the new-user journey across small screens.",
     taskCount: 3,
     completedCount: 1,
+    myRole: "owner",
     createdAt: isoDaysAgo(12),
     updatedAt: isoDaysAgo(1)
   },
@@ -44,6 +51,7 @@ let projects: Project[] = [
     description: "Recurring engineering and release readiness work.",
     taskCount: 2,
     completedCount: 1,
+    myRole: "owner",
     createdAt: isoDaysAgo(30),
     updatedAt: isoDaysAgo(3)
   }
@@ -68,6 +76,9 @@ let tasks: Task[] = [
     priority: "high",
     startDate: "2026-08-18",
     dueDate: "2026-08-24",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(5),
     updatedAt: isoMinutesAgo(18)
   },
@@ -89,6 +100,9 @@ let tasks: Task[] = [
     priority: "medium",
     startDate: "2026-08-21",
     dueDate: "2026-08-27",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(4),
     updatedAt: isoDaysAgo(1)
   },
@@ -110,6 +124,9 @@ let tasks: Task[] = [
     priority: "low",
     startDate: "2026-08-23",
     dueDate: "2026-08-29",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(3),
     updatedAt: isoDaysAgo(2)
   },
@@ -131,6 +148,9 @@ let tasks: Task[] = [
     priority: "high",
     startDate: "2026-08-16",
     dueDate: "2026-08-22",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(6),
     updatedAt: isoMinutesAgo(8)
   },
@@ -152,6 +172,9 @@ let tasks: Task[] = [
     priority: "medium",
     startDate: "2026-08-19",
     dueDate: "2026-08-25",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(8),
     updatedAt: isoMinutesAgo(45)
   },
@@ -173,6 +196,9 @@ let tasks: Task[] = [
     priority: "medium",
     startDate: "2026-08-20",
     dueDate: "2026-08-26",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(7),
     updatedAt: isoDaysAgo(1)
   },
@@ -194,6 +220,9 @@ let tasks: Task[] = [
     priority: "high",
     startDate: "2026-08-13",
     dueDate: "2026-08-20",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(11),
     updatedAt: isoMinutesAgo(32)
   },
@@ -215,6 +244,9 @@ let tasks: Task[] = [
     priority: "medium",
     startDate: "2026-08-04",
     dueDate: "2026-08-18",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(14),
     updatedAt: isoDaysAgo(2)
   },
@@ -236,6 +268,9 @@ let tasks: Task[] = [
     priority: "low",
     startDate: "2026-08-01",
     dueDate: "2026-08-17",
+    assigneeId: null,
+    assigneeName: null,
+    assigneeEmail: null,
     createdAt: isoDaysAgo(16),
     updatedAt: isoDaysAgo(3)
   }
@@ -280,10 +315,34 @@ let activities: Activity[] = [
   }
 ];
 
+// Every demo project starts out owned solely by the demo user. Members added
+// through addMember land here too, so the assignee picker and member list stay
+// realistic without needing a second fake demo collaborator baked into the fixtures.
+const membersByProject: Record<number, ProjectMember[]> = Object.fromEntries(
+  projects.map((project) => [
+    project.id,
+    [
+      {
+        userId: DEMO_USER.id,
+        name: DEMO_USER.name,
+        email: DEMO_USER.email,
+        role: "owner" as ProjectRole,
+        addedAt: project.createdAt
+      }
+    ]
+  ])
+);
+let nextMemberUserId = 1000;
+
 const delay = () => new Promise((resolve) => setTimeout(resolve, 120));
 const nextTaskId = () => Math.max(0, ...tasks.map((task) => task.id)) + 1;
 const nextProjectId = () => Math.max(0, ...projects.map((project) => project.id)) + 1;
 const nextActivityId = () => Math.max(0, ...activities.map((activity) => activity.id)) + 1;
+
+const findMember = (projectId: number | null, userId: number | null): ProjectMember | null => {
+  if (projectId == null || userId == null) return null;
+  return (membersByProject[projectId] || []).find((member) => member.userId === userId) || null;
+};
 
 const addActivity = (activity: Omit<Activity, "id" | "createdAt">) => {
   activities = [
@@ -334,10 +393,20 @@ export const demoWorkspaceApi: WorkspaceClient = {
       ...input,
       taskCount: 0,
       completedCount: 0,
+      myRole: "owner",
       createdAt: timestamp,
       updatedAt: timestamp
     };
     projects = [project, ...projects];
+    membersByProject[project.id] = [
+      {
+        userId: DEMO_USER.id,
+        name: DEMO_USER.name,
+        email: DEMO_USER.email,
+        role: "owner",
+        addedAt: timestamp
+      }
+    ];
     addActivity({
       action: "project_created",
       entityType: "project",
@@ -365,9 +434,18 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const project = projects.find((item) => item.id === id);
     if (!project) throw new Error("Project not found.");
     projects = projects.filter((item) => item.id !== id);
+    delete membersByProject[id];
     tasks = tasks.map((task) =>
       task.projectId === id
-        ? { ...task, projectId: null, projectName: null, projectKey: null }
+        ? {
+            ...task,
+            projectId: null,
+            projectName: null,
+            projectKey: null,
+            assigneeId: null,
+            assigneeName: null,
+            assigneeEmail: null
+          }
         : task
     );
     refreshHierarchyMetadata();
@@ -420,11 +498,15 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const timestamp = new Date().toISOString();
     const project = projects.find((item) => item.id === input.projectId);
+    const assignee = findMember(input.projectId, input.assigneeId);
     const id = nextTaskId();
     const task: Task = {
       id,
       userId: 1,
       ...input,
+      assigneeId: assignee?.userId ?? null,
+      assigneeName: assignee?.name ?? null,
+      assigneeEmail: assignee?.email ?? null,
       projectName: project?.name || null,
       projectKey: project?.key || null,
       issueKey: `${project?.key || "INB"}-${id}`,
@@ -454,7 +536,11 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const previousStatus = task.status;
     const previousPriority = task.priority;
     const project = projects.find((item) => item.id === input.projectId);
+    const assignee = findMember(input.projectId, input.assigneeId);
     Object.assign(task, input, {
+      assigneeId: assignee?.userId ?? null,
+      assigneeName: assignee?.name ?? null,
+      assigneeEmail: assignee?.email ?? null,
       projectName: project?.name || null,
       projectKey: project?.key || null,
       updatedAt: new Date().toISOString()
@@ -528,5 +614,67 @@ export const demoWorkspaceApi: WorkspaceClient = {
   async getActivity(limit = 12) {
     await delay();
     return activities.slice(0, limit).map((activity) => ({ ...activity }));
+  },
+
+  async listMembers(projectId: number) {
+    await delay();
+    return (membersByProject[projectId] || []).map((member) => ({ ...member }));
+  },
+
+  async addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }) {
+    await delay();
+    const email = input.email.trim().toLowerCase();
+    const members = membersByProject[projectId] || [];
+    if (members.some((member) => member.email.toLowerCase() === email)) {
+      throw new Error("This user is already a member of the project.");
+    }
+    const namePart = email.split("@")[0].replace(/[._-]+/g, " ").trim();
+    const name =
+      namePart
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ") || "New teammate";
+    const member: ProjectMember = {
+      userId: nextMemberUserId++,
+      name,
+      email,
+      role: input.role,
+      addedAt: new Date().toISOString()
+    };
+    membersByProject[projectId] = [...members, member];
+  },
+
+  async updateMemberRole(projectId: number, userId: number, role: ProjectRole) {
+    await delay();
+    const members = membersByProject[projectId] || [];
+    const member = members.find((item) => item.userId === userId);
+    if (!member) throw new Error("This user is not a member of the project.");
+    if (member.role === "owner" && role !== "owner") {
+      const owners = members.filter((item) => item.role === "owner").length;
+      if (owners <= 1) throw new Error("A project must keep at least one owner.");
+    }
+    membersByProject[projectId] = members.map((item) =>
+      item.userId === userId ? { ...item, role } : item
+    );
+  },
+
+  async removeMember(projectId: number, userId: number) {
+    await delay();
+    const members = membersByProject[projectId] || [];
+    const member = members.find((item) => item.userId === userId);
+    if (!member) throw new Error("This user is not a member of the project.");
+    if (member.role === "owner") {
+      const owners = members.filter((item) => item.role === "owner").length;
+      if (owners <= 1) {
+        throw new Error("Promote another member to owner before removing the last owner.");
+      }
+    }
+    membersByProject[projectId] = members.filter((item) => item.userId !== userId);
+    tasks = tasks.map((task) =>
+      task.projectId === projectId && task.assigneeId === userId
+        ? { ...task, assigneeId: null, assigneeName: null, assigneeEmail: null }
+        : task
+    );
   }
 };

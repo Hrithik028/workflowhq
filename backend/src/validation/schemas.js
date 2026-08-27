@@ -73,7 +73,8 @@ const taskBodySchema = z
     dueDate: optionalDate.optional().default(null),
     projectId: z.union([idSchema, z.null()]).optional().default(null),
     taskType: taskTypeSchema.default("task"),
-    parentId: z.union([idSchema, z.null()]).optional().default(null)
+    parentId: z.union([idSchema, z.null()]).optional().default(null),
+    assigneeId: z.union([idSchema, z.null()]).optional().default(null)
   })
   .strict()
   .refine((value) => !value.startDate || !value.dueDate || value.startDate <= value.dueDate, {
@@ -105,9 +106,33 @@ const activitySchemas = {
   })
 };
 
+const memberEmailSchema = z
+  .string()
+  .trim()
+  .email()
+  .max(255)
+  .transform((value) => value.toLowerCase());
+
+const projectMemberSchemas = {
+  params: z.object({ id: idSchema }),
+  memberParams: z.object({ id: idSchema, userId: idSchema }),
+  add: z
+    .object({
+      email: memberEmailSchema,
+      role: z.enum(["editor", "viewer"])
+    })
+    .strict(),
+  updateRole: z
+    .object({
+      role: z.enum(["owner", "editor", "viewer"])
+    })
+    .strict()
+};
+
 module.exports = {
   activitySchemas,
   authSchemas,
+  projectMemberSchemas,
   projectSchemas,
   taskSchemas
 };

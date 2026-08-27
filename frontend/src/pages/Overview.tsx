@@ -259,6 +259,7 @@ function Overview() {
 
       {isModalOpen ? (
         <TaskModal
+          client={client}
           initialStatus={newTaskStatus}
           isSaving={isSaving}
           onClose={() => {

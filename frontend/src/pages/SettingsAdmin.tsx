@@ -32,6 +32,7 @@ const fullPermissions: PermissionSet = {
   "projects.create": true,
   "projects.edit": true,
   "projects.delete": true,
+  "projects.members": true,
   "tasks.create": true,
   "tasks.edit": true,
   "tasks.delete": true,
@@ -127,6 +128,11 @@ const permissionCopy: Record<PermissionKey, { title: string; copy: string; group
   "projects.delete": {
     title: "Delete projects",
     copy: "Remove projects while retaining unassigned tickets.",
+    group: "Projects"
+  },
+  "projects.members": {
+    title: "Manage project members",
+    copy: "Add, remove, and change roles for project members.",
     group: "Projects"
   },
   "tasks.create": {

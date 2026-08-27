@@ -279,6 +279,7 @@ function Calendar() {
 
       {isModalOpen ? (
         <TaskModal
+          client={client}
           initialDueDate={newTaskDate}
           isSaving={isSaving}
           onClose={() => {

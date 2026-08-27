@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronRight,
   FolderKanban,
-  GitPullRequest,
   Layers3,
   List,
   ListTree,
@@ -21,10 +20,10 @@ import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
 import TaskModal from "../components/TaskModal";
-import { engineeringMetaFor, issueTypeLabel, progressFor } from "../demo/engineeringMeta";
+import { issueTypeLabel, progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, Task, TaskInput, TaskPriority, TaskStatus, TaskType } from "../types";
-import { formatDate, statusLabel } from "../utils/format";
+import { formatDate, initialsFor, statusLabel } from "../utils/format";
 
 const typeIcon: Record<TaskType, typeof Square> = {
   initiative: Layers3,
@@ -156,7 +155,6 @@ function TasksHierarchy() {
 
   const selected = tasks.find((task) => task.id === selectedId) || null;
   const children = selected ? tasks.filter((task) => task.parentId === selected.id) : [];
-  const selectedMeta = selected ? engineeringMetaFor(selected) : null;
 
   const openCreate = (parent: Task | null = null) => {
     setEditingTask(null);
@@ -277,7 +275,6 @@ function TasksHierarchy() {
             </header>
             {rows.map(({ task, depth }) => {
               const Icon = typeIcon[task.taskType];
-              const meta = engineeringMetaFor(task);
               const hasChildren =
                 task.childCount > 0 || tasks.some((item) => item.parentId === task.id);
               const progress = progressFor(task);
@@ -324,8 +321,8 @@ function TasksHierarchy() {
                     </small>
                   </span>
                   <span className="hierarchy-assignee">
-                    <i>{meta.initials}</i>
-                    {meta.assignee}
+                    <i>{initialsFor(task.assigneeName)}</i>
+                    {task.assigneeName || "Unassigned"}
                   </span>
                   <span className="hierarchy-progress">
                     <i>
@@ -351,7 +348,7 @@ function TasksHierarchy() {
         </div>
 
         <aside className="hierarchy-summary">
-          {selected && selectedMeta ? (
+          {selected ? (
             <>
               <span className="overline">{issueTypeLabel(selected)} summary</span>
               <div className={`summary-type-mark ${selected.taskType}`}>
@@ -380,10 +377,10 @@ function TasksHierarchy() {
                   <i />
                   {statusLabel[selected.status]}
                 </span>
-                <h3>Owner</h3>
+                <h3>Assignee</h3>
                 <span className="hierarchy-assignee">
-                  <i>{selectedMeta.initials}</i>
-                  {selectedMeta.team}
+                  <i>{initialsFor(selected.assigneeName)}</i>
+                  {selected.assigneeName || "Unassigned"}
                 </span>
                 <h3>Dates</h3>
                 <p>
@@ -411,13 +408,6 @@ function TasksHierarchy() {
                   </li>
                 </ul>
               </section>
-              <section>
-                <h3>Linked pull requests</h3>
-                <p className="summary-pr">
-                  <GitPullRequest size={15} /> #{selectedMeta.pullRequest} &nbsp;{" "}
-                  {selectedMeta.branch} <b>OPEN</b>
-                </p>
-              </section>
               <Link className="summary-open-link" to={`/tasks/${selected.id}`}>
                 <ListTree size={16} /> Open full issue <ChevronRight size={16} />
               </Link>
@@ -437,6 +427,7 @@ function TasksHierarchy() {
 
       {isModalOpen ? (
         <TaskModal
+          client={client}
           initialParentTask={initialParentTask}
           isSaving={isSaving}
           onClose={() => {

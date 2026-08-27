@@ -4,6 +4,8 @@ import type {
   PaginationMetadata,
   Project,
   ProjectInput,
+  ProjectMember,
+  ProjectRole,
   Task,
   TaskInput,
   TaskQuery,
@@ -21,8 +23,19 @@ const mapProject = (project: Raw): Project => ({
   description: String(project.description || ""),
   taskCount: Number(project.task_count || 0),
   completedCount: Number(project.completed_count || 0),
+  myRole: project.my_role as Project["myRole"],
   createdAt: String(project.created_at),
   updatedAt: String(project.updated_at)
+});
+
+const mapMember = (member: Raw): ProjectMember => ({
+  userId: Number(member.userId),
+  name: String(member.name),
+  email: String(member.email),
+  role: member.role as ProjectRole,
+  // The add-member response omits addedAt (it isn't returned by that endpoint) - default
+  // to "now" since the membership was in fact just created.
+  addedAt: member.addedAt == null ? new Date().toISOString() : String(member.addedAt)
 });
 
 const mapTask = (task: Raw): Task => ({
@@ -43,6 +56,9 @@ const mapTask = (task: Raw): Task => ({
   priority: task.priority as Task["priority"],
   startDate: task.start_date == null ? null : String(task.start_date).slice(0, 10),
   dueDate: task.due_date == null ? null : String(task.due_date).slice(0, 10),
+  assigneeId: task.assignee_id == null ? null : Number(task.assignee_id),
+  assigneeName: task.assignee_name == null ? null : String(task.assignee_name),
+  assigneeEmail: task.assignee_email == null ? null : String(task.assignee_email),
   createdAt: String(task.created_at),
   updatedAt: String(task.updated_at)
 });
@@ -106,5 +122,20 @@ export const workspaceApi: WorkspaceClient = {
   async getActivity(limit = 12) {
     const response = await api.get<{ data: Raw[] }>("/activity", { params: { limit } });
     return response.data.data.map(mapActivity);
+  },
+  async listMembers(projectId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/projects/${projectId}/members`);
+    return response.data.data.map(mapMember);
+  },
+  async addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }) {
+    // The response is deliberately generic (never reveals whether the email
+    // matched an account) - reload the member list to see what happened.
+    await api.post(`/projects/${projectId}/members`, input);
+  },
+  async updateMemberRole(projectId: number, userId: number, role: ProjectRole) {
+    await api.patch(`/projects/${projectId}/members/${userId}`, { role });
+  },
+  async removeMember(projectId: number, userId: number) {
+    await api.delete(`/projects/${projectId}/members/${userId}`);
   }
 };

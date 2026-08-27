@@ -1,5 +1,6 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
+const { canAccessTask, getProjectRole } = require("../lib/projectAccess");
 
 const taskFields = `
   t.id,
@@ -17,22 +18,35 @@ const taskFields = `
   t.priority,
   t.start_date,
   t.due_date,
+  t.assignee_id,
+  assignee.name AS assignee_name,
+  assignee.email AS assignee_email,
   t.created_at,
   t.updated_at,
   COALESCE(child_stats.child_count, 0)::int AS child_count,
   COALESCE(child_stats.completed_child_count, 0)::int AS completed_child_count`;
 
+// Note: project_id / parent_task_id are already globally unique keys, so joining
+// on them alone is sufficient scoping. The previous "AND ...user_id = t.user_id"
+// clauses assumed a task's creator always matched its project's/parent's creator,
+// which breaks as soon as a project has more than one member.
 const taskJoins = `
-  LEFT JOIN projects p ON p.id = t.project_id AND p.user_id = t.user_id
-  LEFT JOIN tasks parent ON parent.id = t.parent_task_id AND parent.user_id = t.user_id
+  LEFT JOIN projects p ON p.id = t.project_id
+  LEFT JOIN tasks parent ON parent.id = t.parent_task_id
+  LEFT JOIN users assignee ON assignee.id = t.assignee_id
   LEFT JOIN (
-    SELECT user_id, parent_task_id,
+    SELECT parent_task_id,
            COUNT(*)::int AS child_count,
            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)::int AS completed_child_count
     FROM tasks
     WHERE parent_task_id IS NOT NULL
-    GROUP BY user_id, parent_task_id
-  ) child_stats ON child_stats.parent_task_id = t.id AND child_stats.user_id = t.user_id`;
+    GROUP BY parent_task_id
+  ) child_stats ON child_stats.parent_task_id = t.id`;
+
+// A task is visible to a user when it's their own inbox (no project) ticket,
+// or when they're a member (any role) of the project it belongs to.
+const visibleTaskCondition = (userIndex) =>
+  `((t.project_id IS NULL AND t.user_id = $${userIndex}) OR t.project_id IN (SELECT project_id FROM project_members WHERE user_id = $${userIndex}))`;
 
 const typeRank = {
   initiative: 5,
@@ -43,18 +57,41 @@ const typeRank = {
   subtask: 1
 };
 
-const verifyProjectOwnership = async (db, projectId, userId) => {
+// Looks up a project and the caller's role on it in one query. Returns
+// { key: "INB" } unconditionally for a null projectId (inbox tasks have no
+// membership concept). Otherwise throws 404 PROJECT_NOT_FOUND both when the
+// project doesn't exist and when the caller's role isn't in allowedRoles -
+// non-members should not be able to tell those two cases apart.
+const verifyProjectAccess = async (db, projectId, userId, allowedRoles) => {
   if (!projectId) {
-    return { key: "INB" };
+    return { key: "INB", role: null };
   }
-  const result = await db.query("SELECT id, key FROM projects WHERE id = $1 AND user_id = $2", [
-    projectId,
-    userId
-  ]);
-  if (result.rows.length === 0) {
+  const result = await db.query(
+    `SELECT p.key, pm.role
+     FROM projects p
+     LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
+     WHERE p.id = $1`,
+    [projectId, userId]
+  );
+  if (result.rows.length === 0 || !result.rows[0].role || !allowedRoles.includes(result.rows[0].role)) {
     throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found.");
   }
-  return result.rows[0];
+  return { key: result.rows[0].key, role: result.rows[0].role };
+};
+
+const validateAssignee = async (db, projectId, assigneeId) => {
+  if (!assigneeId) return;
+  if (!projectId) {
+    throw new AppError(
+      422,
+      "ASSIGNEE_NOT_A_MEMBER",
+      "Only shared project tickets can be assigned to someone else."
+    );
+  }
+  const role = await getProjectRole(db, projectId, assigneeId);
+  if (!role) {
+    throw new AppError(422, "ASSIGNEE_NOT_A_MEMBER", "The assignee must be a member of this project.");
+  }
 };
 
 const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId, taskId }) => {
@@ -65,11 +102,11 @@ const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId
 
   while (cursorId) {
     const result = await db.query(
-      `SELECT id, project_id, parent_task_id, task_type
-       FROM tasks WHERE id = $1 AND user_id = $2`,
-      [cursorId, userId]
+      `SELECT id, project_id, parent_task_id, task_type, user_id
+       FROM tasks WHERE id = $1`,
+      [cursorId]
     );
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0 || !(await canAccessTask(db, result.rows[0], userId))) {
       throw new AppError(404, "PARENT_TASK_NOT_FOUND", "Parent task not found.");
     }
     const current = result.rows[0];
@@ -105,7 +142,7 @@ const selectTaskById = async (db, id, userId) => {
     `SELECT ${taskFields}
      FROM tasks t
      ${taskJoins}
-     WHERE t.id = $1 AND t.user_id = $2`,
+     WHERE t.id = $1 AND ${visibleTaskCondition(2)}`,
     [id, userId]
   );
   return result.rows[0];
@@ -114,7 +151,7 @@ const selectTaskById = async (db, id, userId) => {
 const getTasks = async (req, res) => {
   const { page, limit, status, priority, projectId, search, sort, order } = req.query;
   const values = [req.user.id];
-  const conditions = ["t.user_id = $1"];
+  const conditions = [visibleTaskCondition(1)];
 
   const addCondition = (sql, value) => {
     values.push(value);
@@ -169,12 +206,22 @@ const getTasks = async (req, res) => {
 const createTask = async (req, res) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const { title, description, status, priority, startDate, dueDate, projectId, taskType, parentId } =
-    req.body;
+  const {
+    title,
+    description,
+    status,
+    priority,
+    startDate,
+    dueDate,
+    projectId,
+    taskType,
+    parentId,
+    assigneeId
+  } = req.body;
 
   try {
     await client.query("BEGIN");
-    const project = await verifyProjectOwnership(client, projectId, req.user.id);
+    const project = await verifyProjectAccess(client, projectId, req.user.id, ["owner", "editor"]);
     await verifyParentHierarchy({
       db: client,
       parentId,
@@ -182,10 +229,11 @@ const createTask = async (req, res) => {
       taskType,
       userId: req.user.id
     });
+    await validateAssignee(client, projectId, assigneeId);
     const result = await client.query(
       `INSERT INTO tasks
-         (user_id, project_id, title, description, status, priority, start_date, due_date, task_type, parent_task_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (user_id, project_id, title, description, status, priority, start_date, due_date, task_type, parent_task_id, assignee_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         req.user.id,
@@ -197,7 +245,8 @@ const createTask = async (req, res) => {
         startDate,
         dueDate,
         taskType,
-        parentId
+        parentId,
+        assigneeId
       ]
     );
     const taskId = result.rows[0].id;
@@ -238,15 +287,18 @@ const getTaskById = async (req, res, next) => {
 };
 
 const getTaskChildren = async (req, res, next) => {
-  const parentTask = await selectTaskById(req.app.locals.db, req.params.id, req.user.id);
+  const db = req.app.locals.db;
+  const parentTask = await selectTaskById(db, req.params.id, req.user.id);
   if (!parentTask) return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
-  const result = await req.app.locals.db.query(
+  // Children always share their parent's project (enforced at creation by
+  // verifyParentHierarchy), so anyone who can see the parent can see the children.
+  const result = await db.query(
     `SELECT ${taskFields}
      FROM tasks t
      ${taskJoins}
-     WHERE t.parent_task_id = $1 AND t.user_id = $2
+     WHERE t.parent_task_id = $1
      ORDER BY t.created_at ASC, t.id ASC`,
-    [req.params.id, req.user.id]
+    [req.params.id]
   );
   return res.status(200).json({ data: result.rows });
 };
@@ -254,20 +306,53 @@ const getTaskChildren = async (req, res, next) => {
 const updateTask = async (req, res, next) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const { title, description, status, priority, startDate, dueDate, projectId, taskType, parentId } =
-    req.body;
+  const {
+    title,
+    description,
+    status,
+    priority,
+    startDate,
+    dueDate,
+    projectId,
+    taskType,
+    parentId,
+    assigneeId
+  } = req.body;
 
   try {
     await client.query("BEGIN");
-    const existingResult = await client.query(
-      "SELECT * FROM tasks WHERE id = $1 AND user_id = $2",
-      [req.params.id, req.user.id]
-    );
+    const existingResult = await client.query("SELECT * FROM tasks WHERE id = $1", [req.params.id]);
     if (existingResult.rows.length === 0) {
       await client.query("ROLLBACK");
       return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
     }
-    await verifyProjectOwnership(client, projectId, req.user.id);
+    const existing = existingResult.rows[0];
+    if (!(await canAccessTask(client, existing, req.user.id))) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    const projectChanged = Number(existing.project_id || 0) !== Number(projectId || 0);
+    // Moving a task into the inbox makes it visible only to its original
+    // creator (tasks.user_id is frozen and inbox tasks have no membership
+    // concept) - letting any editor do this would let them orphan a
+    // teammate's ticket, hiding it from themselves and everyone else.
+    if (projectChanged && !projectId && Number(existing.user_id) !== Number(req.user.id)) {
+      await client.query("ROLLBACK");
+      return next(
+        new AppError(
+          403,
+          "TASK_INBOX_MOVE_DENIED",
+          "Only this ticket's creator can move it out of the project into their inbox."
+        )
+      );
+    }
+    // Editing requires editor/owner on the task's target project context. If the
+    // task is moving between projects (or in/out of the inbox), the caller needs
+    // that same standing on the project it's leaving too.
+    await verifyProjectAccess(client, projectId, req.user.id, ["owner", "editor"]);
+    if (projectChanged) {
+      await verifyProjectAccess(client, existing.project_id, req.user.id, ["owner", "editor"]);
+    }
     await verifyParentHierarchy({
       db: client,
       parentId,
@@ -276,11 +361,11 @@ const updateTask = async (req, res, next) => {
       userId: req.user.id,
       taskId: req.params.id
     });
-    const existing = existingResult.rows[0];
-    if (Number(existing.project_id || 0) !== Number(projectId || 0)) {
+    await validateAssignee(client, projectId, assigneeId);
+    if (projectChanged) {
       const childResult = await client.query(
-        "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1 AND user_id = $2",
-        [req.params.id, req.user.id]
+        "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1",
+        [req.params.id]
       );
       if (childResult.rows[0].count > 0) {
         throw new AppError(
@@ -294,8 +379,8 @@ const updateTask = async (req, res, next) => {
       `UPDATE tasks
        SET project_id = $1, title = $2, description = $3, status = $4, priority = $5,
            start_date = $6, due_date = $7, task_type = $8, parent_task_id = $9,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $10 AND user_id = $11`,
+           assignee_id = $10, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $11`,
       [
         projectId,
         title,
@@ -306,8 +391,8 @@ const updateTask = async (req, res, next) => {
         dueDate,
         taskType,
         parentId,
-        req.params.id,
-        req.user.id
+        assigneeId,
+        req.params.id
       ]
     );
     const task = await selectTaskById(client, req.params.id, req.user.id);
@@ -356,9 +441,20 @@ const deleteTask = async (req, res, next) => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
+    const existingResult = await client.query("SELECT * FROM tasks WHERE id = $1", [req.params.id]);
+    if (existingResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    const existing = existingResult.rows[0];
+    if (!(await canAccessTask(client, existing, req.user.id))) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    await verifyProjectAccess(client, existing.project_id, req.user.id, ["owner", "editor"]);
     const children = await client.query(
-      "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1 AND user_id = $2",
-      [req.params.id, req.user.id]
+      "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1",
+      [req.params.id]
     );
     if (children.rows[0].count > 0) {
       await client.query("ROLLBACK");
@@ -366,14 +462,9 @@ const deleteTask = async (req, res, next) => {
         new AppError(409, "TASK_HAS_CHILDREN", "Move or delete this task's children first.")
       );
     }
-    const result = await client.query(
-      "DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING id, title",
-      [req.params.id, req.user.id]
-    );
-    if (result.rows.length === 0) {
-      await client.query("ROLLBACK");
-      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
-    }
+    const result = await client.query("DELETE FROM tasks WHERE id = $1 RETURNING id, title", [
+      req.params.id
+    ]);
     await logActivity(client, {
       userId: req.user.id,
       action: "task_deleted",
@@ -405,8 +496,8 @@ const getTaskStats = async (req, res) => {
        COALESCE(SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END), 0)::int AS todo_tasks,
        COALESCE(SUM(CASE WHEN priority = 'high' THEN 1 ELSE 0 END), 0)::int AS high_priority_tasks,
        COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE AND status <> 'completed' THEN 1 ELSE 0 END), 0)::int AS overdue_tasks
-     FROM tasks
-     WHERE user_id = $1${projectCondition}`,
+     FROM tasks t
+     WHERE ${visibleTaskCondition(1)}${projectCondition}`,
     values
   );
   return res.status(200).json({ data: result.rows[0] });
