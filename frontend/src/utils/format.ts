@@ -49,6 +49,16 @@ export const activityCopy = (activity: Activity) => {
   }
 };
 
+export const initialsFor = (name: string | null | undefined) => {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+};
+
 export const greeting = () => {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";

@@ -1,9 +1,20 @@
 import { CalendarDays, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import type { Project, Task, TaskInput, TaskPriority, TaskStatus, TaskType } from "../types";
+import { getErrorMessage } from "../api/client";
+import type {
+  Project,
+  ProjectMember,
+  Task,
+  TaskInput,
+  TaskPriority,
+  TaskStatus,
+  TaskType,
+  WorkspaceClient
+} from "../types";
 
 interface TaskModalProps {
+  client: WorkspaceClient;
   initialDueDate?: string | null;
   initialParentTask?: Task | null;
   initialStatus?: TaskStatus;
@@ -54,7 +65,8 @@ const emptyTask = (
   startDate: null,
   dueDate,
   taskType: parent ? childTypeFor(parent) : "task",
-  parentId: parent?.id ?? null
+  parentId: parent?.id ?? null,
+  assigneeId: null
 });
 
 const taskToInput = (task: Task): TaskInput => ({
@@ -66,10 +78,12 @@ const taskToInput = (task: Task): TaskInput => ({
   startDate: task.startDate,
   dueDate: task.dueDate,
   taskType: task.taskType,
-  parentId: task.parentId
+  parentId: task.parentId,
+  assigneeId: task.assigneeId
 });
 
 function TaskModal({
+  client,
   initialDueDate = null,
   initialParentTask = null,
   initialStatus = "todo",
@@ -85,6 +99,42 @@ function TaskModal({
     task ? taskToInput(task) : emptyTask(initialStatus, initialDueDate, initialParentTask)
   );
   const [error, setError] = useState("");
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const projectId = form.projectId;
+    const timer = window.setTimeout(() => {
+      if (!projectId) {
+        setMembers([]);
+        return;
+      }
+      setIsLoadingMembers(true);
+      client
+        .listMembers(projectId)
+        .then((data) => {
+          if (!active) return;
+          setMembers(data);
+          setForm((current) =>
+            current.assigneeId != null &&
+            !data.some((member) => member.userId === current.assigneeId)
+              ? { ...current, assigneeId: null }
+              : current
+          );
+        })
+        .catch((loadError: unknown) => {
+          if (active) setError(getErrorMessage(loadError, "Unable to load project members."));
+        })
+        .finally(() => {
+          if (active) setIsLoadingMembers(false);
+        });
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [client, form.projectId]);
 
   const descendantIds = useMemo(() => {
     const descendants = new Set<number>();
@@ -225,7 +275,7 @@ function TaskModal({
               </select>
             </label>
           </div>
-          <div className="modal-form-grid">
+          <div className="modal-form-grid three">
             <label>
               <span>
                 Parent ticket <small>Optional</small>
@@ -256,6 +306,30 @@ function TaskModal({
                 <option value="todo">Ready</option>
                 <option value="in_progress">In motion</option>
                 <option value="completed">Shipped</option>
+              </select>
+            </label>
+            <label>
+              <span>
+                Assignee <small>Optional</small>
+              </span>
+              <select
+                disabled={!form.projectId || isLoadingMembers}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    assigneeId: event.target.value ? Number(event.target.value) : null
+                  })
+                }
+                value={form.assigneeId ?? ""}
+              >
+                <option value="">
+                  {form.projectId ? "Unassigned" : "Inbox tickets can't be assigned"}
+                </option>
+                {members.map((member) => (
+                  <option key={member.userId} value={member.userId}>
+                    {member.name}
+                  </option>
+                ))}
               </select>
             </label>
           </div>

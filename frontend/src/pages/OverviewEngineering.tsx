@@ -1,11 +1,13 @@
 import {
   ArrowUpRight,
   CheckCircle2,
-  GitBranch,
+  Eye,
   Github,
+  GitBranch,
   MoreHorizontal,
   Plus,
-  ShieldAlert
+  ShieldAlert,
+  UserRound
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
@@ -14,10 +16,9 @@ import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
 import TaskModal from "../components/TaskModal";
-import { engineeringMetaFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Activity, Project, Task, TaskInput, TaskStatus } from "../types";
-import { formatRelativeTime } from "../utils/format";
+import { activityCopy, formatRelativeTime } from "../utils/format";
 
 type CommandLane = "building" | "review" | "release";
 
@@ -28,12 +29,11 @@ const laneFor = (task: Task): CommandLane => {
 };
 
 function CommandTicket({ task }: { task: Task }) {
-  const meta = engineeringMetaFor(task);
   return (
     <Link className="command-ticket" to={`/tasks/${task.id}`}>
       <span className="command-ticket-key">{task.issueKey}</span>
       <strong>{task.title}</strong>
-      <small>{meta.team}</small>
+      <small>{task.projectName || "Inbox"}</small>
       <div className="command-ticket-footer">
         {task.status === "completed" ? (
           <span className="command-check-badge">
@@ -41,14 +41,13 @@ function CommandTicket({ task }: { task: Task }) {
           </span>
         ) : laneFor(task) === "review" ? (
           <span className="command-pr-badge">
-            <GitBranch size={13} /> #{meta.pullRequest} · review
+            <Eye size={13} /> in review
           </span>
         ) : (
           <span className="command-branch-badge">
-            <Github size={13} /> {meta.branch}
+            <UserRound size={13} /> {task.assigneeName || "Unassigned"}
           </span>
         )}
-        <time>{meta.age}</time>
       </div>
       <b className={`command-priority-number ${task.priority}`}>
         {task.priority === "high" ? 1 : task.priority === "medium" ? 2 : 3}
@@ -126,7 +125,10 @@ function OverviewEngineering() {
     }
   ];
   const openPrs = tasks.filter((task) => task.status === "in_progress").length + 5;
-  const failingChecks = tasks.filter((task) => engineeringMetaFor(task).checksFailed > 0).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueTickets = tasks.filter(
+    (task) => task.dueDate && task.dueDate < today && task.status !== "completed"
+  ).length;
   const deployed = tasks.filter((task) => task.status === "completed").length + 14;
 
   return (
@@ -156,8 +158,8 @@ function OverviewEngineering() {
           <small>Awaiting review</small>
         </article>
         <article className="attention">
-          <span>Failing checks</span>
-          <strong>{failingChecks}</strong>
+          <span>Overdue tickets</span>
+          <strong>{overdueTickets}</strong>
           <small>Requiring attention</small>
         </article>
         <article>
@@ -200,34 +202,21 @@ function OverviewEngineering() {
             <span>Live development</span>
           </header>
           <div>
-            {activities.slice(0, 6).map((activity, index) => {
-              const task =
-                tasks.find((item) => item.id === activity.entityId) ||
-                tasks[index % Math.max(tasks.length, 1)];
-              const meta = task ? engineeringMetaFor(task) : null;
+            {activities.slice(0, 6).map((activity) => {
+              const task = tasks.find((item) => item.id === activity.entityId);
               return (
                 <article key={activity.id}>
-                  {index % 3 === 2 ? (
+                  {activity.action.includes("deleted") ? (
                     <ShieldAlert size={25} />
-                  ) : index % 3 === 1 ? (
+                  ) : activity.action === "task_created" || activity.action === "project_created" ? (
                     <GitBranch size={25} />
                   ) : (
                     <Github size={25} />
                   )}
                   <div>
                     <time>{formatRelativeTime(activity.createdAt)}</time>
-                    <strong>
-                      {meta?.assignee.toLowerCase().replace(" ", "-") || "workflow-bot"}{" "}
-                      {index % 3 === 1
-                        ? "requested review"
-                        : index % 3 === 2
-                          ? "reported a failed check"
-                          : "pushed a change"}
-                    </strong>
-                    <span>{activity.entityTitle}</span>
-                    <small>
-                      {task?.projectKey?.toLowerCase() || "workflowhq"} <b>{meta?.commit}</b>
-                    </small>
+                    <strong>{activityCopy(activity)}</strong>
+                    <small>{task?.projectKey?.toLowerCase() || "workflowhq"}</small>
                   </div>
                 </article>
               );
@@ -251,6 +240,7 @@ function OverviewEngineering() {
 
       {isModalOpen ? (
         <TaskModal
+          client={client}
           isSaving={isSaving}
           onClose={() => setIsModalOpen(false)}
           onDelete={async () => undefined}

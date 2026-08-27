@@ -145,6 +145,9 @@ function TaskDetail() {
               <span className={`task-detail-date${isOverdue ? " overdue" : ""}`}>
                 <CalendarDays size={13} /> Due {formatDate(task.dueDate)}
               </span>
+              <span className="task-detail-date">
+                <UserRound size={13} /> {task.assigneeName || "Unassigned"}
+              </span>
             </div>
           </header>
 
@@ -212,43 +215,16 @@ function TaskDetail() {
 
           <section className="task-activity">
             <h2>Activity</h2>
-            <article>
-              <i>{meta.initials}</i>
-              <div>
-                <strong>{meta.assignee}</strong>
-                <time>2 hours ago</time>
-                <p>
-                  Pushed <b>{meta.commit}</b> and added implementation coverage. Ready for review.
-                </p>
-              </div>
-            </article>
-            <article>
-              <i>
-                {meta.reviewer
-                  .split(" ")
-                  .map((part) => part[0])
-                  .join("")}
-              </i>
-              <div>
-                <strong>{meta.reviewer}</strong>
-                <time>45 minutes ago</time>
-                <p>
-                  Reviewed the change. The implementation looks solid; one follow-up is still open.
-                </p>
-              </div>
-            </article>
-            <article>
-              <i>{meta.initials}</i>
-              <div>
-                <strong>{meta.assignee}</strong>
-                <time>10 minutes ago</time>
-                <p>Addressed review feedback and updated the checks.</p>
-              </div>
-            </article>
+            <p className="task-activity-empty">
+              Comments aren't connected yet — this is where discussion on {task.issueKey} will
+              show up.
+            </p>
             <div className="task-comment">
               <i>{user.name.charAt(0)}</i>
-              <input aria-label="Add a comment" placeholder="Add a comment..." />
-              <button type="button">Comment</button>
+              <input aria-label="Add a comment" disabled placeholder="Comments coming soon…" />
+              <button disabled type="button">
+                Comment
+              </button>
             </div>
           </section>
         </div>
@@ -395,6 +371,7 @@ function TaskDetail() {
 
       {isModalOpen ? (
         <TaskModal
+          client={client}
           isSaving={isSaving}
           onClose={() => setIsModalOpen(false)}
           onDelete={deleteTask}

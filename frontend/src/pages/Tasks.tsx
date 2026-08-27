@@ -108,7 +108,8 @@ function Tasks() {
         startDate: task.startDate,
         dueDate: task.dueDate,
         taskType: task.taskType,
-        parentId: task.parentId
+        parentId: task.parentId,
+        assigneeId: task.assigneeId
       });
     } catch (statusError) {
       setError(getErrorMessage(statusError, "Unable to update the task status."));
@@ -327,6 +328,7 @@ function Tasks() {
 
       {isModalOpen ? (
         <TaskModal
+          client={client}
           initialParentTask={initialParentTask}
           isSaving={isSaving}
           onClose={() => {

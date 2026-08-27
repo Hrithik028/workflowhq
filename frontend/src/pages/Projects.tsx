@@ -10,7 +10,7 @@ import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, ProjectInput } from "../types";
 
 function Projects() {
-  const { isDemo } = useOutletContext<LayoutContext>();
+  const { isDemo, user } = useOutletContext<LayoutContext>();
   const client = useMemo(() => (isDemo ? demoWorkspaceApi : workspaceApi), [isDemo]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [editing, setEditing] = useState<Project | null>(null);
@@ -203,6 +203,8 @@ function Projects() {
 
       {isModalOpen ? (
         <ProjectModal
+          client={client}
+          currentUserId={user.id}
           isSaving={isSaving}
           onClose={() => {
             setIsModalOpen(false);

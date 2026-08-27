@@ -1,6 +1,7 @@
 export type TaskStatus = "todo" | "in_progress" | "completed";
 export type TaskPriority = "low" | "medium" | "high";
 export type TaskType = "initiative" | "epic" | "story" | "task" | "bug" | "subtask";
+export type ProjectRole = "owner" | "editor" | "viewer";
 
 export interface User {
   id: number;
@@ -18,8 +19,17 @@ export interface Project {
   description: string;
   taskCount: number;
   completedCount: number;
+  myRole: ProjectRole;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProjectMember {
+  userId: number;
+  name: string;
+  email: string;
+  role: ProjectRole;
+  addedAt: string;
 }
 
 export interface Task {
@@ -40,6 +50,9 @@ export interface Task {
   priority: TaskPriority;
   startDate: string | null;
   dueDate: string | null;
+  assigneeId: number | null;
+  assigneeName: string | null;
+  assigneeEmail: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,6 +67,7 @@ export interface TaskInput {
   dueDate: string | null;
   taskType: TaskType;
   parentId: number | null;
+  assigneeId: number | null;
 }
 
 export interface ProjectInput {
@@ -125,6 +139,7 @@ export type PermissionKey =
   | "projects.create"
   | "projects.edit"
   | "projects.delete"
+  | "projects.members"
   | "tasks.create"
   | "tasks.edit"
   | "tasks.delete"
@@ -177,4 +192,8 @@ export interface WorkspaceClient {
   deleteTask(id: number): Promise<void>;
   getStats(projectId?: number): Promise<TaskStats>;
   getActivity(limit?: number): Promise<Activity[]>;
+  listMembers(projectId: number): Promise<ProjectMember[]>;
+  addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }): Promise<ProjectMember>;
+  updateMemberRole(projectId: number, userId: number, role: ProjectRole): Promise<void>;
+  removeMember(projectId: number, userId: number): Promise<void>;
 }
