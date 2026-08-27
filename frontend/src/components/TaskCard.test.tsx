@@ -21,6 +21,7 @@ const task: Task = {
   description: "Verify the core release flow.",
   status: "todo",
   priority: "high",
+  startDate: "2026-08-18",
   dueDate: "2026-08-24",
   createdAt: "2026-08-20T00:00:00.000Z",
   updatedAt: "2026-08-21T00:00:00.000Z"

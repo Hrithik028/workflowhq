@@ -19,6 +19,7 @@ import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { engineeringMetaFor, progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
@@ -77,7 +78,10 @@ function EngineeringCard({ task }: { task: Task }) {
         <i>
           <b style={{ width: `${progressFor(task)}%` }} />
         </i>
-        <em className={task.priority}>{task.priority}</em>
+        <em className={task.priority}>
+          <PriorityIcon priority={task.priority} />
+          {task.priority}
+        </em>
       </footer>
     </Link>
   );

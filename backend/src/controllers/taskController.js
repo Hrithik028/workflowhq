@@ -15,6 +15,7 @@ const taskFields = `
   t.description,
   t.status,
   t.priority,
+  t.start_date,
   t.due_date,
   t.created_at,
   t.updated_at,
@@ -168,7 +169,8 @@ const getTasks = async (req, res) => {
 const createTask = async (req, res) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const { title, description, status, priority, dueDate, projectId, taskType, parentId } = req.body;
+  const { title, description, status, priority, startDate, dueDate, projectId, taskType, parentId } =
+    req.body;
 
   try {
     await client.query("BEGIN");
@@ -182,10 +184,21 @@ const createTask = async (req, res) => {
     });
     const result = await client.query(
       `INSERT INTO tasks
-         (user_id, project_id, title, description, status, priority, due_date, task_type, parent_task_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (user_id, project_id, title, description, status, priority, start_date, due_date, task_type, parent_task_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
-      [req.user.id, projectId, title, description, status, priority, dueDate, taskType, parentId]
+      [
+        req.user.id,
+        projectId,
+        title,
+        description,
+        status,
+        priority,
+        startDate,
+        dueDate,
+        taskType,
+        parentId
+      ]
     );
     const taskId = result.rows[0].id;
     await client.query("UPDATE tasks SET issue_key = $1 WHERE id = $2", [
@@ -241,7 +254,8 @@ const getTaskChildren = async (req, res, next) => {
 const updateTask = async (req, res, next) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const { title, description, status, priority, dueDate, projectId, taskType, parentId } = req.body;
+  const { title, description, status, priority, startDate, dueDate, projectId, taskType, parentId } =
+    req.body;
 
   try {
     await client.query("BEGIN");
@@ -279,14 +293,16 @@ const updateTask = async (req, res, next) => {
     await client.query(
       `UPDATE tasks
        SET project_id = $1, title = $2, description = $3, status = $4, priority = $5,
-           due_date = $6, task_type = $7, parent_task_id = $8, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $9 AND user_id = $10`,
+           start_date = $6, due_date = $7, task_type = $8, parent_task_id = $9,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $10 AND user_id = $11`,
       [
         projectId,
         title,
         description,
         status,
         priority,
+        startDate,
         dueDate,
         taskType,
         parentId,

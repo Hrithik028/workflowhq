@@ -137,6 +137,7 @@ function Workspace() {
         description: task.description,
         status,
         priority: task.priority,
+        startDate: task.startDate,
         dueDate: task.dueDate,
         taskType: task.taskType,
         parentId: task.parentId

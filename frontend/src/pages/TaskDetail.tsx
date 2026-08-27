@@ -1,4 +1,5 @@
 import {
+  CalendarDays,
   Check,
   CheckCircle2,
   Circle,
@@ -15,11 +16,12 @@ import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { engineeringMetaFor, issueTypeLabel } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, Task, TaskInput } from "../types";
-import { statusLabel } from "../utils/format";
+import { formatDate, statusLabel } from "../utils/format";
 
 const criteriaFor = (task: Task) => [
   `Complete ${task.title.toLowerCase()} for the agreed delivery scope`,
@@ -66,6 +68,12 @@ function TaskDetail() {
   const parent = task?.parentId ? tasks.find((item) => item.id === task.parentId) : null;
   const children = task ? tasks.filter((item) => item.parentId === task.id) : [];
   const meta = task ? engineeringMetaFor(task) : null;
+  const isOverdue = Boolean(
+    task &&
+      task.dueDate &&
+      task.dueDate < new Date().toISOString().slice(0, 10) &&
+      task.status !== "completed"
+  );
 
   const saveTask = async (input: TaskInput) => {
     if (!task) return;
@@ -124,6 +132,18 @@ function TaskDetail() {
               <span className="task-kind">{issueTypeLabel(task)}</span>
               <span className={`task-detail-status ${task.status}`}>
                 {statusLabel[task.status]}
+              </span>
+            </div>
+            <div className="task-detail-meta">
+              <span className={`priority-pill ${task.priority}`}>
+                <PriorityIcon priority={task.priority} />
+                {task.priority}
+              </span>
+              <span className="task-detail-date">
+                <CalendarDays size={13} /> Start {formatDate(task.startDate, "No start date")}
+              </span>
+              <span className={`task-detail-date${isOverdue ? " overdue" : ""}`}>
+                <CalendarDays size={13} /> Due {formatDate(task.dueDate)}
               </span>
             </div>
           </header>

@@ -66,6 +66,7 @@ let tasks: Task[] = [
     description: "Confirm owners, dependencies, and release-day handoff.",
     status: "todo",
     priority: "high",
+    startDate: "2026-08-18",
     dueDate: "2026-08-24",
     createdAt: isoDaysAgo(5),
     updatedAt: isoMinutesAgo(18)
@@ -86,6 +87,7 @@ let tasks: Task[] = [
     description: "Make first-use states helpful without adding extra steps.",
     status: "todo",
     priority: "medium",
+    startDate: "2026-08-21",
     dueDate: "2026-08-27",
     createdAt: isoDaysAgo(4),
     updatedAt: isoDaysAgo(1)
@@ -106,6 +108,7 @@ let tasks: Task[] = [
     description: "Summarise the user-facing improvements in plain language.",
     status: "todo",
     priority: "low",
+    startDate: "2026-08-23",
     dueDate: "2026-08-29",
     createdAt: isoDaysAgo(3),
     updatedAt: isoDaysAgo(2)
@@ -126,6 +129,7 @@ let tasks: Task[] = [
     description: "Verify auth, projects, task movement, and logout after deployment.",
     status: "in_progress",
     priority: "high",
+    startDate: "2026-08-16",
     dueDate: "2026-08-22",
     createdAt: isoDaysAgo(6),
     updatedAt: isoMinutesAgo(8)
@@ -146,6 +150,7 @@ let tasks: Task[] = [
     description: "Keep the main actions reachable at tablet and phone widths.",
     status: "in_progress",
     priority: "medium",
+    startDate: "2026-08-19",
     dueDate: "2026-08-25",
     createdAt: isoDaysAgo(8),
     updatedAt: isoMinutesAgo(45)
@@ -166,6 +171,7 @@ let tasks: Task[] = [
     description: "Use the API health route for service availability checks.",
     status: "in_progress",
     priority: "medium",
+    startDate: "2026-08-20",
     dueDate: "2026-08-26",
     createdAt: isoDaysAgo(7),
     updatedAt: isoDaysAgo(1)
@@ -186,6 +192,7 @@ let tasks: Task[] = [
     description: "Verify one user cannot read or change another user's work.",
     status: "completed",
     priority: "high",
+    startDate: "2026-08-13",
     dueDate: "2026-08-20",
     createdAt: isoDaysAgo(11),
     updatedAt: isoMinutesAgo(32)
@@ -206,6 +213,7 @@ let tasks: Task[] = [
     description: "Document each step from registration to first task.",
     status: "completed",
     priority: "medium",
+    startDate: "2026-08-04",
     dueDate: "2026-08-18",
     createdAt: isoDaysAgo(14),
     updatedAt: isoDaysAgo(2)
@@ -226,6 +234,7 @@ let tasks: Task[] = [
     description: "Require linting, tests, type checking, and production builds.",
     status: "completed",
     priority: "low",
+    startDate: "2026-08-01",
     dueDate: "2026-08-17",
     createdAt: isoDaysAgo(16),
     updatedAt: isoDaysAgo(3)

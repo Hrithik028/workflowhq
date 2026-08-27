@@ -909,6 +909,9 @@ body {
 }
 
 .priority-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   border: 1px solid currentColor;
   border-radius: 0;
   padding: 2px 5px;
@@ -3640,6 +3643,9 @@ html[data-motion="reduced"] *::after {
 }
 
 .engineering-card footer em {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   margin-left: auto;
   border: 1px solid currentColor;
   padding: 3px 5px;
@@ -4090,6 +4096,29 @@ html[data-motion="reduced"] *::after {
 .task-detail-status.completed {
   border-color: #16884a;
   background: #16884a;
+}
+
+.task-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.task-detail-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: "Courier New", monospace;
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #58524a;
+}
+
+.task-detail-date.overdue {
+  color: var(--signal);
 }
 
 .task-copy-block,

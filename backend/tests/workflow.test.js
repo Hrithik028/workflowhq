@@ -114,6 +114,18 @@ describe("projects, tasks, and activity API", () => {
     expect(deleted.status).toBe(204);
   });
 
+  it("persists a task's start date and rejects a start date after the due date", async () => {
+    const created = await createTask(taskPayload({ startDate: "2026-08-20" }));
+    const invalid = await createTask(
+      taskPayload({ startDate: "2026-09-05", dueDate: "2026-09-01" })
+    );
+
+    expect(created.status).toBe(201);
+    expect(String(created.body.data.start_date).slice(0, 10)).toBe("2026-08-20");
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("keeps a ticket issue key immutable when the task is updated or moved", async () => {
     const source = await createProject();
     const target = await createProject(projectPayload({ key: "RQU", name: "Requests UI" }));
