@@ -137,7 +137,9 @@ function Workspace() {
         description: task.description,
         status,
         priority: task.priority,
-        dueDate: task.dueDate
+        dueDate: task.dueDate,
+        taskType: task.taskType,
+        parentId: task.parentId
       });
       setNotice({ tone: "success", message: `Moved “${task.title}”.` });
       await loadWorkspace();
@@ -245,6 +247,7 @@ function Workspace() {
           onSave={saveTask}
           projects={projects}
           task={editingTask}
+          tasks={tasks}
         />
       ) : null}
     </main>

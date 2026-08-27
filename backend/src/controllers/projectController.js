@@ -3,7 +3,7 @@ const { AppError } = require("../lib/errors");
 
 const getProjects = async (req, res) => {
   const result = await req.app.locals.db.query(
-    `SELECT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at,
+    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.created_at, p.updated_at,
             COUNT(t.id)::int AS task_count,
             COALESCE(SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END), 0)::int AS completed_count
      FROM projects p
@@ -18,7 +18,7 @@ const getProjects = async (req, res) => {
 
 const getProjectById = async (req, res, next) => {
   const result = await req.app.locals.db.query(
-    `SELECT p.id, p.user_id, p.name, p.description, p.created_at, p.updated_at,
+    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.created_at, p.updated_at,
             COUNT(t.id)::int AS task_count,
             COALESCE(SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END), 0)::int AS completed_count
      FROM projects p
@@ -39,10 +39,10 @@ const createProject = async (req, res) => {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `INSERT INTO projects (user_id, name, description)
-       VALUES ($1, $2, $3)
-       RETURNING id, user_id, name, description, created_at, updated_at`,
-      [req.user.id, req.body.name, req.body.description]
+      `INSERT INTO projects (user_id, key, name, description)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, user_id, key, name, description, created_at, updated_at`,
+      [req.user.id, req.body.key, req.body.name, req.body.description]
     );
     const project = result.rows[0];
     await logActivity(client, {
@@ -56,6 +56,9 @@ const createProject = async (req, res) => {
     return res.status(201).json({ data: { ...project, task_count: 0, completed_count: 0 } });
   } catch (error) {
     await client.query("ROLLBACK");
+    if (error.code === "23505") {
+      throw new AppError(409, "PROJECT_KEY_EXISTS", "That project key is already in use.");
+    }
     throw error;
   } finally {
     client.release();
@@ -63,16 +66,42 @@ const createProject = async (req, res) => {
 };
 
 const updateProject = async (req, res, next) => {
-  const result = await req.app.locals.db.query(
-    `UPDATE projects SET name = $1, description = $2, updated_at = CURRENT_TIMESTAMP
-     WHERE id = $3 AND user_id = $4
-     RETURNING id, user_id, name, description, created_at, updated_at`,
-    [req.body.name, req.body.description, req.params.id, req.user.id]
+  const db = req.app.locals.db;
+  const current = await db.query(
+    `SELECT p.id, p.key, COUNT(t.id)::int AS task_count
+     FROM projects p
+     LEFT JOIN tasks t ON t.project_id = p.id AND t.user_id = p.user_id
+     WHERE p.id = $1 AND p.user_id = $2
+     GROUP BY p.id`,
+    [req.params.id, req.user.id]
   );
-  if (result.rows.length === 0) {
+  if (current.rows.length === 0) {
     return next(new AppError(404, "PROJECT_NOT_FOUND", "Project not found."));
   }
-  return res.status(200).json({ data: result.rows[0] });
+  if (current.rows[0].key !== req.body.key && current.rows[0].task_count > 0) {
+    return next(
+      new AppError(
+        409,
+        "PROJECT_KEY_LOCKED",
+        "A project key cannot change after its first ticket is created."
+      )
+    );
+  }
+
+  try {
+    const result = await db.query(
+      `UPDATE projects SET key = $1, name = $2, description = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4 AND user_id = $5
+       RETURNING id, user_id, key, name, description, created_at, updated_at`,
+      [req.body.key, req.body.name, req.body.description, req.params.id, req.user.id]
+    );
+    return res.status(200).json({ data: result.rows[0] });
+  } catch (error) {
+    if (error.code === "23505") {
+      return next(new AppError(409, "PROJECT_KEY_EXISTS", "That project key is already in use."));
+    }
+    throw error;
+  }
 };
 
 const deleteProject = async (req, res, next) => {

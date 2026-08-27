@@ -13,8 +13,8 @@
   text-rendering: optimizeLegibility;
   --navy: #13233a;
   --navy-2: #1b304e;
-  --ink: #17202f;
-  --muted: #687385;
+  --ink: #0b0f14;
+  --muted: #303844;
   --line: #e4e7ec;
   --surface: #ffffff;
   --canvas: #f5f6f8;
@@ -106,7 +106,7 @@ p {
 .overline {
   display: block;
   margin-bottom: 7px;
-  color: #7c8799;
+  color: #303844;
   font-size: 0.69rem;
   font-weight: 780;
   letter-spacing: 0.115em;
@@ -698,6 +698,14 @@ p {
     box-shadow 150ms ease;
 }
 
+.auth-form input::placeholder,
+.modal-form input::placeholder,
+.modal-form textarea::placeholder,
+.editorial-search input::placeholder {
+  color: #303844;
+  opacity: 1;
+}
+
 .auth-form input,
 .modal-form input,
 .modal-form select {
@@ -739,7 +747,7 @@ p {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #7b8798;
+  color: #303844;
   transform: translateY(-50%);
 }
 
@@ -761,7 +769,7 @@ p {
   align-items: center;
   gap: 12px;
   margin: 21px 0;
-  color: #98a1af;
+  color: #303844;
   font-size: 0.75rem;
 }
 
@@ -775,7 +783,7 @@ p {
 
 .auth-switch {
   margin: 24px 0 0;
-  color: #727d8d;
+  color: #303844;
   text-align: center;
   font-size: 0.84rem;
 }
@@ -996,7 +1004,7 @@ p {
 }
 
 .refresh-button {
-  color: #697587;
+  color: #303844;
 }
 
 .spin {
@@ -1043,7 +1051,7 @@ p {
 }
 .stat-icon.slate {
   background: #f0f2f5;
-  color: #657186;
+  color: #303844;
 }
 .stat-icon.amber {
   background: #fff4dd;
@@ -1076,7 +1084,7 @@ p {
 .stat-card span:last-child {
   overflow: hidden;
   margin-top: 4px;
-  color: #7b8595;
+  color: #303844;
   font-size: 0.66rem;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -1105,7 +1113,7 @@ p {
 }
 
 .task-count {
-  color: #8791a0;
+  color: #303844;
   font-size: 0.72rem;
 }
 
@@ -1131,7 +1139,7 @@ p {
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 0 9px;
-  color: #7b8696;
+  color: #303844;
   background: #f7f8fa;
 }
 
@@ -1178,7 +1186,7 @@ p {
   gap: 4px;
   border: 0;
   background: transparent;
-  color: #858f9e;
+  color: #303844;
   font-size: 0.7rem;
 }
 
@@ -1232,7 +1240,7 @@ p {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #697587;
+  color: #303844;
 }
 
 .kanban-column-header h3 {
@@ -1251,7 +1259,7 @@ p {
   place-items: center;
   border-radius: 6px;
   background: rgb(255 255 255 / 64%);
-  color: #7e8998;
+  color: #303844;
   font-size: 0.64rem;
   font-weight: 800;
 }
@@ -1265,7 +1273,7 @@ p {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #8b95a3;
+  color: #303844;
 }
 
 .kanban-column-header button:hover,
@@ -1348,7 +1356,7 @@ p {
   display: -webkit-box;
   overflow: hidden;
   margin: 6px 0 9px;
-  color: #7d8795;
+  color: #303844;
   font-size: 0.68rem;
   line-height: 1.45;
   -webkit-box-orient: vertical;
@@ -1360,7 +1368,7 @@ p {
   align-items: center;
   gap: 6px;
   margin-bottom: 10px;
-  color: #6e7989;
+  color: #303844;
   font-size: 0.65rem;
   font-weight: 650;
 }
@@ -1378,7 +1386,7 @@ p {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #8a94a2;
+  color: #303844;
   font-size: 0.62rem;
 }
 
@@ -1394,7 +1402,7 @@ p {
 .status-select-label select {
   max-width: 92px;
   cursor: pointer;
-  color: #737e8d;
+  color: #303844;
   font-size: 0.61rem;
 }
 
@@ -1407,7 +1415,7 @@ p {
   border: 1px dashed #cfd5dd;
   border-radius: 8px;
   background: rgb(255 255 255 / 35%);
-  color: #8792a1;
+  color: #303844;
   font-size: 0.7rem;
 }
 
@@ -1438,7 +1446,7 @@ p {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #778292;
+  color: #303844;
   font-size: 0.6rem;
   font-weight: 700;
 }
@@ -1474,7 +1482,7 @@ p {
   place-items: center;
   border-radius: 8px;
   background: #f1f3f6;
-  color: #607087;
+  color: #303844;
 }
 
 .activity-item p {
@@ -1485,13 +1493,13 @@ p {
 }
 
 .activity-item > div > span {
-  color: #9aa2ad;
+  color: #303844;
   font-size: 0.59rem;
 }
 
 .empty-copy {
   margin: 15px 0;
-  color: #8a94a2;
+  color: #303844;
   font-size: 0.7rem;
 }
 
@@ -1557,7 +1565,7 @@ p {
   border-radius: 11px;
   padding: 30px;
   background: white;
-  color: #7b8796;
+  color: #303844;
   text-align: center;
 }
 
@@ -1639,7 +1647,7 @@ p {
 
 .modal-form label span small {
   margin-left: 4px;
-  color: #9aa2af;
+  color: #303844;
   font-weight: 500;
 }
 
@@ -1659,7 +1667,7 @@ p {
   z-index: 1;
   top: 50%;
   left: 12px;
-  color: #8791a0;
+  color: #303844;
   transform: translateY(-50%);
 }
 
@@ -1704,7 +1712,7 @@ p {
   align-content: center;
   gap: 12px;
   background: var(--canvas);
-  color: #7a8594;
+  color: #303844;
   font-size: 0.8rem;
 }
 

@@ -1,10 +1,11 @@
 import { CalendarDays, Trash2, X } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import type { Project, Task, TaskInput, TaskPriority, TaskStatus } from "../types";
+import type { Project, Task, TaskInput, TaskPriority, TaskStatus, TaskType } from "../types";
 
 interface TaskModalProps {
   initialDueDate?: string | null;
+  initialParentTask?: Task | null;
   initialStatus?: TaskStatus;
   isSaving: boolean;
   onClose: () => void;
@@ -12,15 +13,47 @@ interface TaskModalProps {
   onSave: (input: TaskInput) => Promise<void>;
   projects: Project[];
   task: Task | null;
+  tasks?: Task[];
 }
 
-const emptyTask = (status: TaskStatus, dueDate: string | null = null): TaskInput => ({
+const typeRank: Record<TaskType, number> = {
+  initiative: 5,
+  epic: 4,
+  story: 3,
+  task: 2,
+  bug: 2,
+  subtask: 1
+};
+
+const childTypeFor = (parent: Task): TaskType => {
+  if (parent.taskType === "initiative") return "epic";
+  if (parent.taskType === "epic") return "story";
+  if (parent.taskType === "story") return "task";
+  return "subtask";
+};
+
+const typeLabel: Record<TaskType, string> = {
+  initiative: "Initiative",
+  epic: "Epic",
+  story: "Story",
+  task: "Task",
+  bug: "Bug",
+  subtask: "Subtask"
+};
+
+const emptyTask = (
+  status: TaskStatus,
+  dueDate: string | null = null,
+  parent: Task | null = null
+): TaskInput => ({
   title: "",
   description: "",
-  projectId: null,
+  projectId: parent?.projectId ?? null,
   status,
   priority: "medium",
-  dueDate
+  dueDate,
+  taskType: parent ? childTypeFor(parent) : "task",
+  parentId: parent?.id ?? null
 });
 
 const taskToInput = (task: Task): TaskInput => ({
@@ -29,23 +62,53 @@ const taskToInput = (task: Task): TaskInput => ({
   projectId: task.projectId,
   status: task.status,
   priority: task.priority,
-  dueDate: task.dueDate
+  dueDate: task.dueDate,
+  taskType: task.taskType,
+  parentId: task.parentId
 });
 
 function TaskModal({
   initialDueDate = null,
+  initialParentTask = null,
   initialStatus = "todo",
   isSaving,
   onClose,
   onDelete,
   onSave,
   projects,
-  task
+  task,
+  tasks = []
 }: TaskModalProps) {
   const [form, setForm] = useState<TaskInput>(() =>
-    task ? taskToInput(task) : emptyTask(initialStatus, initialDueDate)
+    task ? taskToInput(task) : emptyTask(initialStatus, initialDueDate, initialParentTask)
   );
   const [error, setError] = useState("");
+
+  const descendantIds = useMemo(() => {
+    const descendants = new Set<number>();
+    if (!task) return descendants;
+    let frontier = [task.id];
+    while (frontier.length > 0) {
+      const children = tasks.filter(
+        (candidate) => candidate.parentId != null && frontier.includes(candidate.parentId)
+      );
+      frontier = children.map((child) => child.id).filter((id) => !descendants.has(id));
+      frontier.forEach((id) => descendants.add(id));
+    }
+    return descendants;
+  }, [task, tasks]);
+
+  const availableParents = useMemo(
+    () =>
+      tasks.filter(
+        (candidate) =>
+          candidate.id !== task?.id &&
+          !descendantIds.has(candidate.id) &&
+          candidate.projectId === form.projectId &&
+          typeRank[candidate.taskType] > typeRank[form.taskType]
+      ),
+    [descendantIds, form.projectId, form.taskType, task?.id, tasks]
+  );
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -74,8 +137,11 @@ function TaskModal({
       <section className="modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title">
         <header className="modal-header">
           <div>
-            <span className="overline">{task ? "Task details" : "New work"}</span>
-            <h2 id="task-modal-title">{task ? "Edit task" : "Create a task"}</h2>
+            <span className="overline">
+              {task?.issueKey ||
+                (initialParentTask ? `Child of ${initialParentTask.issueKey}` : "New work")}
+            </span>
+            <h2 id="task-modal-title">{task ? "Edit ticket" : "Create a ticket"}</h2>
           </div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="Close dialog">
             <X size={19} />
@@ -84,7 +150,7 @@ function TaskModal({
 
         <form className="modal-form" onSubmit={submit}>
           <label>
-            <span>Task title</span>
+            <span>Ticket title</span>
             <input
               autoFocus
               maxLength={200}
@@ -107,20 +173,70 @@ function TaskModal({
           </label>
           <div className="modal-form-grid">
             <label>
-              <span>Project</span>
+              <span>Issue type</span>
               <select
-                onChange={(event) =>
+                onChange={(event) => {
+                  const taskType = event.target.value as TaskType;
+                  const parent = tasks.find((candidate) => candidate.id === form.parentId);
                   setForm({
                     ...form,
-                    projectId: event.target.value ? Number(event.target.value) : null
-                  })
-                }
+                    taskType,
+                    parentId:
+                      parent && typeRank[parent.taskType] > typeRank[taskType]
+                        ? form.parentId
+                        : null
+                  });
+                }}
+                value={form.taskType}
+              >
+                {(Object.keys(typeLabel) as TaskType[]).map((value) => (
+                  <option key={value} value={value}>
+                    {typeLabel[value]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Project</span>
+              <select
+                onChange={(event) => {
+                  const projectId = event.target.value ? Number(event.target.value) : null;
+                  const parent = tasks.find((candidate) => candidate.id === form.parentId);
+                  setForm({
+                    ...form,
+                    projectId,
+                    parentId: parent?.projectId === projectId ? form.parentId : null
+                  });
+                }}
                 value={form.projectId ?? ""}
               >
                 <option value="">Inbox</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
-                    {project.name}
+                    {project.key} · {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="modal-form-grid">
+            <label>
+              <span>
+                Parent ticket <small>Optional</small>
+              </span>
+              <select
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    parentId: event.target.value ? Number(event.target.value) : null
+                  })
+                }
+                value={form.parentId ?? ""}
+              >
+                <option value="">No parent / top level</option>
+                {availableParents.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.issueKey} · {candidate.title}
                   </option>
                 ))}
               </select>
@@ -191,7 +307,7 @@ function TaskModal({
                 Cancel
               </button>
               <button className="button primary" disabled={isSaving} type="submit">
-                {isSaving ? "Saving…" : task ? "Save changes" : "Create task"}
+                {isSaving ? "Saving…" : task ? "Save changes" : "Create ticket"}
               </button>
             </div>
           </footer>

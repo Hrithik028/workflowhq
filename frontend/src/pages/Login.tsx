@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { authApi } from "../api/auth";
 import { getErrorMessage } from "../api/client";
 import AuthLayout from "../components/AuthLayout";
+import { demoCredentials } from "../demo/credentials";
 import type { Session } from "../types";
 
 interface LoginProps {
@@ -23,6 +24,14 @@ function Login({ onDemo, onSuccess }: LoginProps) {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+    if (
+      email.trim().toLowerCase() === demoCredentials.email &&
+      password === demoCredentials.password
+    ) {
+      onDemo();
+      navigate("/app");
+      return;
+    }
     setIsSubmitting(true);
     try {
       onSuccess(await authApi.login({ email, password }));
@@ -37,6 +46,12 @@ function Login({ onDemo, onSuccess }: LoginProps) {
   const enterDemo = () => {
     onDemo();
     navigate("/app");
+  };
+
+  const fillDemoCredentials = () => {
+    setEmail(demoCredentials.email);
+    setPassword(demoCredentials.password);
+    setError("");
   };
 
   return (
@@ -87,16 +102,31 @@ function Login({ onDemo, onSuccess }: LoginProps) {
         </button>
       </form>
 
-      {import.meta.env.VITE_DEMO_MODE === "true" ? (
-        <>
-          <div className="or-divider">
-            <span>or</span>
+      <section className="demo-login-card" aria-label="Demo login">
+        <header>
+          <strong>Demo account</strong>
+          <span>Populated workspace</span>
+        </header>
+        <dl>
+          <div>
+            <dt>Email</dt>
+            <dd>{demoCredentials.email}</dd>
           </div>
-          <button className="button secondary wide" type="button" onClick={enterDemo}>
-            Explore the demo workspace
+          <div>
+            <dt>Password</dt>
+            <dd>{demoCredentials.password}</dd>
+          </div>
+        </dl>
+        <div className="demo-login-actions">
+          <button className="text-link" type="button" onClick={fillDemoCredentials}>
+            Fill credentials
           </button>
-        </>
-      ) : null}
+          <button className="button secondary" type="button" onClick={enterDemo}>
+            Enter demo <ArrowRight size={15} />
+          </button>
+        </div>
+        <p>Includes projects, task hierarchy, deadlines, activity, and delivery metrics.</p>
+      </section>
 
       <p className="auth-switch">
         New to WorkflowHQ? <Link to="/register">Create an account</Link>

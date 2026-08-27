@@ -14,15 +14,23 @@ interface ProjectModalProps {
 function ProjectModal({ isSaving, onClose, onDelete, onSave, project }: ProjectModalProps) {
   const [form, setForm] = useState<ProjectInput>(() =>
     project
-      ? { name: project.name, description: project.description }
-      : { name: "", description: "" }
+      ? { key: project.key, name: project.name, description: project.description }
+      : { key: "", name: "", description: "" }
   );
   const [error, setError] = useState("");
+  const isKeyLocked = Boolean(project && project.taskCount > 0);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.name.trim()) return setError("Give the project a clear name.");
-    await onSave({ name: form.name.trim(), description: form.description.trim() });
+    if (!/^[A-Z][A-Z0-9]{1,9}$/.test(form.key)) {
+      return setError("Use a 2–10 character key starting with a letter.");
+    }
+    await onSave({
+      key: form.key,
+      name: form.name.trim(),
+      description: form.description.trim()
+    });
   };
 
   return (
@@ -48,9 +56,33 @@ function ProjectModal({ isSaving, onClose, onDelete, onSave, project }: ProjectM
         </header>
         <form className="modal-form" onSubmit={submit}>
           <label>
+            <span>Project key</span>
+            <input
+              aria-describedby="project-key-help"
+              autoFocus={!project}
+              disabled={isKeyLocked}
+              inputMode="text"
+              maxLength={10}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  key: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")
+                })
+              }
+              placeholder="e.g. LAUNCH"
+              required
+              value={form.key}
+            />
+            <small className="field-help" id="project-key-help">
+              {isKeyLocked
+                ? "Locked because this project already has tickets. Existing issue keys stay permanent."
+                : "2–10 letters or numbers. This prefix creates permanent keys such as LAUNCH-42."}
+            </small>
+          </label>
+          <label>
             <span>Project name</span>
             <input
-              autoFocus
+              autoFocus={Boolean(project)}
               maxLength={120}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
               placeholder="e.g. Product launch"
