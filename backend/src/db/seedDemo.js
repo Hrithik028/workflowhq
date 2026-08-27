@@ -315,7 +315,35 @@ const seedDemo = async (db = pool) => {
         [userId, fixture.projectKey, fixture.name, fixture.description, isoHoursAgo(96)]
       );
       projectIds.set(fixture.key, result.rows[0].id);
+      // The demo user's projects are re-inserted (not just updated) on every
+      // reseed, so the one-time migration backfill never covers these rows -
+      // without this insert the demo user would lose access to their own projects.
+      await client.query(
+        `INSERT INTO project_members (project_id, user_id, role, created_at)
+         VALUES ($1, $2, 'owner', $3)
+         ON CONFLICT (project_id, user_id) DO NOTHING`,
+        [result.rows[0].id, userId, isoHoursAgo(96)]
+      );
     }
+
+    // Seed a second lightweight collaborator so the "portfolio" project has a
+    // real multi-member setup to demo/test against without manual setup.
+    const collaboratorPasswordHash = await bcrypt.hash("WorkflowHQ!2026", 12);
+    const collaboratorResult = await client.query(
+      `INSERT INTO users (name, email, password_hash)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (email) DO UPDATE
+         SET name = EXCLUDED.name, password_hash = EXCLUDED.password_hash
+       RETURNING id`,
+      ["WorkflowHQ Collaborator", "demo-collaborator@workflowhq.app", collaboratorPasswordHash]
+    );
+    const collaboratorId = collaboratorResult.rows[0].id;
+    await client.query(
+      `INSERT INTO project_members (project_id, user_id, role, invited_by, created_at)
+       VALUES ($1, $2, 'editor', $3, $4)
+       ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+      [projectIds.get("portfolio"), collaboratorId, userId, isoHoursAgo(90)]
+    );
 
     const entityIds = new Map();
     for (const fixture of taskFixtures) {

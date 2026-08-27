@@ -7,11 +7,17 @@ const {
   getProjects,
   updateProject
 } = require("../controllers/projectController");
+const {
+  addMember,
+  listMembers,
+  removeMember,
+  updateMemberRole
+} = require("../controllers/projectMemberController");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { requirePermission, requireRule } = require("../middleware/accessControl");
 const authMiddleware = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validate");
-const { projectSchemas } = require("../validation/schemas");
+const { projectMemberSchemas, projectSchemas } = require("../validation/schemas");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -36,6 +42,30 @@ router.delete(
   asyncHandler(requireRule("allow_project_deletion")),
   validate({ params: projectSchemas.params }),
   asyncHandler(deleteProject)
+);
+
+router.get(
+  "/:id/members",
+  validate({ params: projectMemberSchemas.params }),
+  asyncHandler(listMembers)
+);
+router.post(
+  "/:id/members",
+  asyncHandler(requirePermission("projects.members")),
+  validate({ params: projectMemberSchemas.params, body: projectMemberSchemas.add }),
+  asyncHandler(addMember)
+);
+router.patch(
+  "/:id/members/:userId",
+  asyncHandler(requirePermission("projects.members")),
+  validate({ params: projectMemberSchemas.memberParams, body: projectMemberSchemas.updateRole }),
+  asyncHandler(updateMemberRole)
+);
+router.delete(
+  "/:id/members/:userId",
+  asyncHandler(requirePermission("projects.members")),
+  validate({ params: projectMemberSchemas.memberParams }),
+  asyncHandler(removeMember)
 );
 
 module.exports = router;

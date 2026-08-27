@@ -6,6 +6,7 @@ const allPermissions = {
   "projects.create": true,
   "projects.edit": true,
   "projects.delete": true,
+  "projects.members": true,
   "tasks.create": true,
   "tasks.edit": true,
   "tasks.delete": true,
