@@ -26,6 +26,23 @@ const resolveDemoUser = (environment = process.env) => {
   };
 };
 
+// Unlike the primary demo user, the collaborator is a nice-to-have (shows off
+// multi-member projects) rather than the account people actually sign in
+// with, so in production we skip it entirely instead of failing the whole
+// seed run when no override is set - but its password must be just as
+// unguessable as the primary account's whenever it does get created.
+const resolveCollaborator = (environment = process.env) => {
+  const isProduction = environment.NODE_ENV === "production";
+  if (isProduction && !environment.DEMO_COLLABORATOR_PASSWORD) {
+    return null;
+  }
+  return {
+    name: environment.DEMO_COLLABORATOR_NAME || "WorkflowHQ Collaborator",
+    email: (environment.DEMO_COLLABORATOR_EMAIL || "demo-collaborator@workflowhq.app").toLowerCase(),
+    password: environment.DEMO_COLLABORATOR_PASSWORD || "WorkflowHQ!2026"
+  };
+};
+
 const dateFromToday = (days) => {
   const date = new Date();
   date.setUTCHours(12, 0, 0, 0);
@@ -328,22 +345,25 @@ const seedDemo = async (db = pool) => {
 
     // Seed a second lightweight collaborator so the "portfolio" project has a
     // real multi-member setup to demo/test against without manual setup.
-    const collaboratorPasswordHash = await bcrypt.hash("WorkflowHQ!2026", 12);
-    const collaboratorResult = await client.query(
-      `INSERT INTO users (name, email, password_hash)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (email) DO UPDATE
-         SET name = EXCLUDED.name, password_hash = EXCLUDED.password_hash
-       RETURNING id`,
-      ["WorkflowHQ Collaborator", "demo-collaborator@workflowhq.app", collaboratorPasswordHash]
-    );
-    const collaboratorId = collaboratorResult.rows[0].id;
-    await client.query(
-      `INSERT INTO project_members (project_id, user_id, role, invited_by, created_at)
-       VALUES ($1, $2, 'editor', $3, $4)
-       ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
-      [projectIds.get("portfolio"), collaboratorId, userId, isoHoursAgo(90)]
-    );
+    const collaborator = resolveCollaborator();
+    if (collaborator) {
+      const collaboratorPasswordHash = await bcrypt.hash(collaborator.password, 12);
+      const collaboratorResult = await client.query(
+        `INSERT INTO users (name, email, password_hash)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (email) DO UPDATE
+           SET name = EXCLUDED.name, password_hash = EXCLUDED.password_hash
+         RETURNING id`,
+        [collaborator.name, collaborator.email, collaboratorPasswordHash]
+      );
+      const collaboratorId = collaboratorResult.rows[0].id;
+      await client.query(
+        `INSERT INTO project_members (project_id, user_id, role, invited_by, created_at)
+         VALUES ($1, $2, 'editor', $3, $4)
+         ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+        [projectIds.get("portfolio"), collaboratorId, userId, isoHoursAgo(90)]
+      );
+    }
 
     const entityIds = new Map();
     for (const fixture of taskFixtures) {
