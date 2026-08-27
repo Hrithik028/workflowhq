@@ -1657,6 +1657,10 @@ p {
   gap: 14px;
 }
 
+.modal-form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .date-input {
   position: relative;
   display: block;

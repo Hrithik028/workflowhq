@@ -1,7 +1,7 @@
 import type { Activity, TaskStatus } from "../types";
 
-export const formatDate = (value: string | null) => {
-  if (!value) return "No due date";
+export const formatDate = (value: string | null, emptyLabel = "No due date") => {
+  if (!value) return emptyLabel;
   return new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short" }).format(
     new Date(`${value.slice(0, 10)}T00:00:00`)
   );

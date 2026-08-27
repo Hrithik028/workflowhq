@@ -69,12 +69,17 @@ const taskBodySchema = z
     description: z.string().trim().max(5000).default(""),
     status: statusSchema.default("todo"),
     priority: prioritySchema.default("medium"),
+    startDate: optionalDate.optional().default(null),
     dueDate: optionalDate.optional().default(null),
     projectId: z.union([idSchema, z.null()]).optional().default(null),
     taskType: taskTypeSchema.default("task"),
     parentId: z.union([idSchema, z.null()]).optional().default(null)
   })
-  .strict();
+  .strict()
+  .refine((value) => !value.startDate || !value.dueDate || value.startDate <= value.dueDate, {
+    message: "Start date must be on or before the due date.",
+    path: ["startDate"]
+  });
 
 const taskSchemas = {
   params: z.object({ id: idSchema }),

@@ -105,6 +105,7 @@ function Tasks() {
         description: task.description,
         status: nextStatus,
         priority: task.priority,
+        startDate: task.startDate,
         dueDate: task.dueDate,
         taskType: task.taskType,
         parentId: task.parentId

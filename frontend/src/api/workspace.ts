@@ -41,6 +41,7 @@ const mapTask = (task: Raw): Task => ({
   description: String(task.description || ""),
   status: task.status as Task["status"],
   priority: task.priority as Task["priority"],
+  startDate: task.start_date == null ? null : String(task.start_date).slice(0, 10),
   dueDate: task.due_date == null ? null : String(task.due_date).slice(0, 10),
   createdAt: String(task.created_at),
   updatedAt: String(task.updated_at)

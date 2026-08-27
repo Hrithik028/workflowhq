@@ -23,7 +23,7 @@ import type { LayoutContext } from "../components/AppLayout";
 import TaskModal from "../components/TaskModal";
 import { engineeringMetaFor, issueTypeLabel, progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
-import type { Project, Task, TaskInput, TaskStatus, TaskType } from "../types";
+import type { Project, Task, TaskInput, TaskPriority, TaskStatus, TaskType } from "../types";
 import { formatDate, statusLabel } from "../utils/format";
 
 const typeIcon: Record<TaskType, typeof Square> = {
@@ -45,6 +45,7 @@ function TasksHierarchy() {
   const [search, setSearch] = useState("");
   const [projectId, setProjectId] = useState("");
   const [status, setStatus] = useState<"" | TaskStatus>("");
+  const [priority, setPriority] = useState<"" | TaskPriority>("");
   const [taskType, setTaskType] = useState<"" | TaskType>("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -65,6 +66,7 @@ function TasksHierarchy() {
           search: search || undefined,
           projectId: projectId ? Number(projectId) : undefined,
           status: status || undefined,
+          priority: priority || undefined,
           sort: "created_at",
           order: "asc"
         }),
@@ -91,7 +93,7 @@ function TasksHierarchy() {
     } finally {
       setIsLoading(false);
     }
-  }, [client, projectId, search, status, taskType]);
+  }, [client, priority, projectId, search, status, taskType]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), search ? 180 : 0);
@@ -129,7 +131,7 @@ function TasksHierarchy() {
   };
 
   const rows = useMemo(() => {
-    if (view === "tree") return tasks.map((task) => ({ task, depth: 0 }));
+    if (view === "list") return tasks.map((task) => ({ task, depth: 0 }));
     const byParent = new Map<number | null, Task[]>();
     tasks.forEach((task) =>
       byParent.set(task.parentId, [...(byParent.get(task.parentId) || []), task])
@@ -246,6 +248,16 @@ function TasksHierarchy() {
               <option value="todo">TO DO</option>
               <option value="in_progress">IN PROGRESS</option>
               <option value="completed">DONE</option>
+            </select>
+            <select
+              aria-label="Priority"
+              onChange={(event) => setPriority(event.target.value as "" | TaskPriority)}
+              value={priority}
+            >
+              <option value="">ALL PRIORITIES</option>
+              <option value="high">P1 / HIGH</option>
+              <option value="medium">P2 / MEDIUM</option>
+              <option value="low">P3 / LOW</option>
             </select>
             <button type="button">
               Group by: hierarchy <ChevronDown size={14} />

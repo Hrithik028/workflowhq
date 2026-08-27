@@ -38,6 +38,7 @@ export interface Task {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  startDate: string | null;
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
@@ -49,6 +50,7 @@ export interface TaskInput {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
+  startDate: string | null;
   dueDate: string | null;
   taskType: TaskType;
   parentId: number | null;

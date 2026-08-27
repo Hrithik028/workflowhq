@@ -51,6 +51,7 @@ const emptyTask = (
   projectId: parent?.projectId ?? null,
   status,
   priority: "medium",
+  startDate: null,
   dueDate,
   taskType: parent ? childTypeFor(parent) : "task",
   parentId: parent?.id ?? null
@@ -62,6 +63,7 @@ const taskToInput = (task: Task): TaskInput => ({
   projectId: task.projectId,
   status: task.status,
   priority: task.priority,
+  startDate: task.startDate,
   dueDate: task.dueDate,
   taskType: task.taskType,
   parentId: task.parentId
@@ -122,6 +124,10 @@ function TaskModal({
     event.preventDefault();
     if (!form.title.trim()) {
       setError("Give the task a clear title.");
+      return;
+    }
+    if (form.startDate && form.dueDate && form.startDate > form.dueDate) {
+      setError("Start date must be on or before the due date.");
       return;
     }
     setError("");
@@ -253,7 +259,7 @@ function TaskModal({
               </select>
             </label>
           </div>
-          <div className="modal-form-grid">
+          <div className="modal-form-grid three">
             <label>
               <span>Priority</span>
               <select
@@ -266,6 +272,21 @@ function TaskModal({
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
+            </label>
+            <label>
+              <span>
+                Start date <small>Optional</small>
+              </span>
+              <span className="date-input">
+                <CalendarDays size={16} />
+                <input
+                  onChange={(event) =>
+                    setForm({ ...form, startDate: event.target.value || null })
+                  }
+                  type="date"
+                  value={form.startDate ?? ""}
+                />
+              </span>
             </label>
             <label>
               <span>Due date</span>
