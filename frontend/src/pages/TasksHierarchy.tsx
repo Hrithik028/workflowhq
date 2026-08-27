@@ -131,6 +131,7 @@ function TasksHierarchy() {
 
   const rows = useMemo(() => {
     if (view === "list") return tasks.map((task) => ({ task, depth: 0 }));
+    const idsInView = new Set(tasks.map((task) => task.id));
     const byParent = new Map<number | null, Task[]>();
     tasks.forEach((task) =>
       byParent.set(task.parentId, [...(byParent.get(task.parentId) || []), task])
@@ -144,12 +145,14 @@ function TasksHierarchy() {
       if (expanded.has(task.id))
         (byParent.get(task.id) || []).forEach((child) => add(child, depth + 1));
     };
-    (
-      byParent.get(null) || tasks.filter((task) => !tasks.some((item) => item.id === task.parentId))
-    ).forEach((task) => add(task, 0));
-    tasks.forEach((task) => {
-      if (!visited.has(task.id)) add(task, 0);
-    });
+    // A row is a tree root if it has no parent, or its parent isn't in this
+    // filtered view. A task whose parent IS present but simply collapsed must
+    // stay hidden - a prior "catch-all" pass here used to re-add any unvisited
+    // task regardless of why it was unvisited, which meant collapsing a
+    // parent never actually hid its children.
+    tasks
+      .filter((task) => !task.parentId || !idsInView.has(task.parentId))
+      .forEach((task) => add(task, 0));
     return result;
   }, [expanded, tasks, view]);
 
@@ -231,6 +234,7 @@ function TasksHierarchy() {
               value={taskType}
             >
               <option value="">ALL TYPES</option>
+              <option value="initiative">INITIATIVES</option>
               <option value="epic">EPICS</option>
               <option value="story">STORIES</option>
               <option value="task">TASKS</option>
@@ -275,8 +279,13 @@ function TasksHierarchy() {
             </header>
             {rows.map(({ task, depth }) => {
               const Icon = typeIcon[task.taskType];
-              const hasChildren =
-                task.childCount > 0 || tasks.some((item) => item.parentId === task.id);
+              // The caret only has a real effect in Tree view - List always
+              // renders every row flat regardless of expand state, so showing
+              // an interactive-looking control there that does nothing is
+              // just misleading.
+              const canExpand =
+                view === "tree" &&
+                (task.childCount > 0 || tasks.some((item) => item.parentId === task.id));
               const progress = progressFor(task);
               return (
                 <article
@@ -285,7 +294,7 @@ function TasksHierarchy() {
                   onClick={() => setSelectedId(task.id)}
                 >
                   <span className={`hierarchy-type ${task.taskType}`}>
-                    {hasChildren ? (
+                    {canExpand ? (
                       <button
                         aria-label={`${expanded.has(task.id) ? "Collapse" : "Expand"} ${task.issueKey}`}
                         type="button"
@@ -390,6 +399,10 @@ function TasksHierarchy() {
               <section>
                 <h3>Child summary</h3>
                 <ul className="child-summary">
+                  <li>
+                    <span>Epics</span>
+                    <b>{children.filter((task) => task.taskType === "epic").length}</b>
+                  </li>
                   <li>
                     <span>Stories</span>
                     <b>{children.filter((task) => task.taskType === "story").length}</b>
