@@ -47,53 +47,60 @@ const addMember = async (req, res, next) => {
     );
   }
 
-  // Exact, case-insensitive email match only - no browsable directory, so this
-  // can't be used to enumerate the platform's users.
+  // Exact, case-insensitive email match only - no browsable directory. Whether
+  // or not a match exists, the caller gets back the exact same response below:
+  // a distinguishable "no such user" vs "added" response would let any owner
+  // (any user - creating a free project makes you one) probe arbitrary emails
+  // to learn which ones have accounts on this instance. "Already a member" is
+  // left distinct, since that only confirms something the caller can already
+  // see for themselves in this project's own member list.
   const targetResult = await db.query("SELECT id, name, email FROM users WHERE email = $1", [
     req.body.email
   ]);
-  if (targetResult.rows.length === 0) {
-    return next(new AppError(404, "USER_NOT_FOUND", "No user with that email exists."));
-  }
-  const target = targetResult.rows[0];
-  if (Number(target.id) === Number(req.user.id)) {
-    return next(
-      new AppError(409, "PROJECT_MEMBER_EXISTS", "You are already a member of this project.")
-    );
-  }
-  const existingRole = await getProjectRole(db, req.params.id, target.id);
-  if (existingRole) {
-    return next(
-      new AppError(409, "PROJECT_MEMBER_EXISTS", "This user is already a member of the project.")
-    );
+  const target = targetResult.rows[0] || null;
+
+  if (target) {
+    if (Number(target.id) === Number(req.user.id)) {
+      return next(
+        new AppError(409, "PROJECT_MEMBER_EXISTS", "You are already a member of this project.")
+      );
+    }
+    const existingRole = await getProjectRole(db, req.params.id, target.id);
+    if (existingRole) {
+      return next(
+        new AppError(409, "PROJECT_MEMBER_EXISTS", "This user is already a member of the project.")
+      );
+    }
+
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO project_members (project_id, user_id, role, invited_by)
+         VALUES ($1, $2, $3, $4)`,
+        [req.params.id, target.id, req.body.role, req.user.id]
+      );
+      await logActivity(client, {
+        userId: req.user.id,
+        action: "project_member_added",
+        entityType: "project",
+        entityId: Number(req.params.id),
+        entityTitle: target.email,
+        details: { role: req.body.role, targetUserId: target.id }
+      });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
-  const client = await db.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO project_members (project_id, user_id, role, invited_by)
-       VALUES ($1, $2, $3, $4)`,
-      [req.params.id, target.id, req.body.role, req.user.id]
-    );
-    await logActivity(client, {
-      userId: req.user.id,
-      action: "project_member_added",
-      entityType: "project",
-      entityId: Number(req.params.id),
-      entityTitle: target.email,
-      details: { role: req.body.role, targetUserId: target.id }
-    });
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  return res.status(201).json({
-    data: { userId: target.id, name: target.name, email: target.email, role: req.body.role }
+  return res.status(202).json({
+    data: {
+      message: "If that email belongs to a WorkflowHQ account, they've been added to this project."
+    }
   });
 };
 

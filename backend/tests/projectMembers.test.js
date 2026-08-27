@@ -69,8 +69,7 @@ describe("project membership and roles", () => {
 
     expect(before.status).toBe(404);
     expect(membersBefore.status).toBe(404);
-    expect(added.status).toBe(201);
-    expect(added.body.data).toMatchObject({ email: second.user.email, role: "editor" });
+    expect(added.status).toBe(202);
     expect(after.status).toBe(200);
     expect(after.body.data.my_role).toBe("editor");
   });
@@ -201,18 +200,26 @@ describe("project membership and roles", () => {
     expect(demoteNowAllowed.status).toBe(200);
   });
 
-  it("looks up new members by exact email match only", async () => {
+  it("responds identically to a real and a nonexistent email, so the endpoint can't be used to enumerate accounts", async () => {
     const project = await createProject();
     const projectId = project.body.data.id;
     const editor = await registerUser(app, "member-exact-email");
 
+    const membersBefore = await request(app)
+      .get(`/api/projects/${projectId}/members`)
+      .set(auth(owner.token));
     const notFound = await addMember(projectId, { email: "nobody@example.com", role: "editor" });
+    const membersAfterNotFound = await request(app)
+      .get(`/api/projects/${projectId}/members`)
+      .set(auth(owner.token));
     const added = await addMember(projectId, { email: editor.user.email, role: "editor" });
     const duplicate = await addMember(projectId, { email: editor.user.email, role: "viewer" });
 
-    expect(notFound.status).toBe(404);
-    expect(notFound.body.error.code).toBe("USER_NOT_FOUND");
-    expect(added.status).toBe(201);
+    // Same status and body shape whether or not the email matched an account.
+    expect(notFound.status).toBe(added.status);
+    expect(notFound.body).toEqual(added.body);
+    // ...but only the real add actually created a membership row.
+    expect(membersAfterNotFound.body.data).toHaveLength(membersBefore.body.data.length);
     expect(duplicate.status).toBe(409);
     expect(duplicate.body.error.code).toBe("PROJECT_MEMBER_EXISTS");
   });

@@ -193,7 +193,7 @@ export interface WorkspaceClient {
   getStats(projectId?: number): Promise<TaskStats>;
   getActivity(limit?: number): Promise<Activity[]>;
   listMembers(projectId: number): Promise<ProjectMember[]>;
-  addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }): Promise<ProjectMember>;
+  addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }): Promise<void>;
   updateMemberRole(projectId: number, userId: number, role: ProjectRole): Promise<void>;
   removeMember(projectId: number, userId: number): Promise<void>;
 }

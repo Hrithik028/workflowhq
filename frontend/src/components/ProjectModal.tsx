@@ -42,6 +42,7 @@ function ProjectModal({
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [memberError, setMemberError] = useState("");
+  const [memberNotice, setMemberNotice] = useState("");
   const [isMemberBusy, setIsMemberBusy] = useState(false);
   const [addEmail, setAddEmail] = useState("");
   const [addRole, setAddRole] = useState<"editor" | "viewer">("editor");
@@ -91,7 +92,12 @@ function ProjectModal({
       setAddRole("editor");
       await loadMembers();
       setMemberError("");
+      // The backend won't confirm whether that email had an account (so this
+      // can't be used to check who's registered) - the member list above is
+      // the real signal for whether it worked.
+      setMemberNotice("If that email has a WorkflowHQ account, they've been added below.");
     } catch (addError) {
+      setMemberNotice("");
       setMemberError(getErrorMessage(addError, "Unable to add this member."));
     } finally {
       setIsMemberBusy(false);
@@ -101,6 +107,7 @@ function ProjectModal({
   const changeRole = async (member: ProjectMember, role: ProjectRole) => {
     if (!project) return;
     setIsMemberBusy(true);
+    setMemberNotice("");
     try {
       await client.updateMemberRole(project.id, member.userId, role);
       await loadMembers();
@@ -115,6 +122,7 @@ function ProjectModal({
   const removeMember = async (member: ProjectMember) => {
     if (!project) return;
     setIsMemberBusy(true);
+    setMemberNotice("");
     try {
       await client.removeMember(project.id, member.userId);
       await loadMembers();
@@ -240,6 +248,7 @@ function ProjectModal({
               {!isOwner ? <small>Read only — ask an owner to make changes.</small> : null}
             </header>
             {memberError ? <p className="form-alert error">{memberError}</p> : null}
+            {memberNotice ? <p className="form-alert notice">{memberNotice}</p> : null}
             {isLoadingMembers ? <p className="register-loading">Loading members…</p> : null}
             <ul className="member-list">
               {members.map((member) => {

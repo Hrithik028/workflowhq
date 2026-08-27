@@ -643,7 +643,6 @@ export const demoWorkspaceApi: WorkspaceClient = {
       addedAt: new Date().toISOString()
     };
     membersByProject[projectId] = [...members, member];
-    return { ...member };
   },
 
   async updateMemberRole(projectId: number, userId: number, role: ProjectRole) {

@@ -128,8 +128,9 @@ export const workspaceApi: WorkspaceClient = {
     return response.data.data.map(mapMember);
   },
   async addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }) {
-    const response = await api.post<{ data: Raw }>(`/projects/${projectId}/members`, input);
-    return mapMember(response.data.data);
+    // The response is deliberately generic (never reveals whether the email
+    // matched an account) - reload the member list to see what happened.
+    await api.post(`/projects/${projectId}/members`, input);
   },
   async updateMemberRole(projectId: number, userId: number, role: ProjectRole) {
     await api.patch(`/projects/${projectId}/members/${userId}`, { role });
