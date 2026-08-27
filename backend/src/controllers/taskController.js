@@ -332,6 +332,20 @@ const updateTask = async (req, res, next) => {
       return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
     }
     const projectChanged = Number(existing.project_id || 0) !== Number(projectId || 0);
+    // Moving a task into the inbox makes it visible only to its original
+    // creator (tasks.user_id is frozen and inbox tasks have no membership
+    // concept) - letting any editor do this would let them orphan a
+    // teammate's ticket, hiding it from themselves and everyone else.
+    if (projectChanged && !projectId && Number(existing.user_id) !== Number(req.user.id)) {
+      await client.query("ROLLBACK");
+      return next(
+        new AppError(
+          403,
+          "TASK_INBOX_MOVE_DENIED",
+          "Only this ticket's creator can move it out of the project into their inbox."
+        )
+      );
+    }
     // Editing requires editor/owner on the task's target project context. If the
     // task is moving between projects (or in/out of the inbox), the caller needs
     // that same standing on the project it's leaving too.

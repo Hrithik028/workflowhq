@@ -217,6 +217,32 @@ describe("project membership and roles", () => {
     expect(duplicate.body.error.code).toBe("PROJECT_MEMBER_EXISTS");
   });
 
+  it("blocks an editor from moving a teammate's task into their own inbox", async () => {
+    const project = await createProject();
+    const projectId = project.body.data.id;
+    const editor = await registerUser(app, "member-inbox-move-editor");
+    await addMember(projectId, { email: editor.user.email, role: "editor" });
+
+    const task = await request(app)
+      .post("/api/tasks")
+      .set(auth(owner.token))
+      .send(taskPayload({ projectId, title: "Owner's ticket" }));
+
+    const editorMovesIt = await request(app)
+      .put(`/api/tasks/${task.body.data.id}`)
+      .set(auth(editor.token))
+      .send(taskPayload({ projectId: null, title: "Owner's ticket" }));
+    const ownerMovesIt = await request(app)
+      .put(`/api/tasks/${task.body.data.id}`)
+      .set(auth(owner.token))
+      .send(taskPayload({ projectId: null, title: "Owner's ticket" }));
+
+    expect(editorMovesIt.status).toBe(403);
+    expect(editorMovesIt.body.error.code).toBe("TASK_INBOX_MOVE_DENIED");
+    expect(ownerMovesIt.status).toBe(200);
+    expect(ownerMovesIt.body.data.project_id).toBeNull();
+  });
+
   it("only an owner can add members, and a non-owner is refused", async () => {
     const project = await createProject();
     const projectId = project.body.data.id;
