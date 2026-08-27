@@ -290,6 +290,7 @@ function Calendar() {
           onSave={saveTask}
           projects={projects}
           task={editingTask}
+          tasks={tasks}
         />
       ) : null}
     </main>

@@ -1,5 +1,6 @@
 export type TaskStatus = "todo" | "in_progress" | "completed";
 export type TaskPriority = "low" | "medium" | "high";
+export type TaskType = "initiative" | "epic" | "story" | "task" | "bug" | "subtask";
 
 export interface User {
   id: number;
@@ -12,6 +13,7 @@ export interface User {
 export interface Project {
   id: number;
   userId: number;
+  key: string;
   name: string;
   description: string;
   taskCount: number;
@@ -25,6 +27,13 @@ export interface Task {
   userId: number;
   projectId: number | null;
   projectName: string | null;
+  projectKey: string | null;
+  issueKey: string;
+  taskType: TaskType;
+  parentId: number | null;
+  parentTitle: string | null;
+  childCount: number;
+  completedChildCount: number;
   title: string;
   description: string;
   status: TaskStatus;
@@ -41,9 +50,12 @@ export interface TaskInput {
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string | null;
+  taskType: TaskType;
+  parentId: number | null;
 }
 
 export interface ProjectInput {
+  key: string;
   name: string;
   description: string;
 }
@@ -65,6 +77,7 @@ export interface Activity {
     | "task_completed"
     | "task_status_changed"
     | "task_priority_changed"
+    | "task_parent_changed"
     | "task_deleted"
     | "project_created"
     | "project_deleted";
@@ -104,6 +117,51 @@ export interface ApiErrorPayload {
 export interface Session {
   accessToken: string;
   user: User;
+}
+
+export type PermissionKey =
+  | "projects.create"
+  | "projects.edit"
+  | "projects.delete"
+  | "tasks.create"
+  | "tasks.edit"
+  | "tasks.delete"
+  | "github.manage";
+
+export type PermissionSet = Record<PermissionKey, boolean>;
+
+export interface WorkspaceRules {
+  allow_task_deletion: boolean;
+  allow_project_deletion: boolean;
+  require_due_date_for_high_priority: boolean;
+  max_open_tasks_per_user: number;
+}
+
+export interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  role: "user" | "admin";
+  projectCount: number;
+  taskCount: number;
+  createdAt: string;
+  permissions: PermissionSet;
+}
+
+export interface AdminAuditEntry {
+  id: number;
+  action: string;
+  details: Record<string, unknown>;
+  adminName: string;
+  targetName: string | null;
+  createdAt: string;
+}
+
+export interface AdminOverview {
+  users: AdminUser[];
+  rules: WorkspaceRules;
+  audit: AdminAuditEntry[];
+  permissionKeys: PermissionKey[];
 }
 
 export interface WorkspaceClient {

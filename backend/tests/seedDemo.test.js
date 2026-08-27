@@ -3,7 +3,7 @@ const { resolveDemoUser } = require("../src/db/seedDemo");
 describe("demo seed safeguards", () => {
   it("keeps convenient defaults for local development", () => {
     expect(resolveDemoUser({ NODE_ENV: "development" })).toMatchObject({
-      email: "demo@workflowhq.local",
+      email: "demo@workflowhq.app",
       password: "WorkflowHQ!2026"
     });
   });

@@ -6,25 +6,108 @@ const taskFields = `
   t.user_id,
   t.project_id,
   p.name AS project_name,
+  p.key AS project_key,
+  t.issue_key,
+  t.task_type,
+  t.parent_task_id,
+  parent.title AS parent_title,
   t.title,
   t.description,
   t.status,
   t.priority,
   t.due_date,
   t.created_at,
-  t.updated_at`;
+  t.updated_at,
+  COALESCE(child_stats.child_count, 0)::int AS child_count,
+  COALESCE(child_stats.completed_child_count, 0)::int AS completed_child_count`;
+
+const taskJoins = `
+  LEFT JOIN projects p ON p.id = t.project_id AND p.user_id = t.user_id
+  LEFT JOIN tasks parent ON parent.id = t.parent_task_id AND parent.user_id = t.user_id
+  LEFT JOIN (
+    SELECT user_id, parent_task_id,
+           COUNT(*)::int AS child_count,
+           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)::int AS completed_child_count
+    FROM tasks
+    WHERE parent_task_id IS NOT NULL
+    GROUP BY user_id, parent_task_id
+  ) child_stats ON child_stats.parent_task_id = t.id AND child_stats.user_id = t.user_id`;
+
+const typeRank = {
+  initiative: 5,
+  epic: 4,
+  story: 3,
+  task: 2,
+  bug: 2,
+  subtask: 1
+};
 
 const verifyProjectOwnership = async (db, projectId, userId) => {
   if (!projectId) {
-    return;
+    return { key: "INB" };
   }
-  const result = await db.query("SELECT id FROM projects WHERE id = $1 AND user_id = $2", [
+  const result = await db.query("SELECT id, key FROM projects WHERE id = $1 AND user_id = $2", [
     projectId,
     userId
   ]);
   if (result.rows.length === 0) {
     throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found.");
   }
+  return result.rows[0];
+};
+
+const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId, taskId }) => {
+  if (!parentId) return;
+  let cursorId = parentId;
+  let depth = 0;
+  let parent;
+
+  while (cursorId) {
+    const result = await db.query(
+      `SELECT id, project_id, parent_task_id, task_type
+       FROM tasks WHERE id = $1 AND user_id = $2`,
+      [cursorId, userId]
+    );
+    if (result.rows.length === 0) {
+      throw new AppError(404, "PARENT_TASK_NOT_FOUND", "Parent task not found.");
+    }
+    const current = result.rows[0];
+    if (!parent) parent = current;
+    if (taskId && Number(current.id) === Number(taskId)) {
+      throw new AppError(409, "TASK_HIERARCHY_CYCLE", "A task cannot become its own ancestor.");
+    }
+    depth += 1;
+    if (depth >= 5) {
+      throw new AppError(409, "TASK_HIERARCHY_DEPTH", "Task hierarchy is limited to five levels.");
+    }
+    cursorId = current.parent_task_id;
+  }
+
+  if (Number(parent.project_id || 0) !== Number(projectId || 0)) {
+    throw new AppError(
+      409,
+      "TASK_PROJECT_MISMATCH",
+      "Parent and child tasks must belong to the same project."
+    );
+  }
+  if (typeRank[parent.task_type] <= typeRank[taskType]) {
+    throw new AppError(
+      409,
+      "INVALID_TASK_HIERARCHY",
+      `${parent.task_type} tickets can only contain lower-level work.`
+    );
+  }
+};
+
+const selectTaskById = async (db, id, userId) => {
+  const result = await db.query(
+    `SELECT ${taskFields}
+     FROM tasks t
+     ${taskJoins}
+     WHERE t.id = $1 AND t.user_id = $2`,
+    [id, userId]
+  );
+  return result.rows[0];
 };
 
 const getTasks = async (req, res) => {
@@ -41,7 +124,9 @@ const getTasks = async (req, res) => {
   if (projectId) addCondition("t.project_id = ?", projectId);
   if (search) {
     values.push(`%${search}%`);
-    conditions.push(`(t.title ILIKE $${values.length} OR t.description ILIKE $${values.length})`);
+    conditions.push(
+      `(t.title ILIKE $${values.length} OR t.description ILIKE $${values.length} OR t.issue_key ILIKE $${values.length})`
+    );
   }
 
   const where = conditions.join(" AND ");
@@ -62,7 +147,7 @@ const getTasks = async (req, res) => {
   const rows = await req.app.locals.db.query(
     `SELECT ${taskFields}
      FROM tasks t
-     LEFT JOIN projects p ON p.id = t.project_id AND p.user_id = t.user_id
+     ${taskJoins}
      WHERE ${where}
      ORDER BY ${sortColumns[sort]} ${order.toUpperCase()} NULLS LAST, t.id DESC
      LIMIT $${listValues.length - 1} OFFSET $${listValues.length}`,
@@ -83,24 +168,38 @@ const getTasks = async (req, res) => {
 const createTask = async (req, res) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const { title, description, status, priority, dueDate, projectId } = req.body;
+  const { title, description, status, priority, dueDate, projectId, taskType, parentId } = req.body;
 
   try {
     await client.query("BEGIN");
-    await verifyProjectOwnership(client, projectId, req.user.id);
+    const project = await verifyProjectOwnership(client, projectId, req.user.id);
+    await verifyParentHierarchy({
+      db: client,
+      parentId,
+      projectId,
+      taskType,
+      userId: req.user.id
+    });
     const result = await client.query(
-      `INSERT INTO tasks (user_id, project_id, title, description, status, priority, due_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, user_id, project_id, title, description, status, priority, due_date, created_at, updated_at`,
-      [req.user.id, projectId, title, description, status, priority, dueDate]
+      `INSERT INTO tasks
+         (user_id, project_id, title, description, status, priority, due_date, task_type, parent_task_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id`,
+      [req.user.id, projectId, title, description, status, priority, dueDate, taskType, parentId]
     );
-    const task = result.rows[0];
+    const taskId = result.rows[0].id;
+    await client.query("UPDATE tasks SET issue_key = $1 WHERE id = $2", [
+      `${project.key}-${taskId}`,
+      taskId
+    ]);
+    const task = await selectTaskById(client, taskId, req.user.id);
     await logActivity(client, {
       userId: req.user.id,
       action: "task_created",
       entityType: "task",
       entityId: task.id,
-      entityTitle: task.title
+      entityTitle: task.title,
+      details: { issueKey: task.issue_key, taskType: task.task_type, parentId }
     });
     await client.query("COMMIT");
     return res.status(201).json({ data: task });
@@ -112,24 +211,37 @@ const createTask = async (req, res) => {
   }
 };
 
+const createChildTask = async (req, res) => {
+  req.body.parentId = Number(req.params.id);
+  return createTask(req, res);
+};
+
 const getTaskById = async (req, res, next) => {
+  const task = await selectTaskById(req.app.locals.db, req.params.id, req.user.id);
+  if (!task) {
+    return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+  }
+  return res.status(200).json({ data: task });
+};
+
+const getTaskChildren = async (req, res, next) => {
+  const parentTask = await selectTaskById(req.app.locals.db, req.params.id, req.user.id);
+  if (!parentTask) return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
   const result = await req.app.locals.db.query(
     `SELECT ${taskFields}
      FROM tasks t
-     LEFT JOIN projects p ON p.id = t.project_id AND p.user_id = t.user_id
-     WHERE t.id = $1 AND t.user_id = $2`,
+     ${taskJoins}
+     WHERE t.parent_task_id = $1 AND t.user_id = $2
+     ORDER BY t.created_at ASC, t.id ASC`,
     [req.params.id, req.user.id]
   );
-  if (result.rows.length === 0) {
-    return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
-  }
-  return res.status(200).json({ data: result.rows[0] });
+  return res.status(200).json({ data: result.rows });
 };
 
 const updateTask = async (req, res, next) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const { title, description, status, priority, dueDate, projectId } = req.body;
+  const { title, description, status, priority, dueDate, projectId, taskType, parentId } = req.body;
 
   try {
     await client.query("BEGIN");
@@ -142,16 +254,47 @@ const updateTask = async (req, res, next) => {
       return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
     }
     await verifyProjectOwnership(client, projectId, req.user.id);
+    await verifyParentHierarchy({
+      db: client,
+      parentId,
+      projectId,
+      taskType,
+      userId: req.user.id,
+      taskId: req.params.id
+    });
     const existing = existingResult.rows[0];
-    const result = await client.query(
+    if (Number(existing.project_id || 0) !== Number(projectId || 0)) {
+      const childResult = await client.query(
+        "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1 AND user_id = $2",
+        [req.params.id, req.user.id]
+      );
+      if (childResult.rows[0].count > 0) {
+        throw new AppError(
+          409,
+          "TASK_HAS_CHILDREN",
+          "Move or remove child tasks before changing this task's project."
+        );
+      }
+    }
+    await client.query(
       `UPDATE tasks
        SET project_id = $1, title = $2, description = $3, status = $4, priority = $5,
-           due_date = $6, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7 AND user_id = $8
-       RETURNING id, user_id, project_id, title, description, status, priority, due_date, created_at, updated_at`,
-      [projectId, title, description, status, priority, dueDate, req.params.id, req.user.id]
+           due_date = $6, task_type = $7, parent_task_id = $8, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $9 AND user_id = $10`,
+      [
+        projectId,
+        title,
+        description,
+        status,
+        priority,
+        dueDate,
+        taskType,
+        parentId,
+        req.params.id,
+        req.user.id
+      ]
     );
-    const task = result.rows[0];
+    const task = await selectTaskById(client, req.params.id, req.user.id);
     const activities = [];
     if (existing.status !== status) {
       activities.push({
@@ -163,6 +306,12 @@ const updateTask = async (req, res, next) => {
       activities.push({
         action: "task_priority_changed",
         details: { from: existing.priority, to: priority }
+      });
+    }
+    if (Number(existing.parent_task_id || 0) !== Number(parentId || 0)) {
+      activities.push({
+        action: "task_parent_changed",
+        details: { from: existing.parent_task_id, to: parentId }
       });
     }
     if (activities.length === 0) activities.push({ action: "task_updated", details: {} });
@@ -191,6 +340,16 @@ const deleteTask = async (req, res, next) => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
+    const children = await client.query(
+      "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1 AND user_id = $2",
+      [req.params.id, req.user.id]
+    );
+    if (children.rows[0].count > 0) {
+      await client.query("ROLLBACK");
+      return next(
+        new AppError(409, "TASK_HAS_CHILDREN", "Move or delete this task's children first.")
+      );
+    }
     const result = await client.query(
       "DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING id, title",
       [req.params.id, req.user.id]
@@ -237,4 +396,13 @@ const getTaskStats = async (req, res) => {
   return res.status(200).json({ data: result.rows[0] });
 };
 
-module.exports = { createTask, deleteTask, getTaskById, getTasks, getTaskStats, updateTask };
+module.exports = {
+  createChildTask,
+  createTask,
+  deleteTask,
+  getTaskById,
+  getTaskChildren,
+  getTasks,
+  getTaskStats,
+  updateTask
+};

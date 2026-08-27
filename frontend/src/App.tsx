@@ -5,19 +5,22 @@ import { authApi } from "./api/auth";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Calendar from "./pages/Calendar";
+import { demoCredentials } from "./demo/credentials";
 import Login from "./pages/Login";
-import Overview from "./pages/Overview";
+import Overview from "./pages/OverviewEngineering";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
-import Tasks from "./pages/Tasks";
-import Workspace from "./pages/Workspace";
-import { Analytics, Content, Inbox, Reports, Settings } from "./pages/WorkspaceSections";
+import Settings from "./pages/SettingsAdmin";
+import TaskDetail from "./pages/TaskDetail";
+import Tasks from "./pages/TasksHierarchy";
+import Workspace from "./pages/WorkspaceEngineering";
+import { Analytics, Content, Inbox, Reports } from "./pages/WorkspaceSections";
 import type { Session, User } from "./types";
 
 const demoUser: User = {
   id: 1,
-  name: "Alex Morgan",
-  email: "alex@workflowhq.demo",
+  name: "WorkflowHQ Demo",
+  email: demoCredentials.email,
   role: "user",
   createdAt: new Date().toISOString()
 };
@@ -98,6 +101,7 @@ function App() {
         <Route path="/workflow" element={<Workspace />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/tasks" element={<Tasks />} />
+        <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/content" element={<Content />} />
         <Route path="/analytics" element={<Analytics />} />

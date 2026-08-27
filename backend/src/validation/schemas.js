@@ -2,7 +2,15 @@ const { z } = require("zod");
 
 const statusSchema = z.enum(["todo", "in_progress", "completed"]);
 const prioritySchema = z.enum(["low", "medium", "high"]);
+const taskTypeSchema = z.enum(["initiative", "epic", "story", "task", "bug", "subtask"]);
 const idSchema = z.coerce.number().int().positive();
+const projectKeySchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(10)
+  .regex(/^[A-Za-z][A-Za-z0-9]*$/, "Use 2-10 letters and numbers, starting with a letter.")
+  .transform((value) => value.toUpperCase());
 const optionalDate = z
   .union([
     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date in YYYY-MM-DD format."),
@@ -41,12 +49,14 @@ const projectSchemas = {
   params: z.object({ id: idSchema }),
   create: z
     .object({
+      key: projectKeySchema,
       name: z.string().trim().min(1).max(120),
       description: z.string().trim().max(1000).default("")
     })
     .strict(),
   update: z
     .object({
+      key: projectKeySchema,
       name: z.string().trim().min(1).max(120),
       description: z.string().trim().max(1000).default("")
     })
@@ -60,7 +70,9 @@ const taskBodySchema = z
     status: statusSchema.default("todo"),
     priority: prioritySchema.default("medium"),
     dueDate: optionalDate.optional().default(null),
-    projectId: z.union([idSchema, z.null()]).optional().default(null)
+    projectId: z.union([idSchema, z.null()]).optional().default(null),
+    taskType: taskTypeSchema.default("task"),
+    parentId: z.union([idSchema, z.null()]).optional().default(null)
   })
   .strict();
 

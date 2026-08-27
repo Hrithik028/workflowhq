@@ -11,6 +11,7 @@
     "start": "node src/server.js",
     "migrate": "node src/db/migrate.js",
     "seed:demo": "node src/db/seedDemo.js",
+    "admin:promote": "node src/db/promoteAdmin.js",
     "lint": "eslint .",
     "format": "prettier --write . --ignore-path ../.prettierignore",
     "format:check": "prettier --check . --ignore-path ../.prettierignore",

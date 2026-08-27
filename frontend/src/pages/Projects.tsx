@@ -151,7 +151,7 @@ function Projects() {
             <span>Board</span>
             <span>Edit</span>
           </header>
-          {projects.map((project, index) => {
+          {projects.map((project) => {
             const percent = project.taskCount
               ? Math.round((project.completedCount / project.taskCount) * 100)
               : 0;
@@ -159,7 +159,7 @@ function Projects() {
               project.taskCount === 0 ? "Planning" : percent === 100 ? "Shipped" : "Active";
             return (
               <article className="project-register-row" key={project.id}>
-                <span className="project-reference">PRJ-{String(index + 1).padStart(3, "0")}</span>
+                <span className="project-reference">{project.key}</span>
                 <div className="project-register-name">
                   <strong>{project.name}</strong>
                   <span>{project.description || "Outcome not defined yet."}</span>
@@ -178,7 +178,7 @@ function Projects() {
                 <span className={`project-register-state ${state.toLowerCase()}`}>{state}</span>
                 <Link
                   className="project-register-open"
-                  to={`/app?project=${project.id}`}
+                  to={`/workflow?project=${project.id}`}
                   aria-label={`Open ${project.name} board`}
                 >
                   <span>Open</span>

@@ -17,6 +17,7 @@ let projects: Project[] = [
   {
     id: 1,
     userId: 1,
+    key: "LAUNCH",
     name: "Product launch",
     description: "Coordinate the final work for the WorkflowHQ public launch.",
     taskCount: 4,
@@ -27,6 +28,7 @@ let projects: Project[] = [
   {
     id: 2,
     userId: 1,
+    key: "MOBILE",
     name: "Mobile onboarding",
     description: "Refine the new-user journey across small screens.",
     taskCount: 3,
@@ -37,6 +39,7 @@ let projects: Project[] = [
   {
     id: 3,
     userId: 1,
+    key: "OPS",
     name: "Operations",
     description: "Recurring engineering and release readiness work.",
     taskCount: 2,
@@ -52,6 +55,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 1,
     projectName: "Product launch",
+    projectKey: "LAUNCH",
+    issueKey: "LAUNCH-1",
+    taskType: "epic",
+    parentId: null,
+    parentTitle: null,
+    childCount: 3,
+    completedChildCount: 1,
     title: "Finalize launch checklist",
     description: "Confirm owners, dependencies, and release-day handoff.",
     status: "todo",
@@ -65,6 +75,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 2,
     projectName: "Mobile onboarding",
+    projectKey: "MOBILE",
+    issueKey: "MOBILE-2",
+    taskType: "story",
+    parentId: 8,
+    parentTitle: "Map sign-up journey",
+    childCount: 0,
+    completedChildCount: 0,
     title: "Review empty states",
     description: "Make first-use states helpful without adding extra steps.",
     status: "todo",
@@ -78,6 +95,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 1,
     projectName: "Product launch",
+    projectKey: "LAUNCH",
+    issueKey: "LAUNCH-3",
+    taskType: "story",
+    parentId: 1,
+    parentTitle: "Finalize launch checklist",
+    childCount: 0,
+    completedChildCount: 0,
     title: "Write release notes",
     description: "Summarise the user-facing improvements in plain language.",
     status: "todo",
@@ -91,6 +115,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 1,
     projectName: "Product launch",
+    projectKey: "LAUNCH",
+    issueKey: "LAUNCH-4",
+    taskType: "task",
+    parentId: 1,
+    parentTitle: "Finalize launch checklist",
+    childCount: 0,
+    completedChildCount: 0,
     title: "Run production smoke tests",
     description: "Verify auth, projects, task movement, and logout after deployment.",
     status: "in_progress",
@@ -104,6 +135,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 2,
     projectName: "Mobile onboarding",
+    projectKey: "MOBILE",
+    issueKey: "MOBILE-5",
+    taskType: "task",
+    parentId: 8,
+    parentTitle: "Map sign-up journey",
+    childCount: 0,
+    completedChildCount: 0,
     title: "Tighten mobile navigation",
     description: "Keep the main actions reachable at tablet and phone widths.",
     status: "in_progress",
@@ -117,6 +155,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 3,
     projectName: "Operations",
+    projectKey: "OPS",
+    issueKey: "OPS-6",
+    taskType: "task",
+    parentId: 9,
+    parentTitle: "Define pull request checks",
+    childCount: 0,
+    completedChildCount: 0,
     title: "Configure deployment health check",
     description: "Use the API health route for service availability checks.",
     status: "in_progress",
@@ -130,6 +175,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 1,
     projectName: "Product launch",
+    projectKey: "LAUNCH",
+    issueKey: "LAUNCH-7",
+    taskType: "task",
+    parentId: 1,
+    parentTitle: "Finalize launch checklist",
+    childCount: 0,
+    completedChildCount: 0,
     title: "Add authorization coverage",
     description: "Verify one user cannot read or change another user's work.",
     status: "completed",
@@ -143,6 +195,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 2,
     projectName: "Mobile onboarding",
+    projectKey: "MOBILE",
+    issueKey: "MOBILE-8",
+    taskType: "epic",
+    parentId: null,
+    parentTitle: null,
+    childCount: 2,
+    completedChildCount: 0,
     title: "Map sign-up journey",
     description: "Document each step from registration to first task.",
     status: "completed",
@@ -156,6 +215,13 @@ let tasks: Task[] = [
     userId: 1,
     projectId: 3,
     projectName: "Operations",
+    projectKey: "OPS",
+    issueKey: "OPS-9",
+    taskType: "epic",
+    parentId: null,
+    parentTitle: null,
+    childCount: 1,
+    completedChildCount: 0,
     title: "Define pull request checks",
     description: "Require linting, tests, type checking, and production builds.",
     status: "completed",
@@ -227,6 +293,22 @@ const refreshProjectCounts = () => {
   }));
 };
 
+const refreshHierarchyMetadata = () => {
+  tasks = tasks.map((task) => {
+    const project = projects.find((item) => item.id === task.projectId);
+    const parent = tasks.find((item) => item.id === task.parentId);
+    const children = tasks.filter((item) => item.parentId === task.id);
+    return {
+      ...task,
+      projectName: project?.name || null,
+      projectKey: project?.key || null,
+      parentTitle: parent?.title || null,
+      childCount: children.length,
+      completedChildCount: children.filter((item) => item.status === "completed").length
+    };
+  });
+};
+
 export const demoWorkspaceApi: WorkspaceClient = {
   async listProjects() {
     await delay();
@@ -261,10 +343,11 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const project = projects.find((item) => item.id === id);
     if (!project) throw new Error("Project not found.");
+    if (project.key !== input.key && project.taskCount > 0) {
+      throw new Error("A project key cannot change after its first ticket is created.");
+    }
     Object.assign(project, input, { updatedAt: new Date().toISOString() });
-    tasks = tasks.map((task) =>
-      task.projectId === id ? { ...task, projectName: project.name } : task
-    );
+    refreshHierarchyMetadata();
     return { ...project };
   },
 
@@ -274,8 +357,11 @@ export const demoWorkspaceApi: WorkspaceClient = {
     if (!project) throw new Error("Project not found.");
     projects = projects.filter((item) => item.id !== id);
     tasks = tasks.map((task) =>
-      task.projectId === id ? { ...task, projectId: null, projectName: null } : task
+      task.projectId === id
+        ? { ...task, projectId: null, projectName: null, projectKey: null }
+        : task
     );
+    refreshHierarchyMetadata();
     addActivity({
       action: "project_deleted",
       entityType: "project",
@@ -296,7 +382,8 @@ export const demoWorkspaceApi: WorkspaceClient = {
       result = result.filter(
         (task) =>
           task.title.toLowerCase().includes(search) ||
-          task.description.toLowerCase().includes(search)
+          task.description.toLowerCase().includes(search) ||
+          task.issueKey.toLowerCase().includes(search)
       );
     }
     const sort = query.sort || "updated_at";
@@ -324,16 +411,23 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const timestamp = new Date().toISOString();
     const project = projects.find((item) => item.id === input.projectId);
+    const id = nextTaskId();
     const task: Task = {
-      id: nextTaskId(),
+      id,
       userId: 1,
       ...input,
       projectName: project?.name || null,
+      projectKey: project?.key || null,
+      issueKey: `${project?.key || "INB"}-${id}`,
+      parentTitle: null,
+      childCount: 0,
+      completedChildCount: 0,
       createdAt: timestamp,
       updatedAt: timestamp
     };
     tasks = [task, ...tasks];
     refreshProjectCounts();
+    refreshHierarchyMetadata();
     addActivity({
       action: "task_created",
       entityType: "task",
@@ -353,9 +447,11 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const project = projects.find((item) => item.id === input.projectId);
     Object.assign(task, input, {
       projectName: project?.name || null,
+      projectKey: project?.key || null,
       updatedAt: new Date().toISOString()
     });
     refreshProjectCounts();
+    refreshHierarchyMetadata();
     if (previousStatus !== task.status) {
       addActivity({
         action: task.status === "completed" ? "task_completed" : "task_status_changed",
@@ -388,8 +484,12 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const task = tasks.find((item) => item.id === id);
     if (!task) throw new Error("Task not found.");
+    if (tasks.some((item) => item.parentId === id)) {
+      throw new Error("Move or delete this task's children first.");
+    }
     tasks = tasks.filter((item) => item.id !== id);
     refreshProjectCounts();
+    refreshHierarchyMetadata();
     addActivity({
       action: "task_deleted",
       entityType: "task",

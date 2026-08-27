@@ -21,7 +21,7 @@ const resolveDemoUser = (environment = process.env) => {
 
   return {
     name: environment.DEMO_USER_NAME || "WorkflowHQ Demo",
-    email: (environment.DEMO_USER_EMAIL || "demo@workflowhq.local").toLowerCase(),
+    email: (environment.DEMO_USER_EMAIL || "demo@workflowhq.app").toLowerCase(),
     password: environment.DEMO_USER_PASSWORD || "WorkflowHQ!2026"
   };
 };
@@ -38,21 +38,25 @@ const isoHoursAgo = (hours) => new Date(Date.now() - hours * 3_600_000).toISOStr
 const projectFixtures = [
   {
     key: "launch",
+    projectKey: "WHQ",
     name: "WorkflowHQ launch",
     description: "Coordinate the final product, quality, and storytelling work for launch."
   },
   {
     key: "portfolio",
+    projectKey: "PORT",
     name: "Portfolio refresh",
     description: "Turn the build into a clear, evidence-led portfolio case study."
   },
   {
     key: "analytics",
+    projectKey: "DATA",
     name: "Analytics sprint",
     description: "Define meaningful product signals and make delivery health visible."
   },
   {
     key: "operations",
+    projectKey: "OPS",
     name: "Operations rhythm",
     description: "Keep releases, backups, documentation, and recurring checks reliable."
   }
@@ -305,10 +309,10 @@ const seedDemo = async (db = pool) => {
     const projectIds = new Map();
     for (const fixture of projectFixtures) {
       const result = await client.query(
-        `INSERT INTO projects (user_id, name, description, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $4)
+        `INSERT INTO projects (user_id, key, name, description, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $5)
          RETURNING id`,
-        [userId, fixture.name, fixture.description, isoHoursAgo(96)]
+        [userId, fixture.projectKey, fixture.name, fixture.description, isoHoursAgo(96)]
       );
       projectIds.set(fixture.key, result.rows[0].id);
     }
@@ -332,6 +336,10 @@ const seedDemo = async (db = pool) => {
           timestamp
         ]
       );
+      await client.query("UPDATE tasks SET issue_key = $1 WHERE id = $2", [
+        `${projectFixtures.find((project) => project.key === fixture.project).projectKey}-${result.rows[0].id}`,
+        result.rows[0].id
+      ]);
       entityIds.set(`task:${fixture.title}`, result.rows[0].id);
     }
 

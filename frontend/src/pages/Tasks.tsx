@@ -1,4 +1,4 @@
-import { ArrowUpRight, Plus, Search } from "lucide-react";
+import { ArrowUpRight, CornerDownRight, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 
@@ -26,6 +26,7 @@ function Tasks() {
   const [priority, setPriority] = useState<"" | TaskPriority>("");
   const [projectId, setProjectId] = useState("");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [initialParentTask, setInitialParentTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -67,6 +68,7 @@ function Tasks() {
       if (editingTask) await client.updateTask(editingTask.id, input);
       else await client.createTask(input);
       setEditingTask(null);
+      setInitialParentTask(null);
       setIsModalOpen(false);
       await loadTasks();
     } catch (saveError) {
@@ -81,6 +83,7 @@ function Tasks() {
     try {
       await client.deleteTask(task.id);
       setEditingTask(null);
+      setInitialParentTask(null);
       setIsModalOpen(false);
       await loadTasks();
     } catch (deleteError) {
@@ -102,7 +105,9 @@ function Tasks() {
         description: task.description,
         status: nextStatus,
         priority: task.priority,
-        dueDate: task.dueDate
+        dueDate: task.dueDate,
+        taskType: task.taskType,
+        parentId: task.parentId
       });
     } catch (statusError) {
       setError(getErrorMessage(statusError, "Unable to update the task status."));
@@ -117,6 +122,36 @@ function Tasks() {
     (task) => task.dueDate && task.dueDate < today && task.status !== "completed"
   ).length;
 
+  const hierarchyRows = useMemo(() => {
+    const taskIds = new Set(tasks.map((task) => task.id));
+    const children = new Map<number, Task[]>();
+    tasks.forEach((task) => {
+      if (task.parentId == null || !taskIds.has(task.parentId)) return;
+      children.set(task.parentId, [...(children.get(task.parentId) || []), task]);
+    });
+
+    const result: Array<{ task: Task; depth: number }> = [];
+    const visited = new Set<number>();
+    const append = (task: Task, depth: number) => {
+      if (visited.has(task.id)) return;
+      visited.add(task.id);
+      result.push({ task, depth });
+      (children.get(task.id) || []).forEach((child) => append(child, Math.min(depth + 1, 5)));
+    };
+
+    tasks
+      .filter((task) => task.parentId == null || !taskIds.has(task.parentId))
+      .forEach((task) => append(task, 0));
+    tasks.forEach((task) => append(task, 0));
+    return result;
+  }, [tasks]);
+
+  const openCreate = (parent: Task | null = null) => {
+    setEditingTask(null);
+    setInitialParentTask(parent);
+    setIsModalOpen(true);
+  };
+
   return (
     <main className="workspace-page tasks-page editorial-page">
       <header className="workspace-header editorial-page-header">
@@ -125,14 +160,7 @@ function Tasks() {
           <h1>Task register.</h1>
           <p>Search, prioritise, and move every commitment from ready to shipped.</p>
         </div>
-        <button
-          className="button primary"
-          type="button"
-          onClick={() => {
-            setEditingTask(null);
-            setIsModalOpen(true);
-          }}
-        >
+        <button className="button primary" type="button" onClick={() => openCreate()}>
           <Plus size={17} /> New task
         </button>
       </header>
@@ -194,7 +222,7 @@ function Tasks() {
           <option value="">ALL PROJECTS</option>
           {projects.map((project) => (
             <option key={project.id} value={project.id}>
-              {project.name.toUpperCase()}
+              {project.key} / {project.name.toUpperCase()}
             </option>
           ))}
         </select>
@@ -220,23 +248,30 @@ function Tasks() {
             <p>Change the filters or create the next piece of work.</p>
           </div>
         ) : null}
-        {tasks.map((task) => {
+        {hierarchyRows.map(({ task, depth }) => {
           const isOverdue = Boolean(
             task.dueDate && task.dueDate < today && task.status !== "completed"
           );
           return (
-            <article className="task-register-row" key={task.id}>
-              <span className="task-reference">WHQ-{String(task.id).padStart(3, "0")}</span>
+            <article className={`task-register-row task-depth-${Math.min(depth, 5)}`} key={task.id}>
+              <span className="task-reference">{task.issueKey}</span>
               <button
                 className="register-task-title"
                 type="button"
                 onClick={() => {
+                  setInitialParentTask(null);
                   setEditingTask(task);
                   setIsModalOpen(true);
                 }}
               >
                 <strong>{task.title}</strong>
-                <span>{task.projectName || "Inbox"}</span>
+                <span className="register-task-context">
+                  <b>{task.taskType}</b>
+                  {task.parentTitle ? `Child of ${task.parentTitle}` : task.projectName || "Inbox"}
+                  {task.childCount > 0
+                    ? ` · ${task.completedChildCount}/${task.childCount} children shipped`
+                    : ""}
+                </span>
               </button>
               <span className={`editorial-priority ${task.priority}`}>
                 <strong>{priorityCode[task.priority]}</strong>
@@ -259,17 +294,31 @@ function Tasks() {
               <span className={isOverdue ? "register-due overdue" : "register-due"}>
                 {formatDate(task.dueDate)}
               </span>
-              <button
-                className="register-open"
-                type="button"
-                aria-label={`Open ${task.title}`}
-                onClick={() => {
-                  setEditingTask(task);
-                  setIsModalOpen(true);
-                }}
-              >
-                <ArrowUpRight size={17} />
-              </button>
+              <span className="register-row-actions">
+                {task.taskType !== "subtask" ? (
+                  <button
+                    className="register-add-child"
+                    type="button"
+                    aria-label={`Add a child to ${task.issueKey}`}
+                    onClick={() => openCreate(task)}
+                    title="Add child ticket"
+                  >
+                    <CornerDownRight size={15} />
+                  </button>
+                ) : null}
+                <button
+                  className="register-open"
+                  type="button"
+                  aria-label={`Open ${task.title}`}
+                  onClick={() => {
+                    setInitialParentTask(null);
+                    setEditingTask(task);
+                    setIsModalOpen(true);
+                  }}
+                >
+                  <ArrowUpRight size={17} />
+                </button>
+              </span>
             </article>
           );
         })}
@@ -277,15 +326,18 @@ function Tasks() {
 
       {isModalOpen ? (
         <TaskModal
+          initialParentTask={initialParentTask}
           isSaving={isSaving}
           onClose={() => {
             setIsModalOpen(false);
             setEditingTask(null);
+            setInitialParentTask(null);
           }}
           onDelete={deleteTask}
           onSave={saveTask}
           projects={projects}
           task={editingTask}
+          tasks={tasks}
         />
       ) : null}
     </main>
