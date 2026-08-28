@@ -1,7 +1,6 @@
 import {
   ArrowUpRight,
   CheckCircle2,
-  Eye,
   Github,
   GitBranch,
   MoreHorizontal,
@@ -20,13 +19,9 @@ import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Activity, Project, Task, TaskInput, TaskStatus } from "../types";
 import { activityCopy, formatRelativeTime } from "../utils/format";
 
-type CommandLane = "building" | "review" | "release";
+type CommandLane = "building" | "release";
 
-const laneFor = (task: Task): CommandLane => {
-  if (task.status === "completed") return "release";
-  if (task.status === "in_progress" && task.id % 2 === 0) return "review";
-  return "building";
-};
+const laneFor = (task: Task): CommandLane => (task.status === "completed" ? "release" : "building");
 
 function CommandTicket({ task }: { task: Task }) {
   return (
@@ -38,10 +33,6 @@ function CommandTicket({ task }: { task: Task }) {
         {task.status === "completed" ? (
           <span className="command-check-badge">
             <CheckCircle2 size={13} /> checks passed
-          </span>
-        ) : laneFor(task) === "review" ? (
-          <span className="command-pr-badge">
-            <Eye size={13} /> in review
           </span>
         ) : (
           <span className="command-branch-badge">
@@ -112,24 +103,18 @@ function OverviewEngineering() {
       tasks: tasks.filter((task) => laneFor(task) === "building").slice(0, 4)
     },
     {
-      key: "review",
-      label: "In review",
-      status: "in_progress",
-      tasks: tasks.filter((task) => laneFor(task) === "review").slice(0, 4)
-    },
-    {
       key: "release",
       label: "Ready to release",
       status: "completed",
       tasks: tasks.filter((task) => laneFor(task) === "release").slice(0, 4)
     }
   ];
-  const openPrs = tasks.filter((task) => task.status === "in_progress").length + 5;
+  const openPrs = tasks.filter((task) => task.status === "in_progress").length;
   const today = new Date().toISOString().slice(0, 10);
   const overdueTickets = tasks.filter(
     (task) => task.dueDate && task.dueDate < today && task.status !== "completed"
   ).length;
-  const deployed = tasks.filter((task) => task.status === "completed").length + 14;
+  const deployed = tasks.filter((task) => task.status === "completed").length;
 
   return (
     <main className="workspace-page engineering-command-page" aria-busy={isLoading}>
@@ -149,8 +134,8 @@ function OverviewEngineering() {
       <section className="command-metrics" aria-label="Engineering delivery metrics">
         <article>
           <span>Active tickets</span>
-          <strong>{tasks.filter((task) => task.status !== "completed").length + 35}</strong>
-          <small>Across {projects.length + 9} repos</small>
+          <strong>{tasks.filter((task) => task.status !== "completed").length}</strong>
+          <small>Across {projects.length} repos</small>
         </article>
         <article>
           <span>Open PRs</span>
@@ -232,7 +217,7 @@ function OverviewEngineering() {
         <span>
           <Github size={18} /> Connected to GitHub
         </span>
-        <span>{projects.length + 9} repos&nbsp;&nbsp;•&nbsp;&nbsp;134 contributors</span>
+        <span>{projects.length} repos&nbsp;&nbsp;•&nbsp;&nbsp;134 contributors</span>
         <span>
           Synced 2 minutes ago <i />
         </span>

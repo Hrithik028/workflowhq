@@ -3262,7 +3262,7 @@ html[data-motion="reduced"] *::after {
 
 .command-board {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-right: 1px solid var(--carbon);
 }
 
@@ -3559,8 +3559,8 @@ html[data-motion="reduced"] *::after {
 .engineering-stage-head,
 .engineering-epic-grid {
   display: grid;
-  min-width: 960px;
-  grid-template-columns: repeat(4, minmax(240px, 1fr));
+  min-width: 720px;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
 }
 
 .engineering-stage-head > div {
@@ -3582,9 +3582,6 @@ html[data-motion="reduced"] *::after {
 
 .engineering-stage-head > div.progress {
   border-bottom: 4px solid var(--signal);
-}
-.engineering-stage-head > div.review {
-  border-bottom: 4px solid var(--blueprint);
 }
 
 .engineering-stage-head span {

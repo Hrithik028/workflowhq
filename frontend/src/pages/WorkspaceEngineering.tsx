@@ -1,7 +1,6 @@
 import {
   CalendarDays,
   ChevronDown,
-  Eye,
   FolderKanban,
   ListFilter,
   MoreHorizontal,
@@ -23,18 +22,17 @@ import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, Task, TaskInput } from "../types";
 import { initialsFor } from "../utils/format";
 
-type BoardStage = "backlog" | "progress" | "review" | "released";
+type BoardStage = "backlog" | "progress" | "released";
 
 const stageFor = (task: Task): BoardStage => {
   if (task.status === "completed") return "released";
   if (task.status === "todo") return "backlog";
-  return task.id % 2 === 0 ? "review" : "progress";
+  return "progress";
 };
 
 const stageMeta = [
   { key: "backlog" as const, label: "Backlog", icon: ListFilter },
   { key: "progress" as const, label: "In progress", icon: CalendarDays },
-  { key: "review" as const, label: "In review", icon: Eye },
   { key: "released" as const, label: "Released", icon: Rocket }
 ];
 
@@ -51,11 +49,7 @@ function EngineeringCard({ task }: { task: Task }) {
         <span>{task.assigneeName || "Unassigned"}</span>
       </div>
       <footer>
-        <span>
-          {task.childCount
-            ? `${task.completedChildCount} / ${task.childCount}`
-            : `${Math.max(task.id % 5, 0)} / ${Math.max(task.id % 5, 0) + 3}`}
-        </span>
+        <span>{task.childCount ? `${task.completedChildCount} / ${task.childCount}` : "—"}</span>
         <i>
           <b style={{ width: `${progressFor(task)}%` }} />
         </i>
