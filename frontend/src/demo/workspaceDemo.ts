@@ -1,5 +1,7 @@
 import type {
   Activity,
+  Comment,
+  CommentInput,
   Label,
   LabelInput,
   Project,
@@ -363,6 +365,20 @@ const applyTaskLabels = (task: Task): Task => ({
 // Seed the fixtures' labels once at module load - every later mutation keeps
 // this in sync via refreshHierarchyMetadata(), which also calls applyTaskLabels.
 tasks = tasks.map(applyTaskLabels);
+
+let comments: Comment[] = [
+  {
+    id: 1,
+    taskId: 1,
+    userId: 1000,
+    authorName: "Priya Natarajan",
+    authorEmail: "priya@workflowhq.app",
+    body: "Confirmed the rollback plan with ops - we're good to ship once QA signs off.",
+    createdAt: isoMinutesAgo(40),
+    updatedAt: isoMinutesAgo(40)
+  }
+];
+let nextCommentId = 2;
 
 const delay = () => new Promise((resolve) => setTimeout(resolve, 120));
 const nextTaskId = () => Math.max(0, ...tasks.map((task) => task.id)) + 1;
@@ -798,5 +814,54 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     taskLabelIds[taskId] = (taskLabelIds[taskId] || []).filter((id) => id !== labelId);
     refreshHierarchyMetadata();
+  },
+
+  async listComments(taskId: number) {
+    await delay();
+    return comments
+      .filter((comment) => comment.taskId === taskId)
+      .map((comment) => ({ ...comment }));
+  },
+
+  async createComment(taskId: number, input: CommentInput) {
+    await delay();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    const timestamp = new Date().toISOString();
+    const comment: Comment = {
+      id: nextCommentId++,
+      taskId,
+      userId: DEMO_USER.id,
+      authorName: DEMO_USER.name,
+      authorEmail: DEMO_USER.email,
+      body: input.body,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    comments = [...comments, comment];
+    addActivity({
+      action: "task_comment_added",
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      details: {}
+    });
+    return { ...comment };
+  },
+
+  async updateComment(taskId: number, commentId: number, input: CommentInput) {
+    await delay();
+    const comment = comments.find((item) => item.id === commentId && item.taskId === taskId);
+    if (!comment) throw new Error("Comment not found.");
+    if (comment.userId !== DEMO_USER.id) {
+      throw new Error("Only the comment's author can edit it.");
+    }
+    Object.assign(comment, { body: input.body, updatedAt: new Date().toISOString() });
+    return { ...comment };
+  },
+
+  async deleteComment(taskId: number, commentId: number) {
+    await delay();
+    comments = comments.filter((item) => !(item.id === commentId && item.taskId === taskId));
   }
 };

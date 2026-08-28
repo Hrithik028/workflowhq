@@ -1,6 +1,8 @@
 import { api } from "./client";
 import type {
   Activity,
+  Comment,
+  CommentInput,
   Label,
   LabelInput,
   PaginationMetadata,
@@ -46,6 +48,17 @@ const mapLabel = (label: Raw): Label => ({
   name: String(label.name),
   color: String(label.color),
   createdAt: String(label.created_at)
+});
+
+const mapComment = (comment: Raw): Comment => ({
+  id: Number(comment.id),
+  taskId: Number(comment.task_id),
+  userId: Number(comment.user_id),
+  authorName: String(comment.author_name),
+  authorEmail: String(comment.author_email),
+  body: String(comment.body),
+  createdAt: String(comment.created_at),
+  updatedAt: String(comment.updated_at)
 });
 
 const mapTask = (task: Raw): Task => ({
@@ -172,5 +185,23 @@ export const workspaceApi: WorkspaceClient = {
   },
   async detachLabel(taskId: number, labelId: number) {
     await api.delete(`/tasks/${taskId}/labels/${labelId}`);
+  },
+  async listComments(taskId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/tasks/${taskId}/comments`);
+    return response.data.data.map(mapComment);
+  },
+  async createComment(taskId: number, input: CommentInput) {
+    const response = await api.post<{ data: Raw }>(`/tasks/${taskId}/comments`, input);
+    return mapComment(response.data.data);
+  },
+  async updateComment(taskId: number, commentId: number, input: CommentInput) {
+    const response = await api.put<{ data: Raw }>(
+      `/tasks/${taskId}/comments/${commentId}`,
+      input
+    );
+    return mapComment(response.data.data);
+  },
+  async deleteComment(taskId: number, commentId: number) {
+    await api.delete(`/tasks/${taskId}/comments/${commentId}`);
   }
 };

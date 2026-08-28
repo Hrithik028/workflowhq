@@ -4373,6 +4373,105 @@ html[data-motion="reduced"] *::after {
   line-height: 1.4;
 }
 
+.comment-list {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.comment-list li {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 0;
+  border-top: 1px solid #ece7de;
+}
+
+.comment-list li:first-child {
+  border-top: 0;
+}
+
+.comment-list li > i {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  background: #111;
+  color: white;
+  font-family: "Courier New", monospace;
+  font-size: 0.58rem;
+  font-style: normal;
+}
+
+.comment-list header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.63rem;
+}
+
+.comment-list header time {
+  color: #5e5952;
+  font-family: "Courier New", monospace;
+}
+
+.comment-list header em {
+  color: #948e83;
+  font-style: normal;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+}
+
+.comment-list p {
+  margin: 3px 0 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.comment-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.comment-controls button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #d0cbc2;
+  background: transparent;
+  color: #5e5952;
+}
+
+.comment-controls button:hover {
+  border-color: #aaa49b;
+  color: #111;
+}
+
+.comment-edit-form {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.comment-edit-form textarea {
+  border: 1px solid #aaa49b;
+  padding: 6px 8px;
+  background: rgb(255 255 255 / 28%);
+  font-size: 0.7rem;
+  resize: vertical;
+}
+
+.comment-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .task-comment {
   grid-template-columns: 30px 1fr auto;
   margin-top: 4px;

@@ -155,9 +155,23 @@ const taskLabelSchemas = {
   attach: z.object({ labelId: idSchema }).strict()
 };
 
+const commentBodySchema = z
+  .object({
+    body: z.string().trim().min(1).max(2000)
+  })
+  .strict();
+
+const commentSchemas = {
+  params: z.object({ id: idSchema }),
+  commentParams: z.object({ id: idSchema, commentId: idSchema }),
+  create: commentBodySchema,
+  update: commentBodySchema
+};
+
 module.exports = {
   activitySchemas,
   authSchemas,
+  commentSchemas,
   labelSchemas,
   projectMemberSchemas,
   projectSchemas,

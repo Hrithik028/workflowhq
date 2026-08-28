@@ -45,6 +45,21 @@ export interface LabelInput {
   color: string;
 }
 
+export interface Comment {
+  id: number;
+  taskId: number;
+  userId: number;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommentInput {
+  body: string;
+}
+
 export interface Task {
   id: number;
   userId: number;
@@ -109,6 +124,7 @@ export interface Activity {
     | "task_priority_changed"
     | "task_parent_changed"
     | "task_label_added"
+    | "task_comment_added"
     | "task_deleted"
     | "project_created"
     | "project_deleted";
@@ -217,4 +233,8 @@ export interface WorkspaceClient {
   deleteLabel(projectId: number, labelId: number): Promise<void>;
   attachLabel(taskId: number, labelId: number): Promise<void>;
   detachLabel(taskId: number, labelId: number): Promise<void>;
+  listComments(taskId: number): Promise<Comment[]>;
+  createComment(taskId: number, input: CommentInput): Promise<Comment>;
+  updateComment(taskId: number, commentId: number, input: CommentInput): Promise<Comment>;
+  deleteComment(taskId: number, commentId: number): Promise<void>;
 }

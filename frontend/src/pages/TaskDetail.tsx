@@ -7,7 +7,9 @@ import {
   Github,
   GitPullRequest,
   MoreHorizontal,
+  Pencil,
   Rocket,
+  Trash2,
   UserRound
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,8 +23,8 @@ import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { engineeringMetaFor, issueTypeLabel } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
-import type { Project, Task, TaskInput } from "../types";
-import { formatDate, statusLabel } from "../utils/format";
+import type { Comment, Project, Task, TaskInput } from "../types";
+import { formatDate, formatRelativeTime, initialsFor, statusLabel } from "../utils/format";
 
 const criteriaFor = (task: Task) => [
   `Complete ${task.title.toLowerCase()} for the agreed delivery scope`,
@@ -42,6 +44,11 @@ function TaskDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState("");
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentBody, setCommentBody] = useState("");
+  const [isCommentBusy, setIsCommentBusy] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingBody, setEditingBody] = useState("");
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -75,6 +82,77 @@ function TaskDetail() {
       task.dueDate < new Date().toISOString().slice(0, 10) &&
       task.status !== "completed"
   );
+  const currentProject = task ? projects.find((item) => item.id === task.projectId) : null;
+  const canModerateComments =
+    currentProject?.myRole === "owner" || currentProject?.myRole === "editor";
+
+  const loadComments = useCallback(
+    async (taskId: number) => {
+      try {
+        setComments(await client.listComments(taskId));
+      } catch (commentError) {
+        setError(getErrorMessage(commentError, "Unable to load comments."));
+      }
+    },
+    [client]
+  );
+
+  const taskId = task?.id ?? null;
+
+  useEffect(() => {
+    if (taskId == null) return;
+    const timer = window.setTimeout(() => void loadComments(taskId), 0);
+    return () => window.clearTimeout(timer);
+  }, [taskId, loadComments]);
+
+  const postComment = async () => {
+    if (!task || !commentBody.trim()) return;
+    setIsCommentBusy(true);
+    try {
+      const comment = await client.createComment(task.id, { body: commentBody.trim() });
+      setComments((current) => [...current, comment]);
+      setCommentBody("");
+    } catch (commentError) {
+      setError(getErrorMessage(commentError, "Unable to post that comment."));
+    } finally {
+      setIsCommentBusy(false);
+    }
+  };
+
+  const startEditComment = (comment: Comment) => {
+    setEditingCommentId(comment.id);
+    setEditingBody(comment.body);
+  };
+
+  const saveEditedComment = async (comment: Comment) => {
+    if (!task || !editingBody.trim()) return;
+    setIsCommentBusy(true);
+    try {
+      const updated = await client.updateComment(task.id, comment.id, {
+        body: editingBody.trim()
+      });
+      setComments((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingCommentId(null);
+    } catch (commentError) {
+      setError(getErrorMessage(commentError, "Unable to update that comment."));
+    } finally {
+      setIsCommentBusy(false);
+    }
+  };
+
+  const removeComment = async (comment: Comment) => {
+    if (!task) return;
+    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
+    setIsCommentBusy(true);
+    try {
+      await client.deleteComment(task.id, comment.id);
+      setComments((current) => current.filter((item) => item.id !== comment.id));
+    } catch (commentError) {
+      setError(getErrorMessage(commentError, "Unable to delete that comment."));
+    } finally {
+      setIsCommentBusy(false);
+    }
+  };
 
   const saveTask = async (input: TaskInput) => {
     if (!task) return;
@@ -223,14 +301,104 @@ function TaskDetail() {
 
           <section className="task-activity">
             <h2>Activity</h2>
-            <p className="task-activity-empty">
-              Comments aren't connected yet — this is where discussion on {task.issueKey} will
-              show up.
-            </p>
+            {comments.length === 0 ? (
+              <p className="task-activity-empty">
+                No comments yet — this is where discussion on {task.issueKey} will show up.
+              </p>
+            ) : (
+              <ul className="comment-list">
+                {comments.map((comment) => {
+                  const isAuthor = comment.userId === user.id;
+                  const canEdit = isAuthor;
+                  const canDelete = isAuthor || canModerateComments;
+                  const isEditing = editingCommentId === comment.id;
+                  return (
+                    <li key={comment.id}>
+                      <i>{initialsFor(comment.authorName)}</i>
+                      <div>
+                        <header>
+                          <strong>{comment.authorName}</strong>
+                          <time>{formatRelativeTime(comment.createdAt)}</time>
+                          {comment.updatedAt !== comment.createdAt ? <em>Edited</em> : null}
+                        </header>
+                        {isEditing ? (
+                          <div className="comment-edit-form">
+                            <textarea
+                              maxLength={2000}
+                              onChange={(event) => setEditingBody(event.target.value)}
+                              rows={2}
+                              value={editingBody}
+                            />
+                            <div className="comment-edit-actions">
+                              <button
+                                className="button secondary"
+                                disabled={isCommentBusy}
+                                onClick={() => setEditingCommentId(null)}
+                                type="button"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                className="button primary"
+                                disabled={isCommentBusy || !editingBody.trim()}
+                                onClick={() => void saveEditedComment(comment)}
+                                type="button"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p>{comment.body}</p>
+                        )}
+                      </div>
+                      {!isEditing && (canEdit || canDelete) ? (
+                        <div className="comment-controls">
+                          {canEdit ? (
+                            <button
+                              aria-label="Edit comment"
+                              onClick={() => startEditComment(comment)}
+                              type="button"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                          ) : null}
+                          {canDelete ? (
+                            <button
+                              aria-label="Delete comment"
+                              onClick={() => void removeComment(comment)}
+                              type="button"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <div className="task-comment">
-              <i>{user.name.charAt(0)}</i>
-              <input aria-label="Add a comment" disabled placeholder="Comments coming soon…" />
-              <button disabled type="button">
+              <i>{initialsFor(user.name)}</i>
+              <input
+                aria-label="Add a comment"
+                disabled={isCommentBusy}
+                onChange={(event) => setCommentBody(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void postComment();
+                  }
+                }}
+                placeholder="Add a comment…"
+                value={commentBody}
+              />
+              <button
+                disabled={isCommentBusy || !commentBody.trim()}
+                onClick={() => void postComment()}
+                type="button"
+              >
                 Comment
               </button>
             </div>
