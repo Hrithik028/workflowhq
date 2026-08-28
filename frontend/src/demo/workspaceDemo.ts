@@ -84,6 +84,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(5),
     updatedAt: isoMinutesAgo(18)
   },
@@ -109,6 +110,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(4),
     updatedAt: isoDaysAgo(1)
   },
@@ -134,6 +136,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(3),
     updatedAt: isoDaysAgo(2)
   },
@@ -159,6 +162,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(6),
     updatedAt: isoMinutesAgo(8)
   },
@@ -184,6 +188,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(8),
     updatedAt: isoMinutesAgo(45)
   },
@@ -209,6 +214,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(7),
     updatedAt: isoDaysAgo(1)
   },
@@ -234,6 +240,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(11),
     updatedAt: isoMinutesAgo(32)
   },
@@ -259,6 +266,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(14),
     updatedAt: isoDaysAgo(2)
   },
@@ -284,6 +292,7 @@ let tasks: Task[] = [
     assigneeName: null,
     assigneeEmail: null,
     labels: [],
+    rank: null,
     createdAt: isoDaysAgo(16),
     updatedAt: isoDaysAgo(3)
   }
@@ -362,9 +371,22 @@ const applyTaskLabels = (task: Task): Task => ({
   ...task,
   labels: labels.filter((label) => (taskLabelIds[task.id] || []).includes(label.id))
 });
-// Seed the fixtures' labels once at module load - every later mutation keeps
-// this in sync via refreshHierarchyMetadata(), which also calls applyTaskLabels.
-tasks = tasks.map(applyTaskLabels);
+// Seed the fixtures' labels and a natural manual-order rank once at module
+// load - every later mutation keeps labels in sync via
+// refreshHierarchyMetadata(), which also calls applyTaskLabels.
+tasks = tasks.map((task, index) => applyTaskLabels({ ...task, rank: index * 1000 }));
+
+// Mirrors backend/src/controllers/taskController.js's fractional ranking -
+// moving a task computes a value strictly between its two new neighbors, and
+// only rebalances the whole scoped list when float precision runs out.
+const RANK_GAP = 1000;
+
+const rankBetween = (previousRank: number | null, nextRank: number | null) => {
+  if (previousRank == null && nextRank == null) return 0;
+  if (previousRank == null) return (nextRank as number) - RANK_GAP;
+  if (nextRank == null) return previousRank + RANK_GAP;
+  return (previousRank + nextRank) / 2;
+};
 
 let comments: Comment[] = [
   {
@@ -529,17 +551,31 @@ export const demoWorkspaceApi: WorkspaceClient = {
       );
     }
     const sort = query.sort || "updated_at";
-    const keyMap = {
-      updated_at: "updatedAt",
-      created_at: "createdAt",
-      due_date: "dueDate",
-      title: "title",
-      priority: "priority"
-    } as const;
-    result.sort((left, right) =>
-      String(left[keyMap[sort]] || "").localeCompare(String(right[keyMap[sort]] || ""))
-    );
-    if ((query.order || "desc") === "desc") result.reverse();
+    if (sort === "rank") {
+      // Mirrors the backend's `ORDER BY rank ASC NULLS LAST` - never-ranked
+      // tasks always sort after ranked ones regardless of direction.
+      result.sort((left, right) => {
+        if (left.rank == null && right.rank == null) return 0;
+        if (left.rank == null) return 1;
+        if (right.rank == null) return -1;
+        return left.rank - right.rank;
+      });
+      if ((query.order || "desc") === "desc") {
+        result = [...result.filter((task) => task.rank != null).reverse(), ...result.filter((task) => task.rank == null)];
+      }
+    } else {
+      const keyMap = {
+        updated_at: "updatedAt",
+        created_at: "createdAt",
+        due_date: "dueDate",
+        title: "title",
+        priority: "priority"
+      } as const;
+      result.sort((left, right) =>
+        String(left[keyMap[sort]] || "").localeCompare(String(right[keyMap[sort]] || ""))
+      );
+      if ((query.order || "desc") === "desc") result.reverse();
+    }
     const page = query.page || 1;
     const limit = query.limit || 100;
     const total = result.length;
@@ -569,6 +605,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
       childCount: 0,
       completedChildCount: 0,
       labels: [],
+      rank: null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -863,5 +900,57 @@ export const demoWorkspaceApi: WorkspaceClient = {
   async deleteComment(taskId: number, commentId: number) {
     await delay();
     comments = comments.filter((item) => !(item.id === commentId && item.taskId === taskId));
+  },
+
+  async updateTaskRank(
+    taskId: number,
+    input: { previousTaskId: number | null; nextTaskId: number | null }
+  ) {
+    await delay();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    if (input.previousTaskId === taskId || input.nextTaskId === taskId) {
+      throw new Error("A task cannot be its own neighbor.");
+    }
+    const inScope = (candidate: Task) =>
+      candidate.projectId === task.projectId &&
+      (task.projectId != null || candidate.userId === task.userId);
+    const resolveNeighborRank = (id: number | null) => {
+      if (id == null) return null;
+      const neighbor = tasks.find((item) => item.id === id);
+      if (!neighbor || !inScope(neighbor)) {
+        throw new Error("The neighboring task must be in the same list.");
+      }
+      return neighbor.rank;
+    };
+
+    let previousRank = resolveNeighborRank(input.previousTaskId);
+    let nextRank = resolveNeighborRank(input.nextTaskId);
+    let newRank = rankBetween(previousRank, nextRank);
+    const exhausted =
+      (previousRank != null && newRank <= previousRank) ||
+      (nextRank != null && newRank >= nextRank);
+    if (exhausted) {
+      const scoped = tasks
+        .filter(inScope)
+        .slice()
+        .sort((left, right) => {
+          if (left.rank == null && right.rank == null) return left.id - right.id;
+          if (left.rank == null) return 1;
+          if (right.rank == null) return -1;
+          return left.rank - right.rank || left.id - right.id;
+        });
+      const rebalanced = new Map(scoped.map((item, index) => [item.id, index * RANK_GAP]));
+      tasks = tasks.map((item) =>
+        rebalanced.has(item.id) ? { ...item, rank: rebalanced.get(item.id)! } : item
+      );
+      previousRank = resolveNeighborRank(input.previousTaskId);
+      nextRank = resolveNeighborRank(input.nextTaskId);
+      newRank = rankBetween(previousRank, nextRank);
+    }
+
+    tasks = tasks.map((item) => (item.id === taskId ? { ...item, rank: newRank } : item));
+    refreshHierarchyMetadata();
+    return { ...tasks.find((item) => item.id === taskId)! };
   }
 };

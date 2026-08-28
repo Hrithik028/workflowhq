@@ -94,11 +94,22 @@ const taskSchemas = {
     projectId: idSchema.optional(),
     search: z.string().trim().max(100).optional(),
     sort: z
-      .enum(["updated_at", "created_at", "due_date", "title", "priority"])
+      .enum(["updated_at", "created_at", "due_date", "title", "priority", "rank"])
       .default("updated_at"),
     order: z.enum(["asc", "desc"]).default("desc")
   })
 };
+
+const taskRankSchema = z
+  .object({
+    previousTaskId: z.union([idSchema, z.null()]),
+    nextTaskId: z.union([idSchema, z.null()])
+  })
+  .strict()
+  .refine((value) => value.previousTaskId != null || value.nextTaskId != null, {
+    message: "Provide at least one neighboring task.",
+    path: ["previousTaskId"]
+  });
 
 const activitySchemas = {
   list: z.object({
@@ -176,5 +187,6 @@ module.exports = {
   projectMemberSchemas,
   projectSchemas,
   taskLabelSchemas,
+  taskRankSchema,
   taskSchemas
 };

@@ -3932,6 +3932,21 @@ html[data-motion="reduced"] *::after {
   width: 19px;
 }
 
+.hierarchy-type > i.hierarchy-drag-handle {
+  display: grid;
+  place-items: center;
+  color: #948e83;
+  cursor: grab;
+}
+
+.hierarchy-table > article.drop-before {
+  box-shadow: inset 0 2px 0 var(--signal);
+}
+
+.hierarchy-table > article.drop-after {
+  box-shadow: inset 0 -2px 0 var(--signal);
+}
+
 .hierarchy-type > b,
 .summary-type-mark {
   display: grid;

@@ -83,6 +83,7 @@ const mapTask = (task: Raw): Task => ({
   assigneeName: task.assignee_name == null ? null : String(task.assignee_name),
   assigneeEmail: task.assignee_email == null ? null : String(task.assignee_email),
   labels: ((task.labels as Raw[] | undefined) || []).map(mapLabel),
+  rank: task.rank == null ? null : Number(task.rank),
   createdAt: String(task.created_at),
   updatedAt: String(task.updated_at)
 });
@@ -203,5 +204,12 @@ export const workspaceApi: WorkspaceClient = {
   },
   async deleteComment(taskId: number, commentId: number) {
     await api.delete(`/tasks/${taskId}/comments/${commentId}`);
+  },
+  async updateTaskRank(
+    taskId: number,
+    input: { previousTaskId: number | null; nextTaskId: number | null }
+  ) {
+    const response = await api.patch<{ data: Raw }>(`/tasks/${taskId}/rank`, input);
+    return mapTask(response.data.data);
   }
 };

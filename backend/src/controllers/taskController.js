@@ -21,6 +21,7 @@ const taskFields = `
   t.assignee_id,
   assignee.name AS assignee_name,
   assignee.email AS assignee_email,
+  t.rank,
   t.created_at,
   t.updated_at,
   COALESCE(child_stats.child_count, 0)::int AS child_count,
@@ -216,7 +217,8 @@ const getTasks = async (req, res) => {
     created_at: "t.created_at",
     due_date: "t.due_date",
     title: "LOWER(t.title)",
-    priority: "CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END"
+    priority: "CASE t.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END",
+    rank: "t.rank"
   };
   const offset = (page - 1) * limit;
   const listValues = [...values, limit, offset];
@@ -520,6 +522,108 @@ const deleteTask = async (req, res, next) => {
   }
 };
 
+// Fractional ranking: moving a task only ever computes a value strictly
+// between its two new neighbors, so a reorder is always a single UPDATE - the
+// rest of the list never needs renumbering. The rebalance path only runs when
+// two neighboring ranks are so close that float precision can't fit a value
+// between them anymore, which resets the whole scoped list to evenly spaced
+// integers before retrying the midpoint calc once.
+const RANK_GAP = 1000;
+
+const rankBetween = (previousRank, nextRank) => {
+  if (previousRank == null && nextRank == null) return 0;
+  if (previousRank == null) return nextRank - RANK_GAP;
+  if (nextRank == null) return previousRank + RANK_GAP;
+  return (previousRank + nextRank) / 2;
+};
+
+const updateTaskRank = async (req, res, next) => {
+  const db = req.app.locals.db;
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const existingResult = await client.query("SELECT * FROM tasks WHERE id = $1", [req.params.id]);
+    if (existingResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    const task = existingResult.rows[0];
+    if (!(await canAccessTask(client, task, req.user.id))) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    await verifyProjectAccess(client, task.project_id, req.user.id, ["owner", "editor"]);
+
+    const { previousTaskId, nextTaskId } = req.body;
+    if (previousTaskId === task.id || nextTaskId === task.id) {
+      await client.query("ROLLBACK");
+      return next(
+        new AppError(422, "TASK_RANK_NEIGHBOR_INVALID", "A task cannot be its own neighbor.")
+      );
+    }
+
+    const loadNeighborRank = async (id) => {
+      if (!id) return null;
+      const result = await client.query(
+        "SELECT project_id, user_id, rank FROM tasks WHERE id = $1",
+        [id]
+      );
+      const neighbor = result.rows[0];
+      const sameProject =
+        neighbor && Number(neighbor.project_id || 0) === Number(task.project_id || 0);
+      const sameInboxOwner =
+        task.project_id || !neighbor ? true : Number(neighbor.user_id) === Number(task.user_id);
+      if (!neighbor || !sameProject || !sameInboxOwner) {
+        throw new AppError(
+          422,
+          "TASK_RANK_NEIGHBOR_INVALID",
+          "The neighboring task must be in the same list."
+        );
+      }
+      return neighbor.rank;
+    };
+
+    let previousRank;
+    let nextRank;
+    try {
+      previousRank = await loadNeighborRank(previousTaskId);
+      nextRank = await loadNeighborRank(nextTaskId);
+    } catch (validationError) {
+      await client.query("ROLLBACK");
+      return next(validationError);
+    }
+
+    let newRank = rankBetween(previousRank, nextRank);
+    const exhausted =
+      (previousRank != null && newRank <= previousRank) ||
+      (nextRank != null && newRank >= nextRank);
+    if (exhausted) {
+      const scopeCondition = task.project_id ? "project_id = $1" : "project_id IS NULL AND user_id = $1";
+      const scopeValue = task.project_id || req.user.id;
+      const allResult = await client.query(
+        `SELECT id FROM tasks WHERE ${scopeCondition} ORDER BY rank ASC NULLS LAST, id ASC`,
+        [scopeValue]
+      );
+      for (const [index, row] of allResult.rows.entries()) {
+        await client.query("UPDATE tasks SET rank = $1 WHERE id = $2", [index * RANK_GAP, row.id]);
+      }
+      previousRank = await loadNeighborRank(previousTaskId);
+      nextRank = await loadNeighborRank(nextTaskId);
+      newRank = rankBetween(previousRank, nextRank);
+    }
+
+    await client.query("UPDATE tasks SET rank = $1 WHERE id = $2", [newRank, task.id]);
+    const updated = await selectTaskById(client, task.id, req.user.id);
+    await client.query("COMMIT");
+    return res.status(200).json({ data: updated });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 const getTaskStats = async (req, res) => {
   const values = [req.user.id];
   let projectCondition = "";
@@ -550,5 +654,6 @@ module.exports = {
   getTaskChildren,
   getTasks,
   getTaskStats,
-  updateTask
+  updateTask,
+  updateTaskRank
 };

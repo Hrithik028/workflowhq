@@ -82,6 +82,7 @@ export interface Task {
   assigneeName: string | null;
   assigneeEmail: string | null;
   labels: Label[];
+  rank: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -149,7 +150,7 @@ export interface TaskQuery {
   priority?: TaskPriority;
   projectId?: number;
   search?: string;
-  sort?: "updated_at" | "created_at" | "due_date" | "title" | "priority";
+  sort?: "updated_at" | "created_at" | "due_date" | "title" | "priority" | "rank";
   order?: "asc" | "desc";
 }
 
@@ -237,4 +238,8 @@ export interface WorkspaceClient {
   createComment(taskId: number, input: CommentInput): Promise<Comment>;
   updateComment(taskId: number, commentId: number, input: CommentInput): Promise<Comment>;
   deleteComment(taskId: number, commentId: number): Promise<void>;
+  updateTaskRank(
+    taskId: number,
+    input: { previousTaskId: number | null; nextTaskId: number | null }
+  ): Promise<Task>;
 }
