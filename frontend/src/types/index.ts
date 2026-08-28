@@ -60,6 +60,25 @@ export interface CommentInput {
   body: string;
 }
 
+export type SprintStatus = "planned" | "active" | "completed";
+
+export interface Sprint {
+  id: number;
+  projectId: number;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: SprintStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SprintInput {
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+}
+
 export interface Task {
   id: number;
   userId: number;
@@ -83,6 +102,8 @@ export interface Task {
   assigneeEmail: string | null;
   labels: Label[];
   rank: number | null;
+  sprintId: number | null;
+  sprintName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,6 +119,7 @@ export interface TaskInput {
   taskType: TaskType;
   parentId: number | null;
   assigneeId: number | null;
+  sprintId: number | null;
 }
 
 export interface ProjectInput {
@@ -242,4 +264,12 @@ export interface WorkspaceClient {
     taskId: number,
     input: { previousTaskId: number | null; nextTaskId: number | null }
   ): Promise<Task>;
+  listSprints(projectId: number): Promise<Sprint[]>;
+  createSprint(projectId: number, input: SprintInput): Promise<Sprint>;
+  updateSprint(
+    projectId: number,
+    sprintId: number,
+    input: SprintInput & { status: SprintStatus }
+  ): Promise<Sprint>;
+  deleteSprint(projectId: number, sprintId: number): Promise<void>;
 }

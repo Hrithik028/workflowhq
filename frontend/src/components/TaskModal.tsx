@@ -6,6 +6,7 @@ import type {
   Label,
   Project,
   ProjectMember,
+  Sprint,
   Task,
   TaskInput,
   TaskPriority,
@@ -68,7 +69,8 @@ const emptyTask = (
   dueDate,
   taskType: parent ? childTypeFor(parent) : "task",
   parentId: parent?.id ?? null,
-  assigneeId: null
+  assigneeId: null,
+  sprintId: null
 });
 
 const taskToInput = (task: Task): TaskInput => ({
@@ -81,7 +83,8 @@ const taskToInput = (task: Task): TaskInput => ({
   dueDate: task.dueDate,
   taskType: task.taskType,
   parentId: task.parentId,
-  assigneeId: task.assigneeId
+  assigneeId: task.assigneeId,
+  sprintId: task.sprintId
 });
 
 function TaskModal({
@@ -103,6 +106,7 @@ function TaskModal({
   const [error, setError] = useState("");
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
   const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
   const [attachedLabels, setAttachedLabels] = useState<Label[]>(() => task?.labels ?? []);
   const [newLabelName, setNewLabelName] = useState("");
@@ -136,6 +140,33 @@ function TaskModal({
         .finally(() => {
           if (active) setIsLoadingMembers(false);
         });
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [client, form.projectId]);
+
+  useEffect(() => {
+    let active = true;
+    const projectId = form.projectId;
+    const timer = window.setTimeout(() => {
+      if (!projectId) {
+        setSprints([]);
+        return;
+      }
+      client
+        .listSprints(projectId)
+        .then((data) => {
+          if (!active) return;
+          setSprints(data);
+          setForm((current) =>
+            current.sprintId != null && !data.some((sprint) => sprint.id === current.sprintId)
+              ? { ...current, sprintId: null }
+              : current
+          );
+        })
+        .catch(() => undefined);
     }, 0);
     return () => {
       active = false;
@@ -451,6 +482,30 @@ function TaskModal({
               </span>
             </label>
           </div>
+
+          {form.projectId ? (
+            <label>
+              <span>
+                Sprint <small>Optional</small>
+              </span>
+              <select
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    sprintId: event.target.value ? Number(event.target.value) : null
+                  })
+                }
+                value={form.sprintId ?? ""}
+              >
+                <option value="">No sprint / backlog</option>
+                {sprints.map((sprint) => (
+                  <option key={sprint.id} value={sprint.id}>
+                    {sprint.name} ({sprint.status})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           {task && form.projectId ? (
             <label>

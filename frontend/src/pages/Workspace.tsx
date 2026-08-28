@@ -141,7 +141,8 @@ function Workspace() {
         dueDate: task.dueDate,
         taskType: task.taskType,
         parentId: task.parentId,
-        assigneeId: task.assigneeId
+        assigneeId: task.assigneeId,
+        sprintId: task.sprintId
       });
       setNotice({ tone: "success", message: `Moved “${task.title}”.` });
       await loadWorkspace();

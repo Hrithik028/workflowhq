@@ -19,8 +19,8 @@ import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
-import type { Project, Task, TaskInput } from "../types";
-import { initialsFor } from "../utils/format";
+import type { Project, Sprint, SprintStatus, Task, TaskInput } from "../types";
+import { formatDate, initialsFor } from "../utils/format";
 
 type BoardStage = "backlog" | "progress" | "released";
 
@@ -74,6 +74,13 @@ function WorkspaceEngineering() {
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState("");
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [sprintId, setSprintId] = useState("");
+  const [isCreatingSprint, setIsCreatingSprint] = useState(false);
+  const [newSprintName, setNewSprintName] = useState("");
+  const [newSprintStart, setNewSprintStart] = useState("");
+  const [newSprintEnd, setNewSprintEnd] = useState("");
+  const [isSprintBusy, setIsSprintBusy] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -103,6 +110,65 @@ function WorkspaceEngineering() {
     return () => window.clearTimeout(timer);
   }, [load, search]);
 
+  const loadSprints = useCallback(async () => {
+    if (!projectId) {
+      setSprints([]);
+      return;
+    }
+    try {
+      setSprints(await client.listSprints(Number(projectId)));
+    } catch (sprintError) {
+      setError(getErrorMessage(sprintError, "Unable to load sprints."));
+    }
+  }, [client, projectId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadSprints(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadSprints]);
+
+  const selectedSprint = sprints.find((sprint) => String(sprint.id) === sprintId) || null;
+
+  const createSprint = async () => {
+    if (!projectId || !newSprintName.trim()) return;
+    setIsSprintBusy(true);
+    try {
+      const sprint = await client.createSprint(Number(projectId), {
+        name: newSprintName.trim(),
+        startDate: newSprintStart || null,
+        endDate: newSprintEnd || null
+      });
+      setSprints((current) => [...current, sprint]);
+      setSprintId(String(sprint.id));
+      setNewSprintName("");
+      setNewSprintStart("");
+      setNewSprintEnd("");
+      setIsCreatingSprint(false);
+    } catch (sprintError) {
+      setError(getErrorMessage(sprintError, "Unable to create that sprint."));
+    } finally {
+      setIsSprintBusy(false);
+    }
+  };
+
+  const changeSprintStatus = async (status: SprintStatus) => {
+    if (!projectId || !selectedSprint) return;
+    setIsSprintBusy(true);
+    try {
+      const updated = await client.updateSprint(Number(projectId), selectedSprint.id, {
+        name: selectedSprint.name,
+        startDate: selectedSprint.startDate,
+        endDate: selectedSprint.endDate,
+        status
+      });
+      setSprints((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (sprintError) {
+      setError(getErrorMessage(sprintError, "Unable to update that sprint."));
+    } finally {
+      setIsSprintBusy(false);
+    }
+  };
+
   const saveTask = async (input: TaskInput) => {
     setIsSaving(true);
     try {
@@ -116,10 +182,15 @@ function WorkspaceEngineering() {
     }
   };
 
+  const visibleTasks = useMemo(
+    () => (sprintId ? tasks.filter((task) => task.sprintId === Number(sprintId)) : tasks),
+    [sprintId, tasks]
+  );
+
   const groups = useMemo(() => {
     const byId = new Map(tasks.map((task) => [task.id, task]));
     const grouped = new Map<number, Task[]>();
-    tasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       let root = task;
       const visited = new Set<number>();
       while (root.parentId && byId.has(root.parentId) && !visited.has(root.id)) {
@@ -132,7 +203,7 @@ function WorkspaceEngineering() {
       root: byId.get(rootId) || items[0],
       items
     }));
-  }, [tasks]);
+  }, [tasks, visibleTasks]);
 
   return (
     <main className="workspace-page engineering-board-page" aria-busy={isLoading}>
@@ -146,14 +217,77 @@ function WorkspaceEngineering() {
           <Link className="button secondary" to="/projects">
             <FolderKanban size={16} /> Projects
           </Link>
-          <button className="button secondary" type="button">
-            <CalendarDays size={16} /> Sprint 24 <ChevronDown size={15} />
-          </button>
+          {projectId ? (
+            <>
+              <select
+                aria-label="Select sprint"
+                onChange={(event) => setSprintId(event.target.value)}
+                value={sprintId}
+              >
+                <option value="">All sprints</option>
+                {sprints.map((sprint) => (
+                  <option key={sprint.id} value={sprint.id}>
+                    {sprint.name} ({sprint.status})
+                  </option>
+                ))}
+              </select>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => setIsCreatingSprint((current) => !current)}
+              >
+                <CalendarDays size={16} /> New sprint
+              </button>
+            </>
+          ) : null}
           <button className="button primary" type="button">
             <SlidersHorizontal size={16} /> Group by epic <ChevronDown size={15} />
           </button>
         </div>
       </header>
+
+      {isCreatingSprint && projectId ? (
+        <section className="sprint-create-form">
+          <input
+            aria-label="New sprint name"
+            disabled={isSprintBusy}
+            maxLength={80}
+            onChange={(event) => setNewSprintName(event.target.value)}
+            placeholder="Sprint name"
+            value={newSprintName}
+          />
+          <input
+            aria-label="Sprint start date"
+            disabled={isSprintBusy}
+            onChange={(event) => setNewSprintStart(event.target.value)}
+            type="date"
+            value={newSprintStart}
+          />
+          <input
+            aria-label="Sprint end date"
+            disabled={isSprintBusy}
+            onChange={(event) => setNewSprintEnd(event.target.value)}
+            type="date"
+            value={newSprintEnd}
+          />
+          <button
+            className="button primary"
+            disabled={isSprintBusy || !newSprintName.trim()}
+            type="button"
+            onClick={() => void createSprint()}
+          >
+            <Plus size={14} /> Add sprint
+          </button>
+          <button
+            className="button secondary"
+            disabled={isSprintBusy}
+            type="button"
+            onClick={() => setIsCreatingSprint(false)}
+          >
+            Cancel
+          </button>
+        </section>
+      ) : null}
 
       <section className="engineering-board-toolbar">
         <label>
@@ -167,7 +301,10 @@ function WorkspaceEngineering() {
         </label>
         <select
           aria-label="Select project"
-          onChange={(event) => setProjectId(event.target.value)}
+          onChange={(event) => {
+            setProjectId(event.target.value);
+            setSprintId("");
+          }}
           value={projectId}
         >
           <option value="">WORKFLOWHQ</option>
@@ -177,10 +314,23 @@ function WorkspaceEngineering() {
             </option>
           ))}
         </select>
-        <button type="button">
-          <SlidersHorizontal size={16} /> Sprint 24&nbsp;&nbsp;8 Aug – 22 Aug{" "}
-          <ChevronDown size={15} />
-        </button>
+        <span className="sprint-status-readout">
+          {selectedSprint
+            ? `${selectedSprint.name}  ${formatDate(selectedSprint.startDate, "No start date")} – ${formatDate(selectedSprint.endDate)}`
+            : "No sprint selected"}
+        </span>
+        {selectedSprint ? (
+          <select
+            aria-label="Sprint status"
+            disabled={isSprintBusy}
+            onChange={(event) => void changeSprintStatus(event.target.value as SprintStatus)}
+            value={selectedSprint.status}
+          >
+            <option value="planned">Planned</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+          </select>
+        ) : null}
         <span>Group by</span>
         <button type="button">
           Epic <ChevronDown size={15} />
@@ -195,7 +345,7 @@ function WorkspaceEngineering() {
             <div className={key} key={key}>
               <Icon size={18} />
               <strong>{label}</strong>
-              <span>{tasks.filter((task) => stageFor(task) === key).length}</span>
+              <span>{visibleTasks.filter((task) => stageFor(task) === key).length}</span>
             </div>
           ))}
         </header>
@@ -243,15 +393,15 @@ function WorkspaceEngineering() {
       </section>
 
       <footer className="engineering-board-footer">
-        <span>{tasks.length} issues</span>
+        <span>{visibleTasks.length} issues</span>
         <span className="high">
-          ■ High&nbsp;&nbsp;{tasks.filter((task) => task.priority === "high").length}
+          ■ High&nbsp;&nbsp;{visibleTasks.filter((task) => task.priority === "high").length}
         </span>
         <span className="medium">
-          ■ Medium&nbsp;&nbsp;{tasks.filter((task) => task.priority === "medium").length}
+          ■ Medium&nbsp;&nbsp;{visibleTasks.filter((task) => task.priority === "medium").length}
         </span>
         <span className="low">
-          ■ Low&nbsp;&nbsp;{tasks.filter((task) => task.priority === "low").length}
+          ■ Low&nbsp;&nbsp;{visibleTasks.filter((task) => task.priority === "low").length}
         </span>
       </footer>
 

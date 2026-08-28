@@ -10,6 +10,9 @@ import type {
   ProjectInput,
   ProjectMember,
   ProjectRole,
+  Sprint,
+  SprintInput,
+  SprintStatus,
   Task,
   TaskInput,
   TaskQuery,
@@ -61,6 +64,17 @@ const mapComment = (comment: Raw): Comment => ({
   updatedAt: String(comment.updated_at)
 });
 
+const mapSprint = (sprint: Raw): Sprint => ({
+  id: Number(sprint.id),
+  projectId: Number(sprint.project_id),
+  name: String(sprint.name),
+  startDate: sprint.start_date == null ? null : String(sprint.start_date).slice(0, 10),
+  endDate: sprint.end_date == null ? null : String(sprint.end_date).slice(0, 10),
+  status: sprint.status as Sprint["status"],
+  createdAt: String(sprint.created_at),
+  updatedAt: String(sprint.updated_at)
+});
+
 const mapTask = (task: Raw): Task => ({
   id: Number(task.id),
   userId: Number(task.user_id),
@@ -84,6 +98,8 @@ const mapTask = (task: Raw): Task => ({
   assigneeEmail: task.assignee_email == null ? null : String(task.assignee_email),
   labels: ((task.labels as Raw[] | undefined) || []).map(mapLabel),
   rank: task.rank == null ? null : Number(task.rank),
+  sprintId: task.sprint_id == null ? null : Number(task.sprint_id),
+  sprintName: task.sprint_name == null ? null : String(task.sprint_name),
   createdAt: String(task.created_at),
   updatedAt: String(task.updated_at)
 });
@@ -211,5 +227,27 @@ export const workspaceApi: WorkspaceClient = {
   ) {
     const response = await api.patch<{ data: Raw }>(`/tasks/${taskId}/rank`, input);
     return mapTask(response.data.data);
+  },
+  async listSprints(projectId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/projects/${projectId}/sprints`);
+    return response.data.data.map(mapSprint);
+  },
+  async createSprint(projectId: number, input: SprintInput) {
+    const response = await api.post<{ data: Raw }>(`/projects/${projectId}/sprints`, input);
+    return mapSprint(response.data.data);
+  },
+  async updateSprint(
+    projectId: number,
+    sprintId: number,
+    input: SprintInput & { status: SprintStatus }
+  ) {
+    const response = await api.put<{ data: Raw }>(
+      `/projects/${projectId}/sprints/${sprintId}`,
+      input
+    );
+    return mapSprint(response.data.data);
+  },
+  async deleteSprint(projectId: number, sprintId: number) {
+    await api.delete(`/projects/${projectId}/sprints/${sprintId}`);
   }
 };

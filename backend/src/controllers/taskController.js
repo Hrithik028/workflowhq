@@ -21,6 +21,8 @@ const taskFields = `
   t.assignee_id,
   assignee.name AS assignee_name,
   assignee.email AS assignee_email,
+  t.sprint_id,
+  sprint.name AS sprint_name,
   t.rank,
   t.created_at,
   t.updated_at,
@@ -35,6 +37,7 @@ const taskJoins = `
   LEFT JOIN projects p ON p.id = t.project_id
   LEFT JOIN tasks parent ON parent.id = t.parent_task_id
   LEFT JOIN users assignee ON assignee.id = t.assignee_id
+  LEFT JOIN sprints sprint ON sprint.id = t.sprint_id
   LEFT JOIN (
     SELECT parent_task_id,
            COUNT(*)::int AS child_count,
@@ -92,6 +95,20 @@ const validateAssignee = async (db, projectId, assigneeId) => {
   const role = await getProjectRole(db, projectId, assigneeId);
   if (!role) {
     throw new AppError(422, "ASSIGNEE_NOT_A_MEMBER", "The assignee must be a member of this project.");
+  }
+};
+
+const validateSprint = async (db, projectId, sprintId) => {
+  if (!sprintId) return;
+  if (!projectId) {
+    throw new AppError(422, "SPRINT_NOT_IN_PROJECT", "Only shared project tickets can join a sprint.");
+  }
+  const result = await db.query("SELECT id FROM sprints WHERE id = $1 AND project_id = $2", [
+    sprintId,
+    projectId
+  ]);
+  if (result.rows.length === 0) {
+    throw new AppError(422, "SPRINT_NOT_IN_PROJECT", "The sprint must belong to this task's project.");
   }
 };
 
@@ -257,7 +274,8 @@ const createTask = async (req, res) => {
     projectId,
     taskType,
     parentId,
-    assigneeId
+    assigneeId,
+    sprintId
   } = req.body;
 
   try {
@@ -271,10 +289,11 @@ const createTask = async (req, res) => {
       userId: req.user.id
     });
     await validateAssignee(client, projectId, assigneeId);
+    await validateSprint(client, projectId, sprintId);
     const result = await client.query(
       `INSERT INTO tasks
-         (user_id, project_id, title, description, status, priority, start_date, due_date, task_type, parent_task_id, assignee_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         (user_id, project_id, title, description, status, priority, start_date, due_date, task_type, parent_task_id, assignee_id, sprint_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id`,
       [
         req.user.id,
@@ -287,7 +306,8 @@ const createTask = async (req, res) => {
         dueDate,
         taskType,
         parentId,
-        assigneeId
+        assigneeId,
+        sprintId
       ]
     );
     const taskId = result.rows[0].id;
@@ -357,7 +377,8 @@ const updateTask = async (req, res, next) => {
     projectId,
     taskType,
     parentId,
-    assigneeId
+    assigneeId,
+    sprintId
   } = req.body;
 
   try {
@@ -403,6 +424,7 @@ const updateTask = async (req, res, next) => {
       taskId: req.params.id
     });
     await validateAssignee(client, projectId, assigneeId);
+    await validateSprint(client, projectId, sprintId);
     if (projectChanged) {
       const childResult = await client.query(
         "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1",
@@ -420,8 +442,8 @@ const updateTask = async (req, res, next) => {
       `UPDATE tasks
        SET project_id = $1, title = $2, description = $3, status = $4, priority = $5,
            start_date = $6, due_date = $7, task_type = $8, parent_task_id = $9,
-           assignee_id = $10, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $11`,
+           assignee_id = $10, sprint_id = $11, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $12`,
       [
         projectId,
         title,
@@ -433,6 +455,7 @@ const updateTask = async (req, res, next) => {
         taskType,
         parentId,
         assigneeId,
+        sprintId,
         req.params.id
       ]
     );

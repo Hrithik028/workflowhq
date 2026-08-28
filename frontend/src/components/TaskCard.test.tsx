@@ -28,6 +28,8 @@ const task: Task = {
   assigneeEmail: null,
   labels: [{ id: 1, projectId: 1, name: "Urgent", color: "#ff5500", createdAt: "2026-08-19T00:00:00.000Z" }],
   rank: null,
+  sprintId: null,
+  sprintName: null,
   createdAt: "2026-08-20T00:00:00.000Z",
   updatedAt: "2026-08-21T00:00:00.000Z"
 };

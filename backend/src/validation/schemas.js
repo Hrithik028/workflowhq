@@ -74,7 +74,8 @@ const taskBodySchema = z
     projectId: z.union([idSchema, z.null()]).optional().default(null),
     taskType: taskTypeSchema.default("task"),
     parentId: z.union([idSchema, z.null()]).optional().default(null),
-    assigneeId: z.union([idSchema, z.null()]).optional().default(null)
+    assigneeId: z.union([idSchema, z.null()]).optional().default(null),
+    sprintId: z.union([idSchema, z.null()]).optional().default(null)
   })
   .strict()
   .refine((value) => !value.startDate || !value.dueDate || value.startDate <= value.dueDate, {
@@ -179,6 +180,38 @@ const commentSchemas = {
   update: commentBodySchema
 };
 
+const sprintCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    startDate: optionalDate.optional().default(null),
+    endDate: optionalDate.optional().default(null)
+  })
+  .strict()
+  .refine((value) => !value.startDate || !value.endDate || value.startDate <= value.endDate, {
+    message: "Start date must be on or before the end date.",
+    path: ["startDate"]
+  });
+
+const sprintUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    startDate: optionalDate.optional().default(null),
+    endDate: optionalDate.optional().default(null),
+    status: z.enum(["planned", "active", "completed"])
+  })
+  .strict()
+  .refine((value) => !value.startDate || !value.endDate || value.startDate <= value.endDate, {
+    message: "Start date must be on or before the end date.",
+    path: ["startDate"]
+  });
+
+const sprintSchemas = {
+  params: z.object({ id: idSchema }),
+  sprintParams: z.object({ id: idSchema, sprintId: idSchema }),
+  create: sprintCreateSchema,
+  update: sprintUpdateSchema
+};
+
 module.exports = {
   activitySchemas,
   authSchemas,
@@ -186,6 +219,7 @@ module.exports = {
   labelSchemas,
   projectMemberSchemas,
   projectSchemas,
+  sprintSchemas,
   taskLabelSchemas,
   taskRankSchema,
   taskSchemas

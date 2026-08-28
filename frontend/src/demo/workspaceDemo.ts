@@ -8,6 +8,9 @@ import type {
   ProjectInput,
   ProjectMember,
   ProjectRole,
+  Sprint,
+  SprintInput,
+  SprintStatus,
   Task,
   TaskInput,
   TaskQuery,
@@ -85,6 +88,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: 1,
+    sprintName: "Sprint 24",
     createdAt: isoDaysAgo(5),
     updatedAt: isoMinutesAgo(18)
   },
@@ -111,6 +116,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(4),
     updatedAt: isoDaysAgo(1)
   },
@@ -137,6 +144,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(3),
     updatedAt: isoDaysAgo(2)
   },
@@ -163,6 +172,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: 1,
+    sprintName: "Sprint 24",
     createdAt: isoDaysAgo(6),
     updatedAt: isoMinutesAgo(8)
   },
@@ -189,6 +200,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(8),
     updatedAt: isoMinutesAgo(45)
   },
@@ -215,6 +228,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(7),
     updatedAt: isoDaysAgo(1)
   },
@@ -241,6 +256,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(11),
     updatedAt: isoMinutesAgo(32)
   },
@@ -267,6 +284,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(14),
     updatedAt: isoDaysAgo(2)
   },
@@ -293,6 +312,8 @@ let tasks: Task[] = [
     assigneeEmail: null,
     labels: [],
     rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(16),
     updatedAt: isoDaysAgo(3)
   }
@@ -402,6 +423,30 @@ let comments: Comment[] = [
 ];
 let nextCommentId = 2;
 
+let sprints: Sprint[] = [
+  {
+    id: 1,
+    projectId: 1,
+    name: "Sprint 24",
+    startDate: "2026-08-22",
+    endDate: "2026-09-05",
+    status: "active",
+    createdAt: isoDaysAgo(6),
+    updatedAt: isoDaysAgo(6)
+  },
+  {
+    id: 2,
+    projectId: 2,
+    name: "Sprint 9",
+    startDate: "2026-08-15",
+    endDate: "2026-08-29",
+    status: "active",
+    createdAt: isoDaysAgo(13),
+    updatedAt: isoDaysAgo(13)
+  }
+];
+let nextSprintId = 3;
+
 const delay = () => new Promise((resolve) => setTimeout(resolve, 120));
 const nextTaskId = () => Math.max(0, ...tasks.map((task) => task.id)) + 1;
 const nextProjectId = () => Math.max(0, ...projects.map((project) => project.id)) + 1;
@@ -434,13 +479,15 @@ const refreshHierarchyMetadata = () => {
     const project = projects.find((item) => item.id === task.projectId);
     const parent = tasks.find((item) => item.id === task.parentId);
     const children = tasks.filter((item) => item.parentId === task.id);
+    const sprint = task.sprintId == null ? null : sprints.find((item) => item.id === task.sprintId);
     return applyTaskLabels({
       ...task,
       projectName: project?.name || null,
       projectKey: project?.key || null,
       parentTitle: parent?.title || null,
       childCount: children.length,
-      completedChildCount: children.filter((item) => item.status === "completed").length
+      completedChildCount: children.filter((item) => item.status === "completed").length,
+      sprintName: sprint?.name || null
     });
   });
 };
@@ -590,6 +637,9 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const timestamp = new Date().toISOString();
     const project = projects.find((item) => item.id === input.projectId);
     const assignee = findMember(input.projectId, input.assigneeId);
+    const sprint = sprints.find(
+      (item) => item.id === input.sprintId && item.projectId === input.projectId
+    );
     const id = nextTaskId();
     const task: Task = {
       id,
@@ -606,6 +656,8 @@ export const demoWorkspaceApi: WorkspaceClient = {
       completedChildCount: 0,
       labels: [],
       rank: null,
+      sprintId: sprint?.id ?? null,
+      sprintName: sprint?.name ?? null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -630,12 +682,17 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const previousPriority = task.priority;
     const project = projects.find((item) => item.id === input.projectId);
     const assignee = findMember(input.projectId, input.assigneeId);
+    const sprint = sprints.find(
+      (item) => item.id === input.sprintId && item.projectId === input.projectId
+    );
     Object.assign(task, input, {
       assigneeId: assignee?.userId ?? null,
       assigneeName: assignee?.name ?? null,
       assigneeEmail: assignee?.email ?? null,
       projectName: project?.name || null,
       projectKey: project?.key || null,
+      sprintId: sprint?.id ?? null,
+      sprintName: sprint?.name ?? null,
       updatedAt: new Date().toISOString()
     });
     refreshProjectCounts();
@@ -952,5 +1009,63 @@ export const demoWorkspaceApi: WorkspaceClient = {
     tasks = tasks.map((item) => (item.id === taskId ? { ...item, rank: newRank } : item));
     refreshHierarchyMetadata();
     return { ...tasks.find((item) => item.id === taskId)! };
+  },
+
+  async listSprints(projectId: number) {
+    await delay();
+    return sprints.filter((sprint) => sprint.projectId === projectId).map((sprint) => ({ ...sprint }));
+  },
+
+  async createSprint(projectId: number, input: SprintInput) {
+    await delay();
+    const timestamp = new Date().toISOString();
+    const sprint: Sprint = {
+      id: nextSprintId++,
+      projectId,
+      name: input.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      status: "planned",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    sprints = [...sprints, sprint];
+    return { ...sprint };
+  },
+
+  async updateSprint(
+    projectId: number,
+    sprintId: number,
+    input: SprintInput & { status: SprintStatus }
+  ) {
+    await delay();
+    const sprint = sprints.find((item) => item.id === sprintId && item.projectId === projectId);
+    if (!sprint) throw new Error("Sprint not found.");
+    if (input.status === "active" && sprint.status !== "active") {
+      const alreadyActive = sprints.some(
+        (item) => item.projectId === projectId && item.status === "active" && item.id !== sprintId
+      );
+      if (alreadyActive) {
+        throw new Error("Complete the project's current active sprint before starting another.");
+      }
+    }
+    Object.assign(sprint, {
+      name: input.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      status: input.status,
+      updatedAt: new Date().toISOString()
+    });
+    refreshHierarchyMetadata();
+    return { ...sprint };
+  },
+
+  async deleteSprint(projectId: number, sprintId: number) {
+    await delay();
+    sprints = sprints.filter((item) => !(item.id === sprintId && item.projectId === projectId));
+    tasks = tasks.map((task) =>
+      task.sprintId === sprintId ? { ...task, sprintId: null, sprintName: null } : task
+    );
+    refreshHierarchyMetadata();
   }
 };

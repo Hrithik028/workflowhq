@@ -109,7 +109,8 @@ function Tasks() {
         dueDate: task.dueDate,
         taskType: task.taskType,
         parentId: task.parentId,
-        assigneeId: task.assigneeId
+        assigneeId: task.assigneeId,
+        sprintId: task.sprintId
       });
     } catch (statusError) {
       setError(getErrorMessage(statusError, "Unable to update the task status."));

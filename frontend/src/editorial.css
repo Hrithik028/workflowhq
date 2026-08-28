@@ -3498,10 +3498,41 @@ html[data-motion="reduced"] *::after {
 
 .engineering-board-toolbar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 190px 295px auto 120px;
+  grid-template-columns: minmax(220px, 1fr) 170px minmax(180px, 270px) 140px auto 120px;
   gap: 12px;
   align-items: stretch;
   padding: 17px 0;
+}
+
+.sprint-status-readout {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--carbon);
+  padding: 0 12px;
+  color: #111;
+  font-family: "Courier New", monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sprint-create-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--carbon);
+  border-top: 0;
+  padding: 12px 0;
+}
+
+.sprint-create-form input {
+  min-height: 38px;
+  border: 1px solid var(--carbon);
+  padding: 0 12px;
+  background: rgb(255 255 255 / 24%);
+  font-family: "Courier New", monospace;
+  font-size: 0.62rem;
 }
 
 .engineering-board-toolbar label,
