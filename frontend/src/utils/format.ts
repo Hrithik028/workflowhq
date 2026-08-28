@@ -38,6 +38,8 @@ export const activityCopy = (activity: Activity) => {
       return `Changed ${title} priority to ${activity.details.to}`;
     case "task_parent_changed":
       return `Changed ${title} parent ticket`;
+    case "task_label_added":
+      return `Labeled ${title} “${activity.details.labelName}”`;
     case "task_deleted":
       return `Deleted ${title}`;
     case "project_created":

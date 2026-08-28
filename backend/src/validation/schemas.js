@@ -129,10 +129,38 @@ const projectMemberSchemas = {
     .strict()
 };
 
+const labelColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Use a hex color like #4C6EF5.")
+  .transform((value) => value.toLowerCase());
+
+const labelBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(40),
+    color: labelColorSchema
+  })
+  .strict();
+
+const labelSchemas = {
+  params: z.object({ id: idSchema }),
+  labelParams: z.object({ id: idSchema, labelId: idSchema }),
+  create: labelBodySchema,
+  update: labelBodySchema
+};
+
+const taskLabelSchemas = {
+  params: z.object({ id: idSchema }),
+  labelParams: z.object({ id: idSchema, labelId: idSchema }),
+  attach: z.object({ labelId: idSchema }).strict()
+};
+
 module.exports = {
   activitySchemas,
   authSchemas,
+  labelSchemas,
   projectMemberSchemas,
   projectSchemas,
+  taskLabelSchemas,
   taskSchemas
 };

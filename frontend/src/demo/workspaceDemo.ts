@@ -1,5 +1,7 @@
 import type {
   Activity,
+  Label,
+  LabelInput,
   Project,
   ProjectInput,
   ProjectMember,
@@ -79,6 +81,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(5),
     updatedAt: isoMinutesAgo(18)
   },
@@ -103,6 +106,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(4),
     updatedAt: isoDaysAgo(1)
   },
@@ -127,6 +131,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(3),
     updatedAt: isoDaysAgo(2)
   },
@@ -151,6 +156,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(6),
     updatedAt: isoMinutesAgo(8)
   },
@@ -175,6 +181,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(8),
     updatedAt: isoMinutesAgo(45)
   },
@@ -199,6 +206,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(7),
     updatedAt: isoDaysAgo(1)
   },
@@ -223,6 +231,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(11),
     updatedAt: isoMinutesAgo(32)
   },
@@ -247,6 +256,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(14),
     updatedAt: isoDaysAgo(2)
   },
@@ -271,6 +281,7 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
     createdAt: isoDaysAgo(16),
     updatedAt: isoDaysAgo(3)
   }
@@ -334,6 +345,25 @@ const membersByProject: Record<number, ProjectMember[]> = Object.fromEntries(
 );
 let nextMemberUserId = 1000;
 
+let labels: Label[] = [
+  { id: 1, projectId: 1, name: "Launch blocker", color: "#cb5a43", createdAt: isoDaysAgo(17) },
+  { id: 2, projectId: 1, name: "Customer facing", color: "#4c6ef5", createdAt: isoDaysAgo(16) },
+  { id: 3, projectId: 2, name: "Design review", color: "#aa6d1d", createdAt: isoDaysAgo(11) }
+];
+let nextLabelId = 4;
+// Task -> attached label ids. A separate map (rather than storing ids on the
+// task itself) mirrors the real backend's task_labels join table and makes it
+// trivial to recompute every task's `labels` array after any label mutation.
+const taskLabelIds: Record<number, number[]> = { 1: [1, 2], 8: [3] };
+
+const applyTaskLabels = (task: Task): Task => ({
+  ...task,
+  labels: labels.filter((label) => (taskLabelIds[task.id] || []).includes(label.id))
+});
+// Seed the fixtures' labels once at module load - every later mutation keeps
+// this in sync via refreshHierarchyMetadata(), which also calls applyTaskLabels.
+tasks = tasks.map(applyTaskLabels);
+
 const delay = () => new Promise((resolve) => setTimeout(resolve, 120));
 const nextTaskId = () => Math.max(0, ...tasks.map((task) => task.id)) + 1;
 const nextProjectId = () => Math.max(0, ...projects.map((project) => project.id)) + 1;
@@ -366,14 +396,14 @@ const refreshHierarchyMetadata = () => {
     const project = projects.find((item) => item.id === task.projectId);
     const parent = tasks.find((item) => item.id === task.parentId);
     const children = tasks.filter((item) => item.parentId === task.id);
-    return {
+    return applyTaskLabels({
       ...task,
       projectName: project?.name || null,
       projectKey: project?.key || null,
       parentTitle: parent?.title || null,
       childCount: children.length,
       completedChildCount: children.filter((item) => item.status === "completed").length
-    };
+    });
   });
 };
 
@@ -435,6 +465,15 @@ export const demoWorkspaceApi: WorkspaceClient = {
     if (!project) throw new Error("Project not found.");
     projects = projects.filter((item) => item.id !== id);
     delete membersByProject[id];
+    const removedLabelIds = new Set(
+      labels.filter((label) => label.projectId === id).map((label) => label.id)
+    );
+    labels = labels.filter((label) => label.projectId !== id);
+    Object.keys(taskLabelIds).forEach((taskId) => {
+      taskLabelIds[Number(taskId)] = (taskLabelIds[Number(taskId)] || []).filter(
+        (labelId) => !removedLabelIds.has(labelId)
+      );
+    });
     tasks = tasks.map((task) =>
       task.projectId === id
         ? {
@@ -513,6 +552,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
       parentTitle: null,
       childCount: 0,
       completedChildCount: 0,
+      labels: [],
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -676,5 +716,87 @@ export const demoWorkspaceApi: WorkspaceClient = {
         ? { ...task, assigneeId: null, assigneeName: null, assigneeEmail: null }
         : task
     );
+  },
+
+  async listLabels(projectId: number) {
+    await delay();
+    return labels.filter((label) => label.projectId === projectId).map((label) => ({ ...label }));
+  },
+
+  async createLabel(projectId: number, input: LabelInput) {
+    await delay();
+    const name = input.name.trim();
+    if (
+      labels.some(
+        (label) => label.projectId === projectId && label.name.toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      throw new Error("A label with this name already exists on the project.");
+    }
+    const label: Label = {
+      id: nextLabelId++,
+      projectId,
+      name,
+      color: input.color,
+      createdAt: new Date().toISOString()
+    };
+    labels = [...labels, label];
+    return { ...label };
+  },
+
+  async updateLabel(projectId: number, labelId: number, input: LabelInput) {
+    await delay();
+    const label = labels.find((item) => item.id === labelId && item.projectId === projectId);
+    if (!label) throw new Error("Label not found.");
+    const name = input.name.trim();
+    if (
+      labels.some(
+        (item) =>
+          item.projectId === projectId &&
+          item.id !== labelId &&
+          item.name.toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      throw new Error("A label with this name already exists on the project.");
+    }
+    Object.assign(label, { name, color: input.color });
+    refreshHierarchyMetadata();
+    return { ...label };
+  },
+
+  async deleteLabel(projectId: number, labelId: number) {
+    await delay();
+    labels = labels.filter((item) => !(item.id === labelId && item.projectId === projectId));
+    Object.keys(taskLabelIds).forEach((taskId) => {
+      taskLabelIds[Number(taskId)] = (taskLabelIds[Number(taskId)] || []).filter(
+        (id) => id !== labelId
+      );
+    });
+    refreshHierarchyMetadata();
+  },
+
+  async attachLabel(taskId: number, labelId: number) {
+    await delay();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    if (!task.projectId) throw new Error("Inbox tickets can't carry project labels.");
+    const label = labels.find((item) => item.id === labelId && item.projectId === task.projectId);
+    if (!label) throw new Error("Label not found.");
+    const current = taskLabelIds[taskId] || [];
+    if (!current.includes(labelId)) taskLabelIds[taskId] = [...current, labelId];
+    refreshHierarchyMetadata();
+    addActivity({
+      action: "task_label_added",
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      details: { labelId: String(labelId), labelName: label.name }
+    });
+  },
+
+  async detachLabel(taskId: number, labelId: number) {
+    await delay();
+    taskLabelIds[taskId] = (taskLabelIds[taskId] || []).filter((id) => id !== labelId);
+    refreshHierarchyMetadata();
   }
 };

@@ -137,6 +137,44 @@ const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId
   }
 };
 
+// Labels are attached with one extra batch query per response rather than a
+// JOIN + JSON aggregate in taskFields - pg-mem (used by the test suite) has no
+// json_build_object/json_agg support, and a plain IN(...) lookup here is one
+// query total for a page of tasks rather than one per row.
+const attachLabels = async (db, tasks) => {
+  if (tasks.length === 0) return tasks;
+  const ids = tasks.map((task) => task.id);
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(", ");
+  const result = await db.query(
+    `SELECT tl.task_id, l.id, l.project_id, l.name, l.color, l.created_at
+     FROM task_labels tl
+     JOIN labels l ON l.id = tl.label_id
+     WHERE tl.task_id IN (${placeholders})
+     ORDER BY l.name ASC`,
+    ids
+  );
+  const byTask = new Map();
+  for (const row of result.rows) {
+    const taskId = Number(row.task_id);
+    const list = byTask.get(taskId) || [];
+    list.push({
+      id: row.id,
+      project_id: row.project_id,
+      name: row.name,
+      color: row.color,
+      created_at: row.created_at
+    });
+    byTask.set(taskId, list);
+  }
+  return tasks.map((task) => ({ ...task, labels: byTask.get(Number(task.id)) || [] }));
+};
+
+const attachLabelsToOne = async (db, task) => {
+  if (!task) return task;
+  const [withLabels] = await attachLabels(db, [task]);
+  return withLabels;
+};
+
 const selectTaskById = async (db, id, userId) => {
   const result = await db.query(
     `SELECT ${taskFields}
@@ -145,7 +183,7 @@ const selectTaskById = async (db, id, userId) => {
      WHERE t.id = $1 AND ${visibleTaskCondition(2)}`,
     [id, userId]
   );
-  return result.rows[0];
+  return attachLabelsToOne(db, result.rows[0]);
 };
 
 const getTasks = async (req, res) => {
@@ -191,9 +229,10 @@ const getTasks = async (req, res) => {
      LIMIT $${listValues.length - 1} OFFSET $${listValues.length}`,
     listValues
   );
+  const data = await attachLabels(req.app.locals.db, rows.rows);
 
   return res.status(200).json({
-    data: rows.rows,
+    data,
     pagination: {
       page,
       limit,
@@ -300,7 +339,7 @@ const getTaskChildren = async (req, res, next) => {
      ORDER BY t.created_at ASC, t.id ASC`,
     [req.params.id]
   );
-  return res.status(200).json({ data: result.rows });
+  return res.status(200).json({ data: await attachLabels(db, result.rows) });
 };
 
 const updateTask = async (req, res, next) => {

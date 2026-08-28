@@ -32,6 +32,19 @@ export interface ProjectMember {
   addedAt: string;
 }
 
+export interface Label {
+  id: number;
+  projectId: number;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface LabelInput {
+  name: string;
+  color: string;
+}
+
 export interface Task {
   id: number;
   userId: number;
@@ -53,6 +66,7 @@ export interface Task {
   assigneeId: number | null;
   assigneeName: string | null;
   assigneeEmail: string | null;
+  labels: Label[];
   createdAt: string;
   updatedAt: string;
 }
@@ -94,6 +108,7 @@ export interface Activity {
     | "task_status_changed"
     | "task_priority_changed"
     | "task_parent_changed"
+    | "task_label_added"
     | "task_deleted"
     | "project_created"
     | "project_deleted";
@@ -196,4 +211,10 @@ export interface WorkspaceClient {
   addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }): Promise<void>;
   updateMemberRole(projectId: number, userId: number, role: ProjectRole): Promise<void>;
   removeMember(projectId: number, userId: number): Promise<void>;
+  listLabels(projectId: number): Promise<Label[]>;
+  createLabel(projectId: number, input: LabelInput): Promise<Label>;
+  updateLabel(projectId: number, labelId: number, input: LabelInput): Promise<Label>;
+  deleteLabel(projectId: number, labelId: number): Promise<void>;
+  attachLabel(taskId: number, labelId: number): Promise<void>;
+  detachLabel(taskId: number, labelId: number): Promise<void>;
 }

@@ -1,8 +1,9 @@
-import { CalendarDays, Trash2, X } from "lucide-react";
+import { CalendarDays, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { getErrorMessage } from "../api/client";
 import type {
+  Label,
   Project,
   ProjectMember,
   Task,
@@ -12,6 +13,7 @@ import type {
   TaskType,
   WorkspaceClient
 } from "../types";
+import LabelPill from "./LabelPill";
 
 interface TaskModalProps {
   client: WorkspaceClient;
@@ -101,6 +103,11 @@ function TaskModal({
   const [error, setError] = useState("");
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
+  const [attachedLabels, setAttachedLabels] = useState<Label[]>(() => task?.labels ?? []);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#4c6ef5");
+  const [isLabelBusy, setIsLabelBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -135,6 +142,76 @@ function TaskModal({
       window.clearTimeout(timer);
     };
   }, [client, form.projectId]);
+
+  useEffect(() => {
+    let active = true;
+    const projectId = form.projectId;
+    const timer = window.setTimeout(() => {
+      if (!task || !projectId) {
+        setAvailableLabels([]);
+        return;
+      }
+      client
+        .listLabels(projectId)
+        .then((data) => {
+          if (active) setAvailableLabels(data);
+        })
+        .catch(() => undefined);
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [client, form.projectId, task]);
+
+  const attachExistingLabel = async (label: Label) => {
+    if (!task) return;
+    setIsLabelBusy(true);
+    try {
+      await client.attachLabel(task.id, label.id);
+      setAttachedLabels((current) => [...current, label]);
+    } catch (labelError) {
+      setError(getErrorMessage(labelError, "Unable to attach that label."));
+    } finally {
+      setIsLabelBusy(false);
+    }
+  };
+
+  const removeLabel = async (label: Label) => {
+    if (!task) return;
+    setIsLabelBusy(true);
+    try {
+      await client.detachLabel(task.id, label.id);
+      setAttachedLabels((current) => current.filter((item) => item.id !== label.id));
+    } catch (labelError) {
+      setError(getErrorMessage(labelError, "Unable to remove that label."));
+    } finally {
+      setIsLabelBusy(false);
+    }
+  };
+
+  const createAndAttachLabel = async () => {
+    if (!task || !form.projectId || !newLabelName.trim()) return;
+    setIsLabelBusy(true);
+    try {
+      const label = await client.createLabel(form.projectId, {
+        name: newLabelName.trim(),
+        color: newLabelColor
+      });
+      setAvailableLabels((current) => [...current, label]);
+      await client.attachLabel(task.id, label.id);
+      setAttachedLabels((current) => [...current, label]);
+      setNewLabelName("");
+    } catch (labelError) {
+      setError(getErrorMessage(labelError, "Unable to create that label."));
+    } finally {
+      setIsLabelBusy(false);
+    }
+  };
+
+  const attachableLabels = availableLabels.filter(
+    (label) => !attachedLabels.some((attached) => attached.id === label.id)
+  );
 
   const descendantIds = useMemo(() => {
     const descendants = new Set<number>();
@@ -374,6 +451,66 @@ function TaskModal({
               </span>
             </label>
           </div>
+
+          {task && form.projectId ? (
+            <label>
+              <span>
+                Labels <small>Optional</small>
+              </span>
+              <div className="label-row">
+                {attachedLabels.map((label) => (
+                  <LabelPill key={label.id} label={label} onRemove={() => void removeLabel(label)} />
+                ))}
+                {attachedLabels.length === 0 ? <span className="no-labels">No labels yet.</span> : null}
+              </div>
+              <div className="label-picker">
+                {attachableLabels.length > 0 ? (
+                  <select
+                    disabled={isLabelBusy}
+                    onChange={(event) => {
+                      const label = attachableLabels.find(
+                        (item) => item.id === Number(event.target.value)
+                      );
+                      if (label) void attachExistingLabel(label);
+                      event.target.value = "";
+                    }}
+                    value=""
+                  >
+                    <option value="">Add an existing label…</option>
+                    {attachableLabels.map((label) => (
+                      <option key={label.id} value={label.id}>
+                        {label.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <span className="label-create">
+                  <input
+                    aria-label="New label name"
+                    disabled={isLabelBusy}
+                    maxLength={40}
+                    onChange={(event) => setNewLabelName(event.target.value)}
+                    placeholder="New label name"
+                    value={newLabelName}
+                  />
+                  <input
+                    aria-label="New label color"
+                    disabled={isLabelBusy}
+                    onChange={(event) => setNewLabelColor(event.target.value)}
+                    type="color"
+                    value={newLabelColor}
+                  />
+                  <button
+                    disabled={isLabelBusy || !newLabelName.trim()}
+                    type="button"
+                    onClick={() => void createAndAttachLabel()}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                </span>
+              </div>
+            </label>
+          ) : null}
 
           {error ? <p className="form-alert error">{error}</p> : null}
           <footer className="modal-actions">

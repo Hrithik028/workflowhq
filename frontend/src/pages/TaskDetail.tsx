@@ -16,6 +16,7 @@ import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import LabelPill from "../components/LabelPill";
 import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { engineeringMetaFor, issueTypeLabel } from "../demo/engineeringMeta";
@@ -149,6 +150,13 @@ function TaskDetail() {
                 <UserRound size={13} /> {task.assigneeName || "Unassigned"}
               </span>
             </div>
+            {task.labels.length > 0 ? (
+              <div className="label-row">
+                {task.labels.map((label) => (
+                  <LabelPill key={label.id} label={label} />
+                ))}
+              </div>
+            ) : null}
           </header>
 
           <section className="task-copy-block">

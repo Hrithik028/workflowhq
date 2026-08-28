@@ -26,6 +26,7 @@ const task: Task = {
   assigneeId: null,
   assigneeName: null,
   assigneeEmail: null,
+  labels: [{ id: 1, projectId: 1, name: "Urgent", color: "#ff5500", createdAt: "2026-08-19T00:00:00.000Z" }],
   createdAt: "2026-08-20T00:00:00.000Z",
   updatedAt: "2026-08-21T00:00:00.000Z"
 };
@@ -38,6 +39,7 @@ describe("TaskCard", () => {
     expect(screen.getByText(task.title)).toBeInTheDocument();
     expect(screen.getByText("Product launch")).toBeInTheDocument();
     expect(screen.getByText("high")).toBeInTheDocument();
+    expect(screen.getByText("Urgent")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: task.title }));
     expect(onEdit).toHaveBeenCalledWith(task);
   });

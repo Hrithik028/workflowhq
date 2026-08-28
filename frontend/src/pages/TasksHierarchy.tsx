@@ -19,6 +19,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import LabelPill from "../components/LabelPill";
 import TaskModal from "../components/TaskModal";
 import { issueTypeLabel, progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
@@ -328,6 +329,13 @@ function TasksHierarchy() {
                       {task.description ||
                         `${issueTypeLabel(task)} in ${task.projectName || "Inbox"}.`}
                     </small>
+                    {task.labels.length > 0 ? (
+                      <span className="label-row">
+                        {task.labels.map((label) => (
+                          <LabelPill key={label.id} label={label} />
+                        ))}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="hierarchy-assignee">
                     <i>{initialsFor(task.assigneeName)}</i>

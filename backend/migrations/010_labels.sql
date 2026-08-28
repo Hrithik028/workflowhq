@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS labels (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name VARCHAR(40) NOT NULL,
+  color VARCHAR(7) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (project_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_labels_project ON labels(project_id);
+
+CREATE TABLE IF NOT EXISTS task_labels (
+  task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (task_id, label_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_labels_label ON task_labels(label_id);

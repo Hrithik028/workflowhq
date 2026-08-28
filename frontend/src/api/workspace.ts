@@ -1,6 +1,8 @@
 import { api } from "./client";
 import type {
   Activity,
+  Label,
+  LabelInput,
   PaginationMetadata,
   Project,
   ProjectInput,
@@ -38,6 +40,14 @@ const mapMember = (member: Raw): ProjectMember => ({
   addedAt: member.addedAt == null ? new Date().toISOString() : String(member.addedAt)
 });
 
+const mapLabel = (label: Raw): Label => ({
+  id: Number(label.id),
+  projectId: Number(label.project_id),
+  name: String(label.name),
+  color: String(label.color),
+  createdAt: String(label.created_at)
+});
+
 const mapTask = (task: Raw): Task => ({
   id: Number(task.id),
   userId: Number(task.user_id),
@@ -59,6 +69,7 @@ const mapTask = (task: Raw): Task => ({
   assigneeId: task.assignee_id == null ? null : Number(task.assignee_id),
   assigneeName: task.assignee_name == null ? null : String(task.assignee_name),
   assigneeEmail: task.assignee_email == null ? null : String(task.assignee_email),
+  labels: ((task.labels as Raw[] | undefined) || []).map(mapLabel),
   createdAt: String(task.created_at),
   updatedAt: String(task.updated_at)
 });
@@ -137,5 +148,29 @@ export const workspaceApi: WorkspaceClient = {
   },
   async removeMember(projectId: number, userId: number) {
     await api.delete(`/projects/${projectId}/members/${userId}`);
+  },
+  async listLabels(projectId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/projects/${projectId}/labels`);
+    return response.data.data.map(mapLabel);
+  },
+  async createLabel(projectId: number, input: LabelInput) {
+    const response = await api.post<{ data: Raw }>(`/projects/${projectId}/labels`, input);
+    return mapLabel(response.data.data);
+  },
+  async updateLabel(projectId: number, labelId: number, input: LabelInput) {
+    const response = await api.put<{ data: Raw }>(
+      `/projects/${projectId}/labels/${labelId}`,
+      input
+    );
+    return mapLabel(response.data.data);
+  },
+  async deleteLabel(projectId: number, labelId: number) {
+    await api.delete(`/projects/${projectId}/labels/${labelId}`);
+  },
+  async attachLabel(taskId: number, labelId: number) {
+    await api.post(`/tasks/${taskId}/labels`, { labelId });
+  },
+  async detachLabel(taskId: number, labelId: number) {
+    await api.delete(`/tasks/${taskId}/labels/${labelId}`);
   }
 };
