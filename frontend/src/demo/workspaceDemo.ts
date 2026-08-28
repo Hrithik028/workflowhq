@@ -1,9 +1,17 @@
 import type {
   Activity,
+  Comment,
+  CommentInput,
+  DailyCompletion,
+  Label,
+  LabelInput,
   Project,
   ProjectInput,
   ProjectMember,
   ProjectRole,
+  Sprint,
+  SprintInput,
+  SprintStatus,
   Task,
   TaskInput,
   TaskQuery,
@@ -79,6 +87,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: 1,
+    sprintName: "Sprint 24",
     createdAt: isoDaysAgo(5),
     updatedAt: isoMinutesAgo(18)
   },
@@ -103,6 +115,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(4),
     updatedAt: isoDaysAgo(1)
   },
@@ -127,6 +143,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(3),
     updatedAt: isoDaysAgo(2)
   },
@@ -151,6 +171,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: 1,
+    sprintName: "Sprint 24",
     createdAt: isoDaysAgo(6),
     updatedAt: isoMinutesAgo(8)
   },
@@ -175,6 +199,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(8),
     updatedAt: isoMinutesAgo(45)
   },
@@ -199,6 +227,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(7),
     updatedAt: isoDaysAgo(1)
   },
@@ -223,6 +255,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(11),
     updatedAt: isoMinutesAgo(32)
   },
@@ -247,6 +283,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(14),
     updatedAt: isoDaysAgo(2)
   },
@@ -271,6 +311,10 @@ let tasks: Task[] = [
     assigneeId: null,
     assigneeName: null,
     assigneeEmail: null,
+    labels: [],
+    rank: null,
+    sprintId: null,
+    sprintName: null,
     createdAt: isoDaysAgo(16),
     updatedAt: isoDaysAgo(3)
   }
@@ -334,6 +378,76 @@ const membersByProject: Record<number, ProjectMember[]> = Object.fromEntries(
 );
 let nextMemberUserId = 1000;
 
+let labels: Label[] = [
+  { id: 1, projectId: 1, name: "Launch blocker", color: "#cb5a43", createdAt: isoDaysAgo(17) },
+  { id: 2, projectId: 1, name: "Customer facing", color: "#4c6ef5", createdAt: isoDaysAgo(16) },
+  { id: 3, projectId: 2, name: "Design review", color: "#aa6d1d", createdAt: isoDaysAgo(11) }
+];
+let nextLabelId = 4;
+// Task -> attached label ids. A separate map (rather than storing ids on the
+// task itself) mirrors the real backend's task_labels join table and makes it
+// trivial to recompute every task's `labels` array after any label mutation.
+const taskLabelIds: Record<number, number[]> = { 1: [1, 2], 8: [3] };
+
+const applyTaskLabels = (task: Task): Task => ({
+  ...task,
+  labels: labels.filter((label) => (taskLabelIds[task.id] || []).includes(label.id))
+});
+// Seed the fixtures' labels and a natural manual-order rank once at module
+// load - every later mutation keeps labels in sync via
+// refreshHierarchyMetadata(), which also calls applyTaskLabels.
+tasks = tasks.map((task, index) => applyTaskLabels({ ...task, rank: index * 1000 }));
+
+// Mirrors backend/src/controllers/taskController.js's fractional ranking -
+// moving a task computes a value strictly between its two new neighbors, and
+// only rebalances the whole scoped list when float precision runs out.
+const RANK_GAP = 1000;
+
+const rankBetween = (previousRank: number | null, nextRank: number | null) => {
+  if (previousRank == null && nextRank == null) return 0;
+  if (previousRank == null) return (nextRank as number) - RANK_GAP;
+  if (nextRank == null) return previousRank + RANK_GAP;
+  return (previousRank + nextRank) / 2;
+};
+
+let comments: Comment[] = [
+  {
+    id: 1,
+    taskId: 1,
+    userId: 1000,
+    authorName: "Priya Natarajan",
+    authorEmail: "priya@workflowhq.app",
+    body: "Confirmed the rollback plan with ops - we're good to ship once QA signs off.",
+    createdAt: isoMinutesAgo(40),
+    updatedAt: isoMinutesAgo(40)
+  }
+];
+let nextCommentId = 2;
+
+let sprints: Sprint[] = [
+  {
+    id: 1,
+    projectId: 1,
+    name: "Sprint 24",
+    startDate: "2026-08-22",
+    endDate: "2026-09-05",
+    status: "active",
+    createdAt: isoDaysAgo(6),
+    updatedAt: isoDaysAgo(6)
+  },
+  {
+    id: 2,
+    projectId: 2,
+    name: "Sprint 9",
+    startDate: "2026-08-15",
+    endDate: "2026-08-29",
+    status: "active",
+    createdAt: isoDaysAgo(13),
+    updatedAt: isoDaysAgo(13)
+  }
+];
+let nextSprintId = 3;
+
 const delay = () => new Promise((resolve) => setTimeout(resolve, 120));
 const nextTaskId = () => Math.max(0, ...tasks.map((task) => task.id)) + 1;
 const nextProjectId = () => Math.max(0, ...projects.map((project) => project.id)) + 1;
@@ -366,14 +480,16 @@ const refreshHierarchyMetadata = () => {
     const project = projects.find((item) => item.id === task.projectId);
     const parent = tasks.find((item) => item.id === task.parentId);
     const children = tasks.filter((item) => item.parentId === task.id);
-    return {
+    const sprint = task.sprintId == null ? null : sprints.find((item) => item.id === task.sprintId);
+    return applyTaskLabels({
       ...task,
       projectName: project?.name || null,
       projectKey: project?.key || null,
       parentTitle: parent?.title || null,
       childCount: children.length,
-      completedChildCount: children.filter((item) => item.status === "completed").length
-    };
+      completedChildCount: children.filter((item) => item.status === "completed").length,
+      sprintName: sprint?.name || null
+    });
   });
 };
 
@@ -435,6 +551,15 @@ export const demoWorkspaceApi: WorkspaceClient = {
     if (!project) throw new Error("Project not found.");
     projects = projects.filter((item) => item.id !== id);
     delete membersByProject[id];
+    const removedLabelIds = new Set(
+      labels.filter((label) => label.projectId === id).map((label) => label.id)
+    );
+    labels = labels.filter((label) => label.projectId !== id);
+    Object.keys(taskLabelIds).forEach((taskId) => {
+      taskLabelIds[Number(taskId)] = (taskLabelIds[Number(taskId)] || []).filter(
+        (labelId) => !removedLabelIds.has(labelId)
+      );
+    });
     tasks = tasks.map((task) =>
       task.projectId === id
         ? {
@@ -474,17 +599,31 @@ export const demoWorkspaceApi: WorkspaceClient = {
       );
     }
     const sort = query.sort || "updated_at";
-    const keyMap = {
-      updated_at: "updatedAt",
-      created_at: "createdAt",
-      due_date: "dueDate",
-      title: "title",
-      priority: "priority"
-    } as const;
-    result.sort((left, right) =>
-      String(left[keyMap[sort]] || "").localeCompare(String(right[keyMap[sort]] || ""))
-    );
-    if ((query.order || "desc") === "desc") result.reverse();
+    if (sort === "rank") {
+      // Mirrors the backend's `ORDER BY rank ASC NULLS LAST` - never-ranked
+      // tasks always sort after ranked ones regardless of direction.
+      result.sort((left, right) => {
+        if (left.rank == null && right.rank == null) return 0;
+        if (left.rank == null) return 1;
+        if (right.rank == null) return -1;
+        return left.rank - right.rank;
+      });
+      if ((query.order || "desc") === "desc") {
+        result = [...result.filter((task) => task.rank != null).reverse(), ...result.filter((task) => task.rank == null)];
+      }
+    } else {
+      const keyMap = {
+        updated_at: "updatedAt",
+        created_at: "createdAt",
+        due_date: "dueDate",
+        title: "title",
+        priority: "priority"
+      } as const;
+      result.sort((left, right) =>
+        String(left[keyMap[sort]] || "").localeCompare(String(right[keyMap[sort]] || ""))
+      );
+      if ((query.order || "desc") === "desc") result.reverse();
+    }
     const page = query.page || 1;
     const limit = query.limit || 100;
     const total = result.length;
@@ -499,6 +638,9 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const timestamp = new Date().toISOString();
     const project = projects.find((item) => item.id === input.projectId);
     const assignee = findMember(input.projectId, input.assigneeId);
+    const sprint = sprints.find(
+      (item) => item.id === input.sprintId && item.projectId === input.projectId
+    );
     const id = nextTaskId();
     const task: Task = {
       id,
@@ -513,6 +655,10 @@ export const demoWorkspaceApi: WorkspaceClient = {
       parentTitle: null,
       childCount: 0,
       completedChildCount: 0,
+      labels: [],
+      rank: null,
+      sprintId: sprint?.id ?? null,
+      sprintName: sprint?.name ?? null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -537,12 +683,17 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const previousPriority = task.priority;
     const project = projects.find((item) => item.id === input.projectId);
     const assignee = findMember(input.projectId, input.assigneeId);
+    const sprint = sprints.find(
+      (item) => item.id === input.sprintId && item.projectId === input.projectId
+    );
     Object.assign(task, input, {
       assigneeId: assignee?.userId ?? null,
       assigneeName: assignee?.name ?? null,
       assigneeEmail: assignee?.email ?? null,
       projectName: project?.name || null,
       projectKey: project?.key || null,
+      sprintId: sprint?.id ?? null,
+      sprintName: sprint?.name ?? null,
       updatedAt: new Date().toISOString()
     });
     refreshProjectCounts();
@@ -598,15 +749,29 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const scoped = projectId ? tasks.filter((task) => task.projectId === projectId) : tasks;
     const today = new Date().toISOString().slice(0, 10);
+    const dailyCompletions: DailyCompletion[] = [];
+    for (let offset = 13; offset >= 0; offset -= 1) {
+      const date = new Date(now.getTime() - offset * 86_400_000);
+      const key = date.toISOString().slice(0, 10);
+      dailyCompletions.push({
+        date: key,
+        count: scoped.filter(
+          (task) => task.status === "completed" && task.updatedAt.slice(0, 10) === key
+        ).length
+      });
+    }
     const stats: TaskStats = {
       totalTasks: scoped.length,
       completedTasks: scoped.filter((task) => task.status === "completed").length,
       inProgressTasks: scoped.filter((task) => task.status === "in_progress").length,
       todoTasks: scoped.filter((task) => task.status === "todo").length,
       highPriorityTasks: scoped.filter((task) => task.priority === "high").length,
+      mediumPriorityTasks: scoped.filter((task) => task.priority === "medium").length,
+      lowPriorityTasks: scoped.filter((task) => task.priority === "low").length,
       overdueTasks: scoped.filter(
         (task) => task.dueDate && task.dueDate < today && task.status !== "completed"
-      ).length
+      ).length,
+      dailyCompletions
     };
     return stats;
   },
@@ -676,5 +841,246 @@ export const demoWorkspaceApi: WorkspaceClient = {
         ? { ...task, assigneeId: null, assigneeName: null, assigneeEmail: null }
         : task
     );
+  },
+
+  async listLabels(projectId: number) {
+    await delay();
+    return labels.filter((label) => label.projectId === projectId).map((label) => ({ ...label }));
+  },
+
+  async createLabel(projectId: number, input: LabelInput) {
+    await delay();
+    const name = input.name.trim();
+    if (
+      labels.some(
+        (label) => label.projectId === projectId && label.name.toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      throw new Error("A label with this name already exists on the project.");
+    }
+    const label: Label = {
+      id: nextLabelId++,
+      projectId,
+      name,
+      color: input.color,
+      createdAt: new Date().toISOString()
+    };
+    labels = [...labels, label];
+    return { ...label };
+  },
+
+  async updateLabel(projectId: number, labelId: number, input: LabelInput) {
+    await delay();
+    const label = labels.find((item) => item.id === labelId && item.projectId === projectId);
+    if (!label) throw new Error("Label not found.");
+    const name = input.name.trim();
+    if (
+      labels.some(
+        (item) =>
+          item.projectId === projectId &&
+          item.id !== labelId &&
+          item.name.toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      throw new Error("A label with this name already exists on the project.");
+    }
+    Object.assign(label, { name, color: input.color });
+    refreshHierarchyMetadata();
+    return { ...label };
+  },
+
+  async deleteLabel(projectId: number, labelId: number) {
+    await delay();
+    labels = labels.filter((item) => !(item.id === labelId && item.projectId === projectId));
+    Object.keys(taskLabelIds).forEach((taskId) => {
+      taskLabelIds[Number(taskId)] = (taskLabelIds[Number(taskId)] || []).filter(
+        (id) => id !== labelId
+      );
+    });
+    refreshHierarchyMetadata();
+  },
+
+  async attachLabel(taskId: number, labelId: number) {
+    await delay();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    if (!task.projectId) throw new Error("Inbox tickets can't carry project labels.");
+    const label = labels.find((item) => item.id === labelId && item.projectId === task.projectId);
+    if (!label) throw new Error("Label not found.");
+    const current = taskLabelIds[taskId] || [];
+    if (!current.includes(labelId)) taskLabelIds[taskId] = [...current, labelId];
+    refreshHierarchyMetadata();
+    addActivity({
+      action: "task_label_added",
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      details: { labelId: String(labelId), labelName: label.name }
+    });
+  },
+
+  async detachLabel(taskId: number, labelId: number) {
+    await delay();
+    taskLabelIds[taskId] = (taskLabelIds[taskId] || []).filter((id) => id !== labelId);
+    refreshHierarchyMetadata();
+  },
+
+  async listComments(taskId: number) {
+    await delay();
+    return comments
+      .filter((comment) => comment.taskId === taskId)
+      .map((comment) => ({ ...comment }));
+  },
+
+  async createComment(taskId: number, input: CommentInput) {
+    await delay();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    const timestamp = new Date().toISOString();
+    const comment: Comment = {
+      id: nextCommentId++,
+      taskId,
+      userId: DEMO_USER.id,
+      authorName: DEMO_USER.name,
+      authorEmail: DEMO_USER.email,
+      body: input.body,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    comments = [...comments, comment];
+    addActivity({
+      action: "task_comment_added",
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      details: {}
+    });
+    return { ...comment };
+  },
+
+  async updateComment(taskId: number, commentId: number, input: CommentInput) {
+    await delay();
+    const comment = comments.find((item) => item.id === commentId && item.taskId === taskId);
+    if (!comment) throw new Error("Comment not found.");
+    if (comment.userId !== DEMO_USER.id) {
+      throw new Error("Only the comment's author can edit it.");
+    }
+    Object.assign(comment, { body: input.body, updatedAt: new Date().toISOString() });
+    return { ...comment };
+  },
+
+  async deleteComment(taskId: number, commentId: number) {
+    await delay();
+    comments = comments.filter((item) => !(item.id === commentId && item.taskId === taskId));
+  },
+
+  async updateTaskRank(
+    taskId: number,
+    input: { previousTaskId: number | null; nextTaskId: number | null }
+  ) {
+    await delay();
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    if (input.previousTaskId === taskId || input.nextTaskId === taskId) {
+      throw new Error("A task cannot be its own neighbor.");
+    }
+    const inScope = (candidate: Task) =>
+      candidate.projectId === task.projectId &&
+      (task.projectId != null || candidate.userId === task.userId);
+    const resolveNeighborRank = (id: number | null) => {
+      if (id == null) return null;
+      const neighbor = tasks.find((item) => item.id === id);
+      if (!neighbor || !inScope(neighbor)) {
+        throw new Error("The neighboring task must be in the same list.");
+      }
+      return neighbor.rank;
+    };
+
+    let previousRank = resolveNeighborRank(input.previousTaskId);
+    let nextRank = resolveNeighborRank(input.nextTaskId);
+    let newRank = rankBetween(previousRank, nextRank);
+    const exhausted =
+      (previousRank != null && newRank <= previousRank) ||
+      (nextRank != null && newRank >= nextRank);
+    if (exhausted) {
+      const scoped = tasks
+        .filter(inScope)
+        .slice()
+        .sort((left, right) => {
+          if (left.rank == null && right.rank == null) return left.id - right.id;
+          if (left.rank == null) return 1;
+          if (right.rank == null) return -1;
+          return left.rank - right.rank || left.id - right.id;
+        });
+      const rebalanced = new Map(scoped.map((item, index) => [item.id, index * RANK_GAP]));
+      tasks = tasks.map((item) =>
+        rebalanced.has(item.id) ? { ...item, rank: rebalanced.get(item.id)! } : item
+      );
+      previousRank = resolveNeighborRank(input.previousTaskId);
+      nextRank = resolveNeighborRank(input.nextTaskId);
+      newRank = rankBetween(previousRank, nextRank);
+    }
+
+    tasks = tasks.map((item) => (item.id === taskId ? { ...item, rank: newRank } : item));
+    refreshHierarchyMetadata();
+    return { ...tasks.find((item) => item.id === taskId)! };
+  },
+
+  async listSprints(projectId: number) {
+    await delay();
+    return sprints.filter((sprint) => sprint.projectId === projectId).map((sprint) => ({ ...sprint }));
+  },
+
+  async createSprint(projectId: number, input: SprintInput) {
+    await delay();
+    const timestamp = new Date().toISOString();
+    const sprint: Sprint = {
+      id: nextSprintId++,
+      projectId,
+      name: input.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      status: "planned",
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    sprints = [...sprints, sprint];
+    return { ...sprint };
+  },
+
+  async updateSprint(
+    projectId: number,
+    sprintId: number,
+    input: SprintInput & { status: SprintStatus }
+  ) {
+    await delay();
+    const sprint = sprints.find((item) => item.id === sprintId && item.projectId === projectId);
+    if (!sprint) throw new Error("Sprint not found.");
+    if (input.status === "active" && sprint.status !== "active") {
+      const alreadyActive = sprints.some(
+        (item) => item.projectId === projectId && item.status === "active" && item.id !== sprintId
+      );
+      if (alreadyActive) {
+        throw new Error("Complete the project's current active sprint before starting another.");
+      }
+    }
+    Object.assign(sprint, {
+      name: input.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      status: input.status,
+      updatedAt: new Date().toISOString()
+    });
+    refreshHierarchyMetadata();
+    return { ...sprint };
+  },
+
+  async deleteSprint(projectId: number, sprintId: number) {
+    await delay();
+    sprints = sprints.filter((item) => !(item.id === sprintId && item.projectId === projectId));
+    tasks = tasks.map((task) =>
+      task.sprintId === sprintId ? { ...task, sprintId: null, sprintName: null } : task
+    );
+    refreshHierarchyMetadata();
   }
 };

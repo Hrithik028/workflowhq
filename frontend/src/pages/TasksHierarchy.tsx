@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   FolderKanban,
+  GripVertical,
   Layers3,
   List,
   ListTree,
@@ -19,6 +20,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import LabelPill from "../components/LabelPill";
 import TaskModal from "../components/TaskModal";
 import { issueTypeLabel, progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
@@ -49,6 +51,10 @@ function TasksHierarchy() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [view, setView] = useState<"list" | "tree">("list");
+  const [sortMode, setSortMode] = useState<"recent" | "manual">("recent");
+  const [dropTarget, setDropTarget] = useState<{ taskId: number; position: "before" | "after" } | null>(
+    null
+  );
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [initialParentTask, setInitialParentTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,7 +72,7 @@ function TasksHierarchy() {
           projectId: projectId ? Number(projectId) : undefined,
           status: status || undefined,
           priority: priority || undefined,
-          sort: "created_at",
+          sort: sortMode === "manual" ? "rank" : "created_at",
           order: "asc"
         }),
         client.listProjects()
@@ -92,7 +98,7 @@ function TasksHierarchy() {
     } finally {
       setIsLoading(false);
     }
-  }, [client, priority, projectId, search, status, taskType]);
+  }, [client, priority, projectId, search, sortMode, status, taskType]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), search ? 180 : 0);
@@ -129,8 +135,10 @@ function TasksHierarchy() {
     }
   };
 
+  const effectiveView = sortMode === "manual" ? "list" : view;
+
   const rows = useMemo(() => {
-    if (view === "list") return tasks.map((task) => ({ task, depth: 0 }));
+    if (effectiveView === "list") return tasks.map((task) => ({ task, depth: 0 }));
     const idsInView = new Set(tasks.map((task) => task.id));
     const byParent = new Map<number | null, Task[]>();
     tasks.forEach((task) =>
@@ -154,7 +162,7 @@ function TasksHierarchy() {
       .filter((task) => !task.parentId || !idsInView.has(task.parentId))
       .forEach((task) => add(task, 0));
     return result;
-  }, [expanded, tasks, view]);
+  }, [effectiveView, expanded, tasks]);
 
   const selected = tasks.find((task) => task.id === selectedId) || null;
   const children = selected ? tasks.filter((task) => task.parentId === selected.id) : [];
@@ -163,6 +171,29 @@ function TasksHierarchy() {
     setEditingTask(null);
     setInitialParentTask(parent);
     setIsModalOpen(true);
+  };
+
+  const dropTask = async (
+    event: React.DragEvent,
+    targetTask: Task,
+    position: "before" | "after"
+  ) => {
+    event.preventDefault();
+    setDropTarget(null);
+    const draggedId = Number(event.dataTransfer.getData("text/task-id"));
+    if (!draggedId || draggedId === targetTask.id) return;
+    const orderedIds = rows.map(({ task }) => task.id).filter((id) => id !== draggedId);
+    const targetIndex = orderedIds.indexOf(targetTask.id);
+    if (targetIndex === -1) return;
+    const insertIndex = position === "before" ? targetIndex : targetIndex + 1;
+    const previousTaskId = insertIndex > 0 ? orderedIds[insertIndex - 1] : null;
+    const nextTaskId = insertIndex < orderedIds.length ? orderedIds[insertIndex] : null;
+    try {
+      await client.updateTaskRank(draggedId, { previousTaskId, nextTaskId });
+      await load();
+    } catch (rankError) {
+      setError(getErrorMessage(rankError, "Unable to reorder that issue."));
+    }
   };
 
   return (
@@ -185,6 +216,7 @@ function TasksHierarchy() {
           <div className="hierarchy-view-toggle">
             <button
               className={view === "list" ? "active" : ""}
+              disabled={sortMode === "manual"}
               type="button"
               onClick={() => setView("list")}
             >
@@ -192,10 +224,27 @@ function TasksHierarchy() {
             </button>
             <button
               className={view === "tree" ? "active" : ""}
+              disabled={sortMode === "manual"}
               type="button"
               onClick={() => setView("tree")}
             >
               <ListTree size={15} /> Tree
+            </button>
+          </div>
+          <div className="hierarchy-view-toggle">
+            <button
+              className={sortMode === "recent" ? "active" : ""}
+              type="button"
+              onClick={() => setSortMode("recent")}
+            >
+              Recent
+            </button>
+            <button
+              className={sortMode === "manual" ? "active" : ""}
+              type="button"
+              onClick={() => setSortMode("manual")}
+            >
+              <GripVertical size={15} /> Manual order
             </button>
           </div>
           <button className="button primary" type="button" onClick={() => openCreate()}>
@@ -267,6 +316,12 @@ function TasksHierarchy() {
           </div>
 
           {error ? <p className="form-alert error">{error}</p> : null}
+          {sortMode === "manual" && !projectId ? (
+            <div className="workspace-empty">
+              <h2>Pick a project to reorder its backlog.</h2>
+              <p>Manual order is scoped per project - filter to one above before dragging issues.</p>
+            </div>
+          ) : (
           <section className="hierarchy-table" aria-label="Work hierarchy">
             <header>
               <span>Type</span>
@@ -284,14 +339,38 @@ function TasksHierarchy() {
               // an interactive-looking control there that does nothing is
               // just misleading.
               const canExpand =
-                view === "tree" &&
+                effectiveView === "tree" &&
                 (task.childCount > 0 || tasks.some((item) => item.parentId === task.id));
               const progress = progressFor(task);
+              const dropClass =
+                dropTarget?.taskId === task.id ? ` drop-${dropTarget.position}` : "";
               return (
                 <article
-                  className={`${selectedId === task.id ? "selected" : ""} hierarchy-depth-${Math.min(depth, 5)}`}
+                  className={`${selectedId === task.id ? "selected" : ""} hierarchy-depth-${Math.min(depth, 5)}${dropClass}`}
+                  draggable={sortMode === "manual"}
                   key={task.id}
                   onClick={() => setSelectedId(task.id)}
+                  onDragEnd={() => setDropTarget(null)}
+                  onDragOver={(event) => {
+                    if (sortMode !== "manual") return;
+                    event.preventDefault();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+                    setDropTarget({ taskId: task.id, position });
+                  }}
+                  onDragStart={(event) => {
+                    if (sortMode !== "manual") return;
+                    event.dataTransfer.setData("text/task-id", String(task.id));
+                    event.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDrop={(event) => {
+                    if (sortMode !== "manual") return;
+                    void dropTask(
+                      event,
+                      task,
+                      dropTarget?.taskId === task.id ? dropTarget.position : "before"
+                    );
+                  }}
                 >
                   <span className={`hierarchy-type ${task.taskType}`}>
                     {canExpand ? (
@@ -314,6 +393,10 @@ function TasksHierarchy() {
                           <ChevronRight size={16} />
                         )}
                       </button>
+                    ) : sortMode === "manual" ? (
+                      <i className="hierarchy-drag-handle">
+                        <GripVertical size={15} />
+                      </i>
                     ) : (
                       <i />
                     )}
@@ -328,6 +411,13 @@ function TasksHierarchy() {
                       {task.description ||
                         `${issueTypeLabel(task)} in ${task.projectName || "Inbox"}.`}
                     </small>
+                    {task.labels.length > 0 ? (
+                      <span className="label-row">
+                        {task.labels.map((label) => (
+                          <LabelPill key={label.id} label={label} />
+                        ))}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="hierarchy-assignee">
                     <i>{initialsFor(task.assigneeName)}</i>
@@ -354,6 +444,7 @@ function TasksHierarchy() {
               </div>
             ) : null}
           </section>
+          )}
         </div>
 
         <aside className="hierarchy-summary">

@@ -20,7 +20,10 @@ const emptyStats: TaskStats = {
   inProgressTasks: 0,
   todoTasks: 0,
   highPriorityTasks: 0,
-  overdueTasks: 0
+  mediumPriorityTasks: 0,
+  lowPriorityTasks: 0,
+  overdueTasks: 0,
+  dailyCompletions: []
 };
 
 const initialFilters: Filters = {
@@ -141,7 +144,8 @@ function Workspace() {
         dueDate: task.dueDate,
         taskType: task.taskType,
         parentId: task.parentId,
-        assigneeId: task.assigneeId
+        assigneeId: task.assigneeId,
+        sprintId: task.sprintId
       });
       setNotice({ tone: "success", message: `Moved “${task.title}”.` });
       await loadWorkspace();

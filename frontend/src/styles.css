@@ -1345,6 +1345,91 @@ p {
   color: #687b91;
 }
 
+.label-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.label-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.label-pill button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.label-pill button:hover {
+  opacity: 1;
+}
+
+.no-labels {
+  color: #303844;
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+
+.label-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.label-picker select {
+  width: auto;
+  min-width: 180px;
+}
+
+.label-create {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.label-create input[type="text"],
+.label-create input:not([type]) {
+  width: 150px;
+}
+
+.label-create input[type="color"] {
+  width: 40px;
+  height: 40px;
+  padding: 2px;
+}
+
+.label-create button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  border: 1px solid #d9dee6;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: white;
+  color: #394457;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.label-create button:disabled {
+  opacity: 0.5;
+}
+
 .task-title-button {
   display: block;
   width: 100%;

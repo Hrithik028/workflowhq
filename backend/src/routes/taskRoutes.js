@@ -1,6 +1,8 @@
 const express = require("express");
 const { z } = require("zod");
 
+const { createComment, deleteComment, listComments, updateComment } = require("../controllers/commentController");
+const { attachLabel, detachLabel } = require("../controllers/labelController");
 const {
   createChildTask,
   createTask,
@@ -9,13 +11,19 @@ const {
   getTaskChildren,
   getTasks,
   getTaskStats,
-  updateTask
+  updateTask,
+  updateTaskRank
 } = require("../controllers/taskController");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { enforceTaskRules, requirePermission, requireRule } = require("../middleware/accessControl");
 const authMiddleware = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validate");
-const { taskSchemas } = require("../validation/schemas");
+const {
+  commentSchemas,
+  taskLabelSchemas,
+  taskRankSchema,
+  taskSchemas
+} = require("../validation/schemas");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -59,6 +67,46 @@ router.delete(
   asyncHandler(requireRule("allow_task_deletion")),
   validate({ params: taskSchemas.params }),
   asyncHandler(deleteTask)
+);
+router.patch(
+  "/:id/rank",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: taskSchemas.params, body: taskRankSchema }),
+  asyncHandler(updateTaskRank)
+);
+
+router.post(
+  "/:id/labels",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: taskLabelSchemas.params, body: taskLabelSchemas.attach }),
+  asyncHandler(attachLabel)
+);
+router.delete(
+  "/:id/labels/:labelId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: taskLabelSchemas.labelParams }),
+  asyncHandler(detachLabel)
+);
+
+router.get(
+  "/:id/comments",
+  validate({ params: commentSchemas.params }),
+  asyncHandler(listComments)
+);
+router.post(
+  "/:id/comments",
+  validate({ params: commentSchemas.params, body: commentSchemas.create }),
+  asyncHandler(createComment)
+);
+router.put(
+  "/:id/comments/:commentId",
+  validate({ params: commentSchemas.commentParams, body: commentSchemas.update }),
+  asyncHandler(updateComment)
+);
+router.delete(
+  "/:id/comments/:commentId",
+  validate({ params: commentSchemas.commentParams }),
+  asyncHandler(deleteComment)
 );
 
 module.exports = router;

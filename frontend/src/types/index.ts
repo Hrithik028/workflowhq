@@ -32,6 +32,53 @@ export interface ProjectMember {
   addedAt: string;
 }
 
+export interface Label {
+  id: number;
+  projectId: number;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface LabelInput {
+  name: string;
+  color: string;
+}
+
+export interface Comment {
+  id: number;
+  taskId: number;
+  userId: number;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommentInput {
+  body: string;
+}
+
+export type SprintStatus = "planned" | "active" | "completed";
+
+export interface Sprint {
+  id: number;
+  projectId: number;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: SprintStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SprintInput {
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+}
+
 export interface Task {
   id: number;
   userId: number;
@@ -53,6 +100,10 @@ export interface Task {
   assigneeId: number | null;
   assigneeName: string | null;
   assigneeEmail: string | null;
+  labels: Label[];
+  rank: number | null;
+  sprintId: number | null;
+  sprintName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -68,6 +119,7 @@ export interface TaskInput {
   taskType: TaskType;
   parentId: number | null;
   assigneeId: number | null;
+  sprintId: number | null;
 }
 
 export interface ProjectInput {
@@ -76,13 +128,21 @@ export interface ProjectInput {
   description: string;
 }
 
+export interface DailyCompletion {
+  date: string;
+  count: number;
+}
+
 export interface TaskStats {
   totalTasks: number;
   completedTasks: number;
   inProgressTasks: number;
   todoTasks: number;
   highPriorityTasks: number;
+  mediumPriorityTasks: number;
+  lowPriorityTasks: number;
   overdueTasks: number;
+  dailyCompletions: DailyCompletion[];
 }
 
 export interface Activity {
@@ -94,6 +154,8 @@ export interface Activity {
     | "task_status_changed"
     | "task_priority_changed"
     | "task_parent_changed"
+    | "task_label_added"
+    | "task_comment_added"
     | "task_deleted"
     | "project_created"
     | "project_deleted";
@@ -118,7 +180,7 @@ export interface TaskQuery {
   priority?: TaskPriority;
   projectId?: number;
   search?: string;
-  sort?: "updated_at" | "created_at" | "due_date" | "title" | "priority";
+  sort?: "updated_at" | "created_at" | "due_date" | "title" | "priority" | "rank";
   order?: "asc" | "desc";
 }
 
@@ -196,4 +258,26 @@ export interface WorkspaceClient {
   addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }): Promise<void>;
   updateMemberRole(projectId: number, userId: number, role: ProjectRole): Promise<void>;
   removeMember(projectId: number, userId: number): Promise<void>;
+  listLabels(projectId: number): Promise<Label[]>;
+  createLabel(projectId: number, input: LabelInput): Promise<Label>;
+  updateLabel(projectId: number, labelId: number, input: LabelInput): Promise<Label>;
+  deleteLabel(projectId: number, labelId: number): Promise<void>;
+  attachLabel(taskId: number, labelId: number): Promise<void>;
+  detachLabel(taskId: number, labelId: number): Promise<void>;
+  listComments(taskId: number): Promise<Comment[]>;
+  createComment(taskId: number, input: CommentInput): Promise<Comment>;
+  updateComment(taskId: number, commentId: number, input: CommentInput): Promise<Comment>;
+  deleteComment(taskId: number, commentId: number): Promise<void>;
+  updateTaskRank(
+    taskId: number,
+    input: { previousTaskId: number | null; nextTaskId: number | null }
+  ): Promise<Task>;
+  listSprints(projectId: number): Promise<Sprint[]>;
+  createSprint(projectId: number, input: SprintInput): Promise<Sprint>;
+  updateSprint(
+    projectId: number,
+    sprintId: number,
+    input: SprintInput & { status: SprintStatus }
+  ): Promise<Sprint>;
+  deleteSprint(projectId: number, sprintId: number): Promise<void>;
 }

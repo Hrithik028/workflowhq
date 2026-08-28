@@ -2,6 +2,7 @@ import { CalendarDays, MoreHorizontal } from "lucide-react";
 
 import type { Task, TaskStatus } from "../types";
 import { formatDate, statusLabel } from "../utils/format";
+import LabelPill from "./LabelPill";
 
 interface TaskCardProps {
   task: Task;
@@ -29,6 +30,13 @@ function TaskCard({ task, onEdit, onMove }: TaskCardProps) {
         {task.title}
       </button>
       {task.description ? <p className="task-summary">{task.description}</p> : null}
+      {task.labels.length > 0 ? (
+        <div className="label-row">
+          {task.labels.map((label) => (
+            <LabelPill key={label.id} label={label} />
+          ))}
+        </div>
+      ) : null}
       <div className="task-project-row">
         <span className="project-dot" />
         <span>{task.projectName || "Inbox"}</span>

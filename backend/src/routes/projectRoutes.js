@@ -8,16 +8,33 @@ const {
   updateProject
 } = require("../controllers/projectController");
 const {
+  createLabel,
+  deleteLabel,
+  listLabels,
+  updateLabel
+} = require("../controllers/labelController");
+const {
   addMember,
   listMembers,
   removeMember,
   updateMemberRole
 } = require("../controllers/projectMemberController");
+const {
+  createSprint,
+  deleteSprint,
+  listSprints,
+  updateSprint
+} = require("../controllers/sprintController");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { requirePermission, requireRule } = require("../middleware/accessControl");
 const authMiddleware = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validate");
-const { projectMemberSchemas, projectSchemas } = require("../validation/schemas");
+const {
+  labelSchemas,
+  projectMemberSchemas,
+  projectSchemas,
+  sprintSchemas
+} = require("../validation/schemas");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -66,6 +83,46 @@ router.delete(
   asyncHandler(requirePermission("projects.members")),
   validate({ params: projectMemberSchemas.memberParams }),
   asyncHandler(removeMember)
+);
+
+router.get("/:id/labels", validate({ params: labelSchemas.params }), asyncHandler(listLabels));
+router.post(
+  "/:id/labels",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: labelSchemas.params, body: labelSchemas.create }),
+  asyncHandler(createLabel)
+);
+router.put(
+  "/:id/labels/:labelId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: labelSchemas.labelParams, body: labelSchemas.update }),
+  asyncHandler(updateLabel)
+);
+router.delete(
+  "/:id/labels/:labelId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: labelSchemas.labelParams }),
+  asyncHandler(deleteLabel)
+);
+
+router.get("/:id/sprints", validate({ params: sprintSchemas.params }), asyncHandler(listSprints));
+router.post(
+  "/:id/sprints",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: sprintSchemas.params, body: sprintSchemas.create }),
+  asyncHandler(createSprint)
+);
+router.put(
+  "/:id/sprints/:sprintId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: sprintSchemas.sprintParams, body: sprintSchemas.update }),
+  asyncHandler(updateSprint)
+);
+router.delete(
+  "/:id/sprints/:sprintId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: sprintSchemas.sprintParams }),
+  asyncHandler(deleteSprint)
 );
 
 module.exports = router;

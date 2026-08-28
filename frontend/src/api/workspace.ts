@@ -1,11 +1,18 @@
 import { api } from "./client";
 import type {
   Activity,
+  Comment,
+  CommentInput,
+  Label,
+  LabelInput,
   PaginationMetadata,
   Project,
   ProjectInput,
   ProjectMember,
   ProjectRole,
+  Sprint,
+  SprintInput,
+  SprintStatus,
   Task,
   TaskInput,
   TaskQuery,
@@ -38,6 +45,36 @@ const mapMember = (member: Raw): ProjectMember => ({
   addedAt: member.addedAt == null ? new Date().toISOString() : String(member.addedAt)
 });
 
+const mapLabel = (label: Raw): Label => ({
+  id: Number(label.id),
+  projectId: Number(label.project_id),
+  name: String(label.name),
+  color: String(label.color),
+  createdAt: String(label.created_at)
+});
+
+const mapComment = (comment: Raw): Comment => ({
+  id: Number(comment.id),
+  taskId: Number(comment.task_id),
+  userId: Number(comment.user_id),
+  authorName: String(comment.author_name),
+  authorEmail: String(comment.author_email),
+  body: String(comment.body),
+  createdAt: String(comment.created_at),
+  updatedAt: String(comment.updated_at)
+});
+
+const mapSprint = (sprint: Raw): Sprint => ({
+  id: Number(sprint.id),
+  projectId: Number(sprint.project_id),
+  name: String(sprint.name),
+  startDate: sprint.start_date == null ? null : String(sprint.start_date).slice(0, 10),
+  endDate: sprint.end_date == null ? null : String(sprint.end_date).slice(0, 10),
+  status: sprint.status as Sprint["status"],
+  createdAt: String(sprint.created_at),
+  updatedAt: String(sprint.updated_at)
+});
+
 const mapTask = (task: Raw): Task => ({
   id: Number(task.id),
   userId: Number(task.user_id),
@@ -59,6 +96,10 @@ const mapTask = (task: Raw): Task => ({
   assigneeId: task.assignee_id == null ? null : Number(task.assignee_id),
   assigneeName: task.assignee_name == null ? null : String(task.assignee_name),
   assigneeEmail: task.assignee_email == null ? null : String(task.assignee_email),
+  labels: ((task.labels as Raw[] | undefined) || []).map(mapLabel),
+  rank: task.rank == null ? null : Number(task.rank),
+  sprintId: task.sprint_id == null ? null : Number(task.sprint_id),
+  sprintName: task.sprint_name == null ? null : String(task.sprint_name),
   createdAt: String(task.created_at),
   updatedAt: String(task.updated_at)
 });
@@ -69,7 +110,13 @@ const mapStats = (stats: Raw): TaskStats => ({
   inProgressTasks: Number(stats.in_progress_tasks || 0),
   todoTasks: Number(stats.todo_tasks || 0),
   highPriorityTasks: Number(stats.high_priority_tasks || 0),
-  overdueTasks: Number(stats.overdue_tasks || 0)
+  mediumPriorityTasks: Number(stats.medium_priority_tasks || 0),
+  lowPriorityTasks: Number(stats.low_priority_tasks || 0),
+  overdueTasks: Number(stats.overdue_tasks || 0),
+  dailyCompletions: ((stats.daily_completions as Raw[] | undefined) || []).map((entry) => ({
+    date: String(entry.date),
+    count: Number(entry.count || 0)
+  }))
 });
 
 const mapActivity = (activity: Raw): Activity => ({
@@ -137,5 +184,76 @@ export const workspaceApi: WorkspaceClient = {
   },
   async removeMember(projectId: number, userId: number) {
     await api.delete(`/projects/${projectId}/members/${userId}`);
+  },
+  async listLabels(projectId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/projects/${projectId}/labels`);
+    return response.data.data.map(mapLabel);
+  },
+  async createLabel(projectId: number, input: LabelInput) {
+    const response = await api.post<{ data: Raw }>(`/projects/${projectId}/labels`, input);
+    return mapLabel(response.data.data);
+  },
+  async updateLabel(projectId: number, labelId: number, input: LabelInput) {
+    const response = await api.put<{ data: Raw }>(
+      `/projects/${projectId}/labels/${labelId}`,
+      input
+    );
+    return mapLabel(response.data.data);
+  },
+  async deleteLabel(projectId: number, labelId: number) {
+    await api.delete(`/projects/${projectId}/labels/${labelId}`);
+  },
+  async attachLabel(taskId: number, labelId: number) {
+    await api.post(`/tasks/${taskId}/labels`, { labelId });
+  },
+  async detachLabel(taskId: number, labelId: number) {
+    await api.delete(`/tasks/${taskId}/labels/${labelId}`);
+  },
+  async listComments(taskId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/tasks/${taskId}/comments`);
+    return response.data.data.map(mapComment);
+  },
+  async createComment(taskId: number, input: CommentInput) {
+    const response = await api.post<{ data: Raw }>(`/tasks/${taskId}/comments`, input);
+    return mapComment(response.data.data);
+  },
+  async updateComment(taskId: number, commentId: number, input: CommentInput) {
+    const response = await api.put<{ data: Raw }>(
+      `/tasks/${taskId}/comments/${commentId}`,
+      input
+    );
+    return mapComment(response.data.data);
+  },
+  async deleteComment(taskId: number, commentId: number) {
+    await api.delete(`/tasks/${taskId}/comments/${commentId}`);
+  },
+  async updateTaskRank(
+    taskId: number,
+    input: { previousTaskId: number | null; nextTaskId: number | null }
+  ) {
+    const response = await api.patch<{ data: Raw }>(`/tasks/${taskId}/rank`, input);
+    return mapTask(response.data.data);
+  },
+  async listSprints(projectId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/projects/${projectId}/sprints`);
+    return response.data.data.map(mapSprint);
+  },
+  async createSprint(projectId: number, input: SprintInput) {
+    const response = await api.post<{ data: Raw }>(`/projects/${projectId}/sprints`, input);
+    return mapSprint(response.data.data);
+  },
+  async updateSprint(
+    projectId: number,
+    sprintId: number,
+    input: SprintInput & { status: SprintStatus }
+  ) {
+    const response = await api.put<{ data: Raw }>(
+      `/projects/${projectId}/sprints/${sprintId}`,
+      input
+    );
+    return mapSprint(response.data.data);
+  },
+  async deleteSprint(projectId: number, sprintId: number) {
+    await api.delete(`/projects/${projectId}/sprints/${sprintId}`);
   }
 };
