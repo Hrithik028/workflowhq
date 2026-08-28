@@ -647,6 +647,20 @@ const updateTaskRank = async (req, res, next) => {
   }
 };
 
+// Zero-fills the last 14 days (including today) so the chart always has a
+// complete series - the query only returns rows for days with completions.
+const buildDailyCompletions = (rows) => {
+  const byDay = new Map(rows.map((row) => [new Date(row.day).toISOString().slice(0, 10), row.count]));
+  const days = [];
+  for (let offset = 13; offset >= 0; offset -= 1) {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    const key = date.toISOString().slice(0, 10);
+    days.push({ date: key, count: byDay.get(key) || 0 });
+  }
+  return days;
+};
+
 const getTaskStats = async (req, res) => {
   const values = [req.user.id];
   let projectCondition = "";
@@ -661,12 +675,28 @@ const getTaskStats = async (req, res) => {
        COALESCE(SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END), 0)::int AS in_progress_tasks,
        COALESCE(SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END), 0)::int AS todo_tasks,
        COALESCE(SUM(CASE WHEN priority = 'high' THEN 1 ELSE 0 END), 0)::int AS high_priority_tasks,
+       COALESCE(SUM(CASE WHEN priority = 'medium' THEN 1 ELSE 0 END), 0)::int AS medium_priority_tasks,
+       COALESCE(SUM(CASE WHEN priority = 'low' THEN 1 ELSE 0 END), 0)::int AS low_priority_tasks,
        COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE AND status <> 'completed' THEN 1 ELSE 0 END), 0)::int AS overdue_tasks
      FROM tasks t
      WHERE ${visibleTaskCondition(1)}${projectCondition}`,
     values
   );
-  return res.status(200).json({ data: result.rows[0] });
+  // Grouped on a plain ::date cast rather than to_char(), which pg-mem (used
+  // by the test suite) doesn't implement - the day is stringified in JS instead.
+  const trendResult = await req.app.locals.db.query(
+    `SELECT updated_at::date AS day, COUNT(*)::int AS count
+     FROM tasks t
+     WHERE ${visibleTaskCondition(1)}${projectCondition}
+       AND status = 'completed'
+       AND updated_at::date >= (CURRENT_DATE - 13)
+     GROUP BY day
+     ORDER BY day ASC`,
+    values
+  );
+  return res.status(200).json({
+    data: { ...result.rows[0], daily_completions: buildDailyCompletions(trendResult.rows) }
+  });
 };
 
 module.exports = {

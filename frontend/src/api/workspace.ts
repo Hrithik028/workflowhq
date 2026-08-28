@@ -110,7 +110,13 @@ const mapStats = (stats: Raw): TaskStats => ({
   inProgressTasks: Number(stats.in_progress_tasks || 0),
   todoTasks: Number(stats.todo_tasks || 0),
   highPriorityTasks: Number(stats.high_priority_tasks || 0),
-  overdueTasks: Number(stats.overdue_tasks || 0)
+  mediumPriorityTasks: Number(stats.medium_priority_tasks || 0),
+  lowPriorityTasks: Number(stats.low_priority_tasks || 0),
+  overdueTasks: Number(stats.overdue_tasks || 0),
+  dailyCompletions: ((stats.daily_completions as Raw[] | undefined) || []).map((entry) => ({
+    date: String(entry.date),
+    count: Number(entry.count || 0)
+  }))
 });
 
 const mapActivity = (activity: Raw): Activity => ({

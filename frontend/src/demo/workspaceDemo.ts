@@ -2,6 +2,7 @@ import type {
   Activity,
   Comment,
   CommentInput,
+  DailyCompletion,
   Label,
   LabelInput,
   Project,
@@ -748,15 +749,29 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const scoped = projectId ? tasks.filter((task) => task.projectId === projectId) : tasks;
     const today = new Date().toISOString().slice(0, 10);
+    const dailyCompletions: DailyCompletion[] = [];
+    for (let offset = 13; offset >= 0; offset -= 1) {
+      const date = new Date(now.getTime() - offset * 86_400_000);
+      const key = date.toISOString().slice(0, 10);
+      dailyCompletions.push({
+        date: key,
+        count: scoped.filter(
+          (task) => task.status === "completed" && task.updatedAt.slice(0, 10) === key
+        ).length
+      });
+    }
     const stats: TaskStats = {
       totalTasks: scoped.length,
       completedTasks: scoped.filter((task) => task.status === "completed").length,
       inProgressTasks: scoped.filter((task) => task.status === "in_progress").length,
       todoTasks: scoped.filter((task) => task.status === "todo").length,
       highPriorityTasks: scoped.filter((task) => task.priority === "high").length,
+      mediumPriorityTasks: scoped.filter((task) => task.priority === "medium").length,
+      lowPriorityTasks: scoped.filter((task) => task.priority === "low").length,
       overdueTasks: scoped.filter(
         (task) => task.dueDate && task.dueDate < today && task.status !== "completed"
-      ).length
+      ).length,
+      dailyCompletions
     };
     return stats;
   },

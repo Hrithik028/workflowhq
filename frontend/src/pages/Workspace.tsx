@@ -20,7 +20,10 @@ const emptyStats: TaskStats = {
   inProgressTasks: 0,
   todoTasks: 0,
   highPriorityTasks: 0,
-  overdueTasks: 0
+  mediumPriorityTasks: 0,
+  lowPriorityTasks: 0,
+  overdueTasks: 0,
+  dailyCompletions: []
 };
 
 const initialFilters: Filters = {

@@ -394,8 +394,13 @@ describe("projects, tasks, and activity API", () => {
       completed_tasks: 1,
       todo_tasks: 1,
       high_priority_tasks: 1,
+      medium_priority_tasks: 0,
+      low_priority_tasks: 1,
       overdue_tasks: 1
     });
+    const today = new Date().toISOString().slice(0, 10);
+    expect(response.body.data.daily_completions).toHaveLength(14);
+    expect(response.body.data.daily_completions.at(-1)).toMatchObject({ date: today, count: 1 });
   });
 
   it.each([

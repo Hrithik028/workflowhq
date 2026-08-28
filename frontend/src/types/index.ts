@@ -128,13 +128,21 @@ export interface ProjectInput {
   description: string;
 }
 
+export interface DailyCompletion {
+  date: string;
+  count: number;
+}
+
 export interface TaskStats {
   totalTasks: number;
   completedTasks: number;
   inProgressTasks: number;
   todoTasks: number;
   highPriorityTasks: number;
+  mediumPriorityTasks: number;
+  lowPriorityTasks: number;
   overdueTasks: number;
+  dailyCompletions: DailyCompletion[];
 }
 
 export interface Activity {

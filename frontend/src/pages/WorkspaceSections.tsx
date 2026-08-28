@@ -12,6 +12,7 @@ import { Link, useOutletContext } from "react-router-dom";
 
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
+import { CategoryBarChart, TrendBarChart } from "../components/AnalyticsCharts";
 import type { LayoutContext } from "../components/AppLayout";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Activity, Project, Task, TaskStats } from "../types";
@@ -23,8 +24,17 @@ const emptyStats: TaskStats = {
   inProgressTasks: 0,
   todoTasks: 0,
   highPriorityTasks: 0,
-  overdueTasks: 0
+  mediumPriorityTasks: 0,
+  lowPriorityTasks: 0,
+  overdueTasks: 0,
+  dailyCompletions: []
 };
+
+// Chart-only palette, separate from the app's own chrome colors (--carbon,
+// --blueprint) which failed the dataviz skill's validator (lightness/chroma
+// floor) - see the skill's default categorical slots and fixed status roles.
+const statusChartColors = { todo: "#2a78d6", in_progress: "#eb6834", completed: "#1baf7a" };
+const priorityChartColors = { high: "#d03b3b", medium: "#fab219", low: "#0ca30c" };
 
 function useSectionData() {
   const { isDemo } = useOutletContext<LayoutContext>();
@@ -207,6 +217,51 @@ export function Analytics() {
           <strong>{stats.overdueTasks}</strong>
         </article>
       </section>
+
+      <div className="analytics-charts-grid">
+        <CategoryBarChart
+          title="Status breakdown"
+          categories={[
+            { key: "todo", label: "Ready", value: stats.todoTasks, color: statusChartColors.todo },
+            {
+              key: "in_progress",
+              label: "In motion",
+              value: stats.inProgressTasks,
+              color: statusChartColors.in_progress
+            },
+            {
+              key: "completed",
+              label: "Shipped",
+              value: stats.completedTasks,
+              color: statusChartColors.completed
+            }
+          ]}
+        />
+        <CategoryBarChart
+          title="Priority breakdown"
+          categories={[
+            {
+              key: "high",
+              label: "High",
+              value: stats.highPriorityTasks,
+              color: priorityChartColors.high
+            },
+            {
+              key: "medium",
+              label: "Medium",
+              value: stats.mediumPriorityTasks,
+              color: priorityChartColors.medium
+            },
+            { key: "low", label: "Low", value: stats.lowPriorityTasks, color: priorityChartColors.low }
+          ]}
+        />
+        <TrendBarChart
+          caption="Tasks marked shipped each day, by last-updated date."
+          color="#ff4d00"
+          data={stats.dailyCompletions}
+          title="Completion trend (14 days)"
+        />
+      </div>
 
       <section className="analytics-ledger">
         <header>
