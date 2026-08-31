@@ -56,6 +56,20 @@ const createApp = ({ db = pool, config = loadConfig() } = {}) => {
     }
   });
 
+  const ownershipTransferLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    skip: () => config.nodeEnv === "test",
+    message: {
+      error: {
+        code: "OWNER_TRANSFER_RATE_LIMITED",
+        message: "Too many ownership transfer attempts. Please try again later."
+      }
+    }
+  });
+
   app.get("/api/health", async (_req, res, next) => {
     try {
       await db.query("SELECT 1");
@@ -67,6 +81,7 @@ const createApp = ({ db = pool, config = loadConfig() } = {}) => {
 
   app.use("/api/auth/register", authLimiter);
   app.use("/api/auth/login", authLimiter);
+  app.use("/api/admin/platform-owner/transfer", ownershipTransferLimiter);
   app.use("/api/auth", authRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/github", githubIntegrationRoutes);

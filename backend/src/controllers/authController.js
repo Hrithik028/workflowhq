@@ -12,6 +12,7 @@ const createAccessToken = (user, config) =>
     {
       email: user.email,
       role: user.role,
+      authVersion: Number(user.auth_version || 0),
       type: "access"
     },
     config.jwtSecret,
@@ -67,7 +68,7 @@ const register = async (req, res, next) => {
     const result = await client.query(
       `INSERT INTO users (name, email, password_hash)
        VALUES ($1, $2, $3)
-       RETURNING id, name, email, role, created_at`,
+       RETURNING id, name, email, role, auth_version, created_at`,
       [req.body.name, req.body.email, passwordHash]
     );
     const user = result.rows[0];
@@ -104,6 +105,7 @@ const login = async (req, res, next) => {
     name: user.name,
     email: user.email,
     role: user.role,
+    auth_version: user.auth_version,
     created_at: user.created_at
   };
   const refreshToken = await createRefreshSession(db, user.id, req);
@@ -135,7 +137,7 @@ const refresh = async (req, res, next) => {
     }
 
     const userResult = await client.query(
-      "SELECT id, name, email, role, created_at FROM users WHERE id = $1",
+      "SELECT id, name, email, role, auth_version, created_at FROM users WHERE id = $1",
       [sessionResult.rows[0].user_id]
     );
     if (userResult.rows.length === 0) {
@@ -153,6 +155,7 @@ const refresh = async (req, res, next) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      auth_version: user.auth_version,
       created_at: user.created_at
     };
     return sendSession(res, req, 200, safeUser, nextRefreshToken);
@@ -178,7 +181,7 @@ const logout = async (req, res) => {
 
 const getCurrentUser = async (req, res, next) => {
   const result = await req.app.locals.db.query(
-    "SELECT id, name, email, role, created_at FROM users WHERE id = $1",
+    "SELECT id, name, email, role, auth_version, created_at FROM users WHERE id = $1",
     [req.user.id]
   );
   if (result.rows.length === 0) {

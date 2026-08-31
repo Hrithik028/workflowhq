@@ -53,5 +53,16 @@ export const adminApi = {
   async updateRules(rules: WorkspaceRules) {
     const response = await api.put<{ data: WorkspaceRules }>("/admin/rules", rules);
     return response.data.data;
+  },
+
+  async transferOwnership(targetUserId: number, password: string) {
+    const response = await api.post<{
+      data: {
+        previousOwner: { id: number; name: string; email: string; role: "admin" };
+        owner: { id: number; name: string; email: string; role: "platform_owner" };
+        sessionsInvalidated: boolean;
+      };
+    }>("/admin/platform-owner/transfer", { targetUserId, password });
+    return response.data.data;
   }
 };

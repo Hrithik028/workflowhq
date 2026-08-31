@@ -1,6 +1,8 @@
 import {
+  ArrowRightLeft,
   Check,
   Clock3,
+  Crown,
   FolderKanban,
   Github,
   KeyRound,
@@ -45,7 +47,7 @@ const demoOverview: AdminOverview = {
       id: 101,
       name: "Alicia Moore",
       email: "alicia@workflowhq.dev",
-      role: "admin",
+      role: "platform_owner",
       projectCount: 6,
       taskCount: 28,
       createdAt: new Date(Date.now() - 120 * 86_400_000).toISOString(),
@@ -55,7 +57,7 @@ const demoOverview: AdminOverview = {
       id: 102,
       name: "Alex Lee",
       email: "alex@workflowhq.dev",
-      role: "user",
+      role: "admin",
       projectCount: 3,
       taskCount: 17,
       createdAt: new Date(Date.now() - 78 * 86_400_000).toISOString(),
@@ -160,14 +162,20 @@ const permissionCopy: Record<PermissionKey, { title: string; copy: string; group
 const auditCopy = (entry: AdminAuditEntry) =>
   entry.action === "workspace_rules_updated"
     ? `${entry.adminName} changed workspace rules`
-    : `${entry.adminName} changed access for ${entry.targetName || "a member"}`;
+    : entry.action === "platform_ownership_transferred"
+      ? `${entry.adminName} transferred ownership to ${entry.targetName || "an administrator"}`
+      : entry.action === "platform_owner_assigned_server"
+        ? `Server recovery assigned ownership to ${entry.targetName || "an administrator"}`
+        : `${entry.adminName} changed access for ${entry.targetName || "a member"}`;
 
 function Toggle({
   checked,
+  disabled = false,
   label,
   onChange
 }: {
   checked: boolean;
+  disabled?: boolean;
   label: string;
   onChange: (checked: boolean) => void;
 }) {
@@ -175,6 +183,7 @@ function Toggle({
     <button
       aria-pressed={checked}
       className={`admin-switch ${checked ? "on" : ""}`}
+      disabled={disabled}
       type="button"
       onClick={() => onChange(!checked)}
     >
@@ -186,13 +195,17 @@ function Toggle({
 
 function SettingsAdmin() {
   const { isDemo, user } = useOutletContext<LayoutContext>();
-  const canAdminister = isDemo || user.role === "admin";
+  const canAdminister = isDemo || user.role === "admin" || user.role === "platform_owner";
   const [overview, setOverview] = useState<AdminOverview | null>(isDemo ? demoOverview : null);
   const [selectedId, setSelectedId] = useState<number>(demoOverview.users[1].id);
   const [draftUser, setDraftUser] = useState<AdminUser | null>(demoOverview.users[1]);
   const [draftRules, setDraftRules] = useState<WorkspaceRules>(demoOverview.rules);
   const [isLoading, setIsLoading] = useState(!isDemo && canAdminister);
   const [isSaving, setIsSaving] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState(
+    isDemo ? demoOverview.users.find((member) => member.role === "admin")?.id || 0 : 0
+  );
+  const [ownerPassword, setOwnerPassword] = useState("");
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -202,6 +215,9 @@ function SettingsAdmin() {
       const next = await adminApi.getOverview();
       setOverview(next);
       setDraftRules(next.rules);
+      setTransferTargetId((current) =>
+        current || next.users.find((member) => member.role === "admin")?.id || 0
+      );
       const selected = next.users.find((member) => member.id === selectedId) || next.users[0];
       setSelectedId(selected?.id || 0);
       setDraftUser(selected || null);
@@ -228,7 +244,7 @@ function SettingsAdmin() {
   };
 
   const saveAccess = async () => {
-    if (!draftUser || !overview) return;
+    if (!draftUser || !overview || draftUser.role === "platform_owner") return;
     setIsSaving(true);
     try {
       const saved = isDemo
@@ -290,6 +306,70 @@ function SettingsAdmin() {
       setNotice({
         tone: "error",
         text: getErrorMessage(error, "Unable to update workspace rules.")
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const transferOwnership = async () => {
+    if (!overview || !transferTargetId || (!isDemo && !ownerPassword)) return;
+    const nextOwner = overview?.users.find((member) => member.id === transferTargetId);
+    if (!nextOwner) return;
+    if (
+      !window.confirm(
+        isDemo
+          ? `Preview an ownership transfer to ${nextOwner.name}? This change remains in the browser demo only.`
+          : `Transfer platform ownership to ${nextOwner.name}? You will become an administrator and both accounts will need to sign in again.`
+      )
+    )
+      return;
+
+    setIsSaving(true);
+    try {
+      if (isDemo) {
+        const previousOwner = overview.users.find((member) => member.role === "platform_owner");
+        const users = overview.users.map((member) =>
+          member.role === "platform_owner"
+            ? { ...member, role: "admin" as const }
+            : member.id === nextOwner.id
+              ? { ...member, role: "platform_owner" as const }
+              : member
+        );
+        setOverview({
+          ...overview,
+          users,
+          audit: [
+            {
+              id: Date.now(),
+              action: "platform_ownership_transferred",
+              details: {},
+              adminName: previousOwner?.name || "Demo owner",
+              targetName: nextOwner.name,
+              createdAt: new Date().toISOString()
+            },
+            ...overview.audit
+          ]
+        });
+        setDraftUser(users.find((member) => member.id === selectedId) || null);
+        setTransferTargetId(previousOwner?.id || 0);
+        setNotice({
+          tone: "success",
+          text: `Preview only: ownership transferred to ${nextOwner.name}.`
+        });
+        return;
+      }
+      await adminApi.transferOwnership(transferTargetId, ownerPassword);
+      setOwnerPassword("");
+      setNotice({
+        tone: "success",
+        text: `Ownership transferred to ${nextOwner.name}. Redirecting to sign in…`
+      });
+      window.setTimeout(() => window.location.assign("/login"), 1200);
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        text: getErrorMessage(error, "Unable to transfer platform ownership.")
       });
     } finally {
       setIsSaving(false);
@@ -361,10 +441,12 @@ function SettingsAdmin() {
               <strong>{overview?.users.length || 0}</strong>
             </article>
             <article>
-              <ShieldCheck size={18} />
-              <span>Administrators</span>
+              <Crown size={18} />
+              <span>Privileged accounts</span>
               <strong>
-                {overview?.users.filter((member) => member.role === "admin").length || 0}
+                {overview?.users.filter(
+                  (member) => member.role === "admin" || member.role === "platform_owner"
+                ).length || 0}
               </strong>
             </article>
             <article>
@@ -428,6 +510,7 @@ function SettingsAdmin() {
                     <label>
                       Role
                       <select
+                        disabled={draftUser.role === "platform_owner"}
                         value={draftUser.role}
                         onChange={(event) =>
                           setDraftUser({
@@ -438,6 +521,9 @@ function SettingsAdmin() {
                       >
                         <option value="user">USER</option>
                         <option value="admin">ADMIN</option>
+                        {draftUser.role === "platform_owner" ? (
+                          <option value="platform_owner">PLATFORM OWNER</option>
+                        ) : null}
                       </select>
                     </label>
                   ) : null}
@@ -462,6 +548,7 @@ function SettingsAdmin() {
                           </span>
                           <Toggle
                             checked={draftUser.permissions[key]}
+                            disabled={draftUser.role === "platform_owner"}
                             label={draftUser.permissions[key] ? "Allowed" : "Blocked"}
                             onChange={(checked) =>
                               setDraftUser({
@@ -477,11 +564,12 @@ function SettingsAdmin() {
                 ) : null}
                 <footer>
                   <span>
-                    <KeyRound size={15} /> Administrator role always has every permission.
+                    <KeyRound size={15} /> Platform owner and administrator roles always have every
+                    permission.
                   </span>
                   <button
                     className="button primary"
-                    disabled={!draftUser || isSaving}
+                    disabled={!draftUser || draftUser.role === "platform_owner" || isSaving}
                     type="button"
                     onClick={() => void saveAccess()}
                   >
@@ -492,11 +580,79 @@ function SettingsAdmin() {
             </div>
           )}
 
+          {(isDemo || user.role === "platform_owner") && overview ? (
+            <section className="owner-transfer-panel">
+              <header>
+                <span className="overline">03 / Platform ownership</span>
+                <h2>Transfer the highest authority</h2>
+                <p>
+                  Ownership can move only to an existing administrator. The transfer is audited,
+                  and both accounts are signed out immediately.
+                </p>
+              </header>
+              <div className="owner-transfer-current">
+                <Crown size={22} />
+                <span>
+                  <small>Current platform owner</small>
+                  <strong>
+                    {overview.users.find((member) => member.role === "platform_owner")?.name ||
+                      user.name}
+                  </strong>
+                  <b>
+                    {overview.users.find((member) => member.role === "platform_owner")?.email ||
+                      user.email}
+                  </b>
+                </span>
+              </div>
+              <div className="owner-transfer-form">
+                <label>
+                  New platform owner
+                  <select
+                    disabled={!overview.users.some((member) => member.role === "admin") || isSaving}
+                    onChange={(event) => setTransferTargetId(Number(event.target.value))}
+                    value={transferTargetId}
+                  >
+                    {!overview.users.some((member) => member.role === "admin") ? (
+                      <option value="0">Promote an administrator first</option>
+                    ) : null}
+                    {overview.users
+                      .filter((member) => member.role === "admin")
+                      .map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.name} — {member.email}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Confirm your password
+                  <input
+                    autoComplete="current-password"
+                    disabled={isDemo || isSaving}
+                    maxLength={200}
+                    onChange={(event) => setOwnerPassword(event.target.value)}
+                    placeholder={isDemo ? "Not required in preview" : "Current password"}
+                    type="password"
+                    value={ownerPassword}
+                  />
+                </label>
+                <button
+                  className="button primary"
+                  disabled={!transferTargetId || (!isDemo && !ownerPassword) || isSaving}
+                  type="button"
+                  onClick={() => void transferOwnership()}
+                >
+                  <ArrowRightLeft size={15} /> Transfer ownership
+                </button>
+              </div>
+            </section>
+          ) : null}
+
           {overview ? (
             <div className="admin-policy-grid">
               <section className="workspace-rules">
                 <header>
-                  <span className="overline">03 / Workspace policy</span>
+                  <span className="overline">04 / Workspace policy</span>
                   <h2>Operational rules</h2>
                   <p>These rules apply after individual permissions are checked.</p>
                 </header>
@@ -581,7 +737,7 @@ function SettingsAdmin() {
               </section>
               <aside className="admin-audit">
                 <header>
-                  <span className="overline">04 / Audit trail</span>
+                  <span className="overline">05 / Audit trail</span>
                   <h2>Recent policy changes</h2>
                 </header>
                 {overview.audit.length ? (

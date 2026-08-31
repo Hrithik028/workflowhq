@@ -8,11 +8,18 @@ const promoteAdmin = async () => {
     .toLowerCase();
   if (!email) throw new Error("Usage: npm run admin:promote -- owner@example.com");
   const result = await pool.query(
-    "UPDATE users SET role = 'admin' WHERE email = $1 RETURNING id, name, email, role",
+    `UPDATE users
+     SET auth_version = auth_version + CASE
+           WHEN role IN ('admin', 'platform_owner') THEN 0
+           ELSE 1
+         END,
+         role = CASE WHEN role = 'platform_owner' THEN role ELSE 'admin' END
+     WHERE email = $1
+     RETURNING id, name, email, role`,
     [email]
   );
   if (result.rows.length === 0) throw new Error(`No user exists with email ${email}.`);
-  process.stdout.write(`Promoted ${result.rows[0].email} to administrator.\n`);
+  process.stdout.write(`Administrator access confirmed for ${result.rows[0].email}.\n`);
 };
 
 promoteAdmin()

@@ -121,6 +121,20 @@ npm run dev
 
 The frontend development server runs at `http://localhost:5173`.
 
+### Assign the initial platform owner
+
+After migrations have run and the owner has registered an account, assign the single platform
+owner from a trusted backend shell:
+
+```bash
+cd backend
+npm run owner:assign -- owner@example.com
+```
+
+The command demotes any previous owner to administrator, revokes affected sessions, and records the
+recovery action. Future ownership transfers use the protected Settings screen and require the
+current owner's password.
+
 ## Testing
 
 ```bash

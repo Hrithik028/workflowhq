@@ -5353,6 +5353,11 @@ html[data-motion="reduced"] *::after {
   color: var(--signal);
 }
 
+.member-register button em.platform_owner {
+  border-color: #8a45c2;
+  color: #6d239f;
+}
+
 .member-register button b {
   grid-column: 2 / 4;
   color: #57524b;
@@ -5497,6 +5502,11 @@ html[data-motion="reduced"] *::after {
   text-transform: uppercase;
 }
 
+.admin-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .permission-editor > footer,
 .workspace-rules > footer {
   display: flex;
@@ -5517,6 +5527,92 @@ html[data-motion="reduced"] *::after {
   font-family: "Courier New", monospace;
   font-size: 0.54rem;
   text-transform: uppercase;
+}
+
+.owner-transfer-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(230px, 0.55fr) minmax(360px, 1fr);
+  gap: 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--carbon);
+  padding: 22px 0;
+}
+
+.owner-transfer-panel header h2 {
+  margin: 5px 0 4px;
+  font-size: 1.2rem;
+}
+
+.owner-transfer-panel header p {
+  margin: 0;
+  color: #413e38;
+  font-family: "Courier New", monospace;
+  font-size: 0.57rem;
+  line-height: 1.45;
+}
+
+.owner-transfer-current {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--carbon);
+  padding: 13px;
+  background: rgb(255 255 255 / 35%);
+}
+
+.owner-transfer-current > svg {
+  color: #6d239f;
+}
+
+.owner-transfer-current > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.owner-transfer-current small,
+.owner-transfer-current b,
+.owner-transfer-form label {
+  font-family: "Courier New", monospace;
+  font-size: 0.53rem;
+  text-transform: uppercase;
+}
+
+.owner-transfer-current b {
+  overflow: hidden;
+  color: #4d4942;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.owner-transfer-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.75fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.owner-transfer-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.owner-transfer-form select,
+.owner-transfer-form input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--carbon);
+  border-radius: 0;
+  padding: 0 9px;
+  background: transparent;
+  color: #111;
+  font: 700 0.61rem "Courier New", monospace;
+}
+
+.owner-transfer-form .button {
+  min-height: 38px;
+  white-space: nowrap;
 }
 
 .admin-policy-grid {
@@ -5673,8 +5769,13 @@ html[data-motion="reduced"] *::after {
 
 @media (max-width: 1120px) {
   .admin-console-grid,
-  .admin-policy-grid {
+  .admin-policy-grid,
+  .owner-transfer-panel {
     grid-template-columns: 1fr;
+  }
+
+  .owner-transfer-form {
+    grid-template-columns: 1fr 1fr auto;
   }
 
   .member-register,
@@ -5711,6 +5812,10 @@ html[data-motion="reduced"] *::after {
 
   .permission-editor > header > .overline {
     grid-column: auto;
+  }
+
+  .owner-transfer-form {
+    grid-template-columns: 1fr;
   }
 }
 

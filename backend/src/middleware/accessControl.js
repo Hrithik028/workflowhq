@@ -5,8 +5,23 @@ const requireAdmin = async (req, _res, next) => {
   try {
     const access = await readCurrentAccess(req.app.locals.db, req.user.id);
     req.user.role = access.role;
-    if (access.role !== "admin") {
+    if (access.role !== "admin" && access.role !== "platform_owner") {
       return next(new AppError(403, "ADMIN_REQUIRED", "Administrator access is required."));
+    }
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const requirePlatformOwner = async (req, _res, next) => {
+  try {
+    const access = await readCurrentAccess(req.app.locals.db, req.user.id);
+    req.user.role = access.role;
+    if (access.role !== "platform_owner") {
+      return next(
+        new AppError(403, "PLATFORM_OWNER_REQUIRED", "Platform owner access is required.")
+      );
     }
     return next();
   } catch (error) {
@@ -18,7 +33,11 @@ const requirePermission = (permissionKey) => async (req, _res, next) => {
   try {
     const access = await readCurrentAccess(req.app.locals.db, req.user.id);
     req.user.role = access.role;
-    if (access.role !== "admin" && access.permissions[permissionKey] !== true) {
+    if (
+      access.role !== "admin" &&
+      access.role !== "platform_owner" &&
+      access.permissions[permissionKey] !== true
+    ) {
       return next(
         new AppError(403, "PERMISSION_DENIED", `Your role cannot perform ${permissionKey}.`)
       );
@@ -83,4 +102,10 @@ const enforceTaskRules =
     }
   };
 
-module.exports = { enforceTaskRules, requireAdmin, requirePermission, requireRule };
+module.exports = {
+  enforceTaskRules,
+  requireAdmin,
+  requirePermission,
+  requirePlatformOwner,
+  requireRule
+};

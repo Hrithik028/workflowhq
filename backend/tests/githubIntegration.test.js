@@ -8,7 +8,13 @@ const { buildTestApp, testConfig } = require("./helpers/testApp");
 
 const accessToken = (user) =>
   jwt.sign(
-    { sub: String(user.id), email: user.email, role: "user", type: "access" },
+    {
+      sub: String(user.id),
+      email: user.email,
+      role: "user",
+      authVersion: Number(user.auth_version || 0),
+      type: "access"
+    },
     testConfig.jwtSecret,
     { expiresIn: "15m" }
   );

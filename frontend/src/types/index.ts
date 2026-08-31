@@ -2,12 +2,13 @@ export type TaskStatus = "todo" | "in_progress" | "completed";
 export type TaskPriority = "low" | "medium" | "high";
 export type TaskType = "initiative" | "epic" | "story" | "task" | "bug" | "subtask";
 export type ProjectRole = "owner" | "editor" | "viewer";
+export type WorkspaceRole = "user" | "admin" | "platform_owner";
 
 export interface User {
   id: number;
   name: string;
   email: string;
-  role: string;
+  role: WorkspaceRole;
   createdAt: string;
 }
 
@@ -220,7 +221,7 @@ export interface AdminUser {
   id: number;
   name: string;
   email: string;
-  role: "user" | "admin";
+  role: WorkspaceRole;
   projectCount: number;
   taskCount: number;
   createdAt: string;
