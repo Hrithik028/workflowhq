@@ -410,7 +410,7 @@ export function Inbox() {
         <section className="inbox-list">
           {inboxTasks.map((task) => (
             <article key={task.id}>
-              <span>WHQ-{String(task.id).padStart(3, "0")}</span>
+              <span>{task.issueKey}</span>
               <div>
                 <strong>{task.title}</strong>
                 <p>{task.description || "No context added yet."}</p>

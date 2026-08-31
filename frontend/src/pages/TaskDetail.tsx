@@ -204,7 +204,9 @@ function TaskDetail() {
       <section className="task-detail-grid">
         <div className="task-detail-main">
           <header className="task-detail-header">
-            <span className="overline">{task.projectName || "Inbox"} / Track development</span>
+            <span className="overline">
+              {task.projectName || "Inbox"} / {isDemo ? "Sample development" : "Issue details"}
+            </span>
             <span className="task-detail-key">{task.issueKey}</span>
             <div>
               <h1>{task.title}</h1>
@@ -246,26 +248,33 @@ function TaskDetail() {
           </section>
           <section className="task-copy-block">
             <h2>Acceptance criteria</h2>
-            <ul className="acceptance-list">
-              {criteriaFor(task).map((criterion, index) => (
-                <li key={criterion}>
-                  <span
-                    className={
-                      index <
-                      (task.status === "completed" ? 4 : task.status === "in_progress" ? 2 : 1)
-                        ? "checked"
-                        : ""
-                    }
-                  >
-                    {index <
-                    (task.status === "completed" ? 4 : task.status === "in_progress" ? 2 : 1) ? (
-                      <Check size={14} />
-                    ) : null}
-                  </span>
-                  {criterion}
-                </li>
-              ))}
-            </ul>
+            {isDemo ? (
+              <ul className="acceptance-list">
+                {criteriaFor(task).map((criterion, index) => (
+                  <li key={criterion}>
+                    <span
+                      className={
+                        index <
+                        (task.status === "completed" ? 4 : task.status === "in_progress" ? 2 : 1)
+                          ? "checked"
+                          : ""
+                      }
+                    >
+                      {index <
+                      (task.status === "completed" ? 4 : task.status === "in_progress" ? 2 : 1) ? (
+                        <Check size={14} />
+                      ) : null}
+                    </span>
+                    {criterion}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="truthful-empty-state">
+                No acceptance criteria are stored for this issue yet. Persisted criteria editing
+                will be added as ticket data.
+              </p>
+            )}
           </section>
 
           <section className="task-relations">
@@ -415,6 +424,8 @@ function TaskDetail() {
               Edit task
             </button>
           </header>
+          {isDemo ? (
+            <>
           <section>
             <h3>Repository</h3>
             <a href="https://github.com/Hrithik028/workflowhq" rel="noreferrer" target="_blank">
@@ -502,9 +513,22 @@ function TaskDetail() {
               </a>
             </p>
           </section>
+            </>
+          ) : (
+            <section className="development-empty-state">
+              <Github size={28} />
+              <h3>GitHub not connected</h3>
+              <p>
+                This issue has no linked repository, branch, commits, pull requests, checks, or
+                deployments.
+              </p>
+              <span>Verified development data will appear after the GitHub App is connected.</span>
+            </section>
+          )}
         </aside>
       </section>
 
+      {isDemo ? (
       <section className="development-timeline">
         <h2>Activity timeline</h2>
         <div>
@@ -544,6 +568,7 @@ function TaskDetail() {
           </article>
         </div>
       </section>
+      ) : null}
 
       {isModalOpen ? (
         <TaskModal

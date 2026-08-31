@@ -23,14 +23,14 @@ type CommandLane = "building" | "release";
 
 const laneFor = (task: Task): CommandLane => (task.status === "completed" ? "release" : "building");
 
-function CommandTicket({ task }: { task: Task }) {
+function CommandTicket({ isDemo, task }: { isDemo: boolean; task: Task }) {
   return (
     <Link className="command-ticket" to={`/tasks/${task.id}`}>
       <span className="command-ticket-key">{task.issueKey}</span>
       <strong>{task.title}</strong>
       <small>{task.projectName || "Inbox"}</small>
       <div className="command-ticket-footer">
-        {task.status === "completed" ? (
+        {isDemo && task.status === "completed" ? (
           <span className="command-check-badge">
             <CheckCircle2 size={13} /> checks passed
           </span>
@@ -109,12 +109,9 @@ function OverviewEngineering() {
       tasks: tasks.filter((task) => laneFor(task) === "release").slice(0, 4)
     }
   ];
-  const openPrs = tasks.filter((task) => task.status === "in_progress").length;
-  const today = new Date().toISOString().slice(0, 10);
-  const overdueTickets = tasks.filter(
-    (task) => task.dueDate && task.dueDate < today && task.status !== "completed"
-  ).length;
-  const deployed = tasks.filter((task) => task.status === "completed").length;
+  const openPrs = isDemo ? tasks.filter((task) => task.status === "in_progress").length : null;
+  const failingChecks = isDemo ? 0 : null;
+  const deployed = isDemo ? tasks.filter((task) => task.status === "completed").length : null;
 
   return (
     <main className="workspace-page engineering-command-page" aria-busy={isLoading}>
@@ -131,26 +128,33 @@ function OverviewEngineering() {
 
       {error ? <p className="form-alert error">{error}</p> : null}
 
+      {isDemo ? (
+        <p className="sample-data-notice">
+          Sample engineering data — repository, pull request, check, and deployment signals are
+          illustrative.
+        </p>
+      ) : null}
+
       <section className="command-metrics" aria-label="Engineering delivery metrics">
         <article>
           <span>Active tickets</span>
           <strong>{tasks.filter((task) => task.status !== "completed").length}</strong>
-          <small>Across {projects.length} repos</small>
+          <small>Across {projects.length} projects</small>
         </article>
         <article>
           <span>Open PRs</span>
-          <strong>{openPrs}</strong>
-          <small>Awaiting review</small>
+          <strong className={!isDemo ? "metric-unavailable" : ""}>{openPrs ?? "—"}</strong>
+          <small>{isDemo ? "Awaiting review" : "Connect GitHub to track"}</small>
         </article>
         <article className="attention">
-          <span>Overdue tickets</span>
-          <strong>{overdueTickets}</strong>
-          <small>Requiring attention</small>
+          <span>Failing checks</span>
+          <strong className={!isDemo ? "metric-unavailable" : ""}>{failingChecks ?? "—"}</strong>
+          <small>{isDemo ? "Requiring attention" : "Connect GitHub to track"}</small>
         </article>
         <article>
           <span>Deployed this week</span>
-          <strong>{deployed}</strong>
-          <small>Across 6 environments</small>
+          <strong className={!isDemo ? "metric-unavailable" : ""}>{deployed ?? "—"}</strong>
+          <small>{isDemo ? "Sample deployments" : "Connect GitHub to track"}</small>
         </article>
       </section>
 
@@ -165,7 +169,7 @@ function OverviewEngineering() {
               </header>
               <div className="command-ticket-list">
                 {lane.tasks.map((task) => (
-                  <CommandTicket key={task.id} task={task} />
+                  <CommandTicket isDemo={isDemo} key={task.id} task={task} />
                 ))}
                 {!lane.tasks.length ? (
                   <p className="command-empty">No tickets in this lane.</p>
@@ -184,7 +188,7 @@ function OverviewEngineering() {
 
         <aside className="live-development">
           <header>
-            <span>Live development</span>
+            <span>{isDemo ? "Sample development" : "Workflow activity"}</span>
           </header>
           <div>
             {activities.slice(0, 6).map((activity) => {
@@ -195,8 +199,10 @@ function OverviewEngineering() {
                     <ShieldAlert size={25} />
                   ) : activity.action === "task_created" || activity.action === "project_created" ? (
                     <GitBranch size={25} />
-                  ) : (
+                  ) : isDemo ? (
                     <Github size={25} />
+                  ) : (
+                    <CheckCircle2 size={25} />
                   )}
                   <div>
                     <time>{formatRelativeTime(activity.createdAt)}</time>
@@ -213,13 +219,23 @@ function OverviewEngineering() {
         </aside>
       </section>
 
-      <footer className="command-footer">
+      <footer className={`command-footer${isDemo ? "" : " disconnected"}`}>
         <span>
-          <Github size={18} /> Connected to GitHub
+          <Github size={18} /> {isDemo ? "Sample GitHub connection" : "GitHub not connected"}
         </span>
-        <span>{projects.length} repos&nbsp;&nbsp;•&nbsp;&nbsp;134 contributors</span>
         <span>
-          Synced 2 minutes ago <i />
+          {isDemo
+            ? `${projects.length} sample repositories`
+            : "No repositories or contributors imported"}
+        </span>
+        <span>
+          {isDemo ? (
+            <>
+              Sample sync <i />
+            </>
+          ) : (
+            "Not synced"
+          )}
         </span>
       </footer>
 

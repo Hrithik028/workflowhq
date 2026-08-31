@@ -4,7 +4,9 @@
 
 ## Live Demo
 
-Public deployment will be added after the local production preview is approved.
+[Open WorkflowHQ](https://workflowhq-app.onrender.com/login)
+
+Use the clearly labelled demo entry for sample data, or create an account to verify persisted projects and tickets. GitHub development signals remain unavailable until a repository is explicitly connected.
 
 ## Overview
 
@@ -96,7 +98,7 @@ To load a presentation-ready workspace with four projects, eighteen tasks, and r
 docker compose run --rm backend npm run seed:demo
 ```
 
-Sign in with `demo@workflowhq.local` and `WorkflowHQ!2026`. The command resets only this local
+Sign in with `demo@workflowhq.app` and `WorkflowHQ!2026`. The command resets only this local
 demo account, so it is safe to rerun when you want a clean showcase workspace. Override the
 `DEMO_USER_*` environment variables if you need different local credentials.
 
@@ -142,6 +144,7 @@ Both applications are containerised. Production requires a managed PostgreSQL da
 
 ## Future Improvements
 
-- Deploy the approved build and add verified live URLs and screenshots.
+- Replace the product screenshots whenever the production interface changes materially.
+- Connect the GitHub App and replace sample development signals with verified repository activity.
 - Add password reset and session-management controls.
 - Consider AI task breakdown only after the deployed core flow is stable.
