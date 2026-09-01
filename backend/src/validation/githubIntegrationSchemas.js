@@ -15,18 +15,19 @@ const githubIntegrationSchemas = {
     })
     .strict(),
   repositoryParams: z.object({ repositoryId: positiveId }).strict(),
+  installationParams: z.object({ installationId: positiveId }).strict(),
+  projectParams: z.object({ projectId: positiveId }).strict(),
+  callbackQuery: z
+    .object({
+      code: z.string().min(1).max(500),
+      installation_id: positiveId,
+      setup_action: z.enum(["install", "update"]).optional(),
+      state: z.string().min(20).max(200)
+    })
+    .strict(),
   repositorySelection: z
     .object({ selected: z.boolean(), projectId: positiveId.nullable() })
-    .strict()
-    .superRefine((value, context) => {
-      if (!value.selected && value.projectId !== null) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["projectId"],
-          message: "An unselected repository cannot be assigned to a project."
-        });
-      }
-    }),
+    .strict(),
   taskParams: z.object({ taskId: positiveId }).strict()
 };
 

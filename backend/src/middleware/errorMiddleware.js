@@ -15,7 +15,7 @@ const errorHandler = (error, req, res, _next) => {
     message: "request_error",
     requestId: req.id,
     method: req.method,
-    path: req.originalUrl,
+    path: req.path,
     status,
     error: error.message
   };

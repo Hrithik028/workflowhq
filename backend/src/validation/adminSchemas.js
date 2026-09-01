@@ -21,6 +21,12 @@ const adminSchemas = {
       permissions
     })
     .strict(),
+  ownershipTransfer: z
+    .object({
+      targetUserId: z.number().int().positive(),
+      password: z.string().min(8).max(200)
+    })
+    .strict(),
   rules: z
     .object({
       allow_task_deletion: z.boolean(),

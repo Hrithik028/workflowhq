@@ -36,7 +36,7 @@ const dueTime = (task: Task) =>
 function OverviewTaskCard({ task, onOpen }: { task: Task; onOpen: (task: Task) => void }) {
   return (
     <button className="overview-task-card" type="button" onClick={() => onOpen(task)}>
-      <span className="overview-task-ref">WHQ-{String(task.id).padStart(3, "0")}</span>
+      <span className="overview-task-ref">{task.issueKey}</span>
       <span className={`overview-task-priority ${task.priority}`}>
         {priorityNumber[task.priority]}
       </span>

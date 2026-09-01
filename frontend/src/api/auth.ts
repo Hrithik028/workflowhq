@@ -1,11 +1,11 @@
 import { api, setAccessToken } from "./client";
-import type { Session } from "../types";
+import type { Session, WorkspaceRole } from "../types";
 
 const mapUser = (user: Record<string, unknown>) => ({
   id: Number(user.id),
   name: String(user.name),
   email: String(user.email),
-  role: String(user.role),
+  role: String(user.role) as WorkspaceRole,
   createdAt: String(user.created_at)
 });
 

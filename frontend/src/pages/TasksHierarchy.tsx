@@ -26,6 +26,7 @@ import { issueTypeLabel, progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, Task, TaskInput, TaskPriority, TaskStatus, TaskType } from "../types";
 import { formatDate, initialsFor, statusLabel } from "../utils/format";
+import { persistedProgressFor } from "../utils/taskProgress";
 
 const typeIcon: Record<TaskType, typeof Square> = {
   initiative: Layers3,
@@ -37,6 +38,9 @@ const typeIcon: Record<TaskType, typeof Square> = {
 };
 
 const statusClass = (status: TaskStatus) => (status === "completed" ? "done" : status);
+
+const visibleProgressFor = (task: Task, isDemo: boolean) =>
+  isDemo ? progressFor(task) : persistedProgressFor(task);
 
 function TasksHierarchy() {
   const { isDemo } = useOutletContext<LayoutContext>();
@@ -341,7 +345,7 @@ function TasksHierarchy() {
               const canExpand =
                 effectiveView === "tree" &&
                 (task.childCount > 0 || tasks.some((item) => item.parentId === task.id));
-              const progress = progressFor(task);
+              const progress = visibleProgressFor(task, isDemo);
               const dropClass =
                 dropTarget?.taskId === task.id ? ` drop-${dropTarget.position}` : "";
               return (
@@ -458,14 +462,14 @@ function TasksHierarchy() {
               <h2>{selected.title}</h2>
               <div className="summary-progress">
                 <i>
-                  <b style={{ width: `${progressFor(selected)}%` }} />
+                  <b style={{ width: `${visibleProgressFor(selected, isDemo)}%` }} />
                 </i>
                 <span>
                   {selected.completedChildCount ||
                     children.filter((task) => task.status === "completed").length}{" "}
                   of {Math.max(selected.childCount, children.length)} complete
                 </span>
-                <strong>{progressFor(selected)}%</strong>
+                <strong>{visibleProgressFor(selected, isDemo)}%</strong>
               </div>
               <section>
                 <h3>Description</h3>

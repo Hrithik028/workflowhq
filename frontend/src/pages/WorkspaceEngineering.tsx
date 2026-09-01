@@ -21,6 +21,7 @@ import { progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, Sprint, SprintStatus, Task, TaskInput } from "../types";
 import { formatDate, initialsFor } from "../utils/format";
+import { persistedProgressFor } from "../utils/taskProgress";
 
 type BoardStage = "backlog" | "progress" | "released";
 
@@ -30,13 +31,17 @@ const stageFor = (task: Task): BoardStage => {
   return "progress";
 };
 
+const visibleProgressFor = (task: Task, isDemo: boolean) =>
+  isDemo ? progressFor(task) : persistedProgressFor(task);
+
 const stageMeta = [
   { key: "backlog" as const, label: "Backlog", icon: ListFilter },
   { key: "progress" as const, label: "In progress", icon: CalendarDays },
   { key: "released" as const, label: "Released", icon: Rocket }
 ];
 
-function EngineeringCard({ task }: { task: Task }) {
+function EngineeringCard({ isDemo, task }: { isDemo: boolean; task: Task }) {
+  const progress = visibleProgressFor(task, isDemo);
   return (
     <Link className="engineering-card" to={`/tasks/${task.id}`}>
       <div className="engineering-card-top">
@@ -51,7 +56,7 @@ function EngineeringCard({ task }: { task: Task }) {
       <footer>
         <span>{task.childCount ? `${task.completedChildCount} / ${task.childCount}` : "—"}</span>
         <i>
-          <b style={{ width: `${progressFor(task)}%` }} />
+          <b style={{ width: `${progress}%` }} />
         </i>
         <em className={task.priority}>
           <PriorityIcon priority={task.priority} />
@@ -355,14 +360,14 @@ function WorkspaceEngineering() {
               <span>
                 <ChevronDown size={15} /> ◆ {root.title}
               </span>
-              <b>{progressFor(root)}%</b>
+              <b>{visibleProgressFor(root, isDemo)}%</b>
               <small>
                 {root.completedChildCount ||
                   items.filter((item) => item.status === "completed").length}{" "}
                 / {Math.max(root.childCount, items.length)}
               </small>
               <i>
-                <b style={{ width: `${progressFor(root)}%` }} />
+                <b style={{ width: `${visibleProgressFor(root, isDemo)}%` }} />
               </i>
               <MoreHorizontal size={17} />
             </header>
@@ -372,7 +377,7 @@ function WorkspaceEngineering() {
                 return (
                   <div className="engineering-stage-cell" key={key}>
                     {item ? (
-                      <EngineeringCard task={item} />
+                      <EngineeringCard isDemo={isDemo} task={item} />
                     ) : (
                       <button type="button" onClick={() => setIsModalOpen(true)}>
                         <Plus size={14} /> Add issue

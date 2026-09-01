@@ -1,17 +1,50 @@
 const { z } = require("zod");
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().int().positive().max(65535).default(5000),
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
-  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
-  ACCESS_TOKEN_TTL: z.string().default("15m"),
-  REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().max(30).default(7),
-  REFRESH_COOKIE_NAME: z.string().default("workflowhq_refresh"),
-  CORS_ORIGIN: z.string().default("http://localhost:5173"),
-  COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).optional(),
-  TRUST_PROXY: z.enum(["true", "false"]).default("false")
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    PORT: z.coerce.number().int().positive().max(65535).default(5000),
+    DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
+    JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
+    ACCESS_TOKEN_TTL: z.string().default("15m"),
+    REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().max(30).default(7),
+    REFRESH_COOKIE_NAME: z.string().default("workflowhq_refresh"),
+    CORS_ORIGIN: z.string().default("http://localhost:5173"),
+    COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).optional(),
+    TRUST_PROXY: z.enum(["true", "false"]).default("false"),
+    GITHUB_INTEGRATION_ENABLED: z.enum(["true", "false"]).default("false"),
+    GITHUB_APP_ID: z.string().regex(/^\d+$/).optional(),
+    GITHUB_APP_SLUG: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/)
+      .optional(),
+    GITHUB_APP_CLIENT_ID: z.string().min(1).optional(),
+    GITHUB_APP_CLIENT_SECRET: z.string().min(1).optional(),
+    GITHUB_APP_PRIVATE_KEY_BASE64: z.string().min(1).optional(),
+    GITHUB_WEBHOOK_SECRET: z.string().min(16).optional(),
+    GITHUB_API_VERSION: z.literal("2026-03-10").default("2026-03-10"),
+    GITHUB_CONNECT_STATE_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(10)
+  })
+  .superRefine((values, context) => {
+    if (values.GITHUB_INTEGRATION_ENABLED !== "true") return;
+
+    for (const key of [
+      "GITHUB_APP_ID",
+      "GITHUB_APP_SLUG",
+      "GITHUB_APP_CLIENT_ID",
+      "GITHUB_APP_CLIENT_SECRET",
+      "GITHUB_APP_PRIVATE_KEY_BASE64",
+      "GITHUB_WEBHOOK_SECRET"
+    ]) {
+      if (!values[key]) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} is required when GitHub integration is enabled.`
+        });
+      }
+    }
+  });
 
 const loadConfig = (overrides = {}) => {
   const values = envSchema.parse({ ...process.env, ...overrides });
@@ -29,7 +62,16 @@ const loadConfig = (overrides = {}) => {
       .filter(Boolean),
     cookieSameSite: values.COOKIE_SAME_SITE || (values.NODE_ENV === "production" ? "none" : "lax"),
     secureCookies: values.NODE_ENV === "production",
-    trustProxy: values.TRUST_PROXY === "true"
+    trustProxy: values.TRUST_PROXY === "true",
+    githubIntegrationEnabled: values.GITHUB_INTEGRATION_ENABLED === "true",
+    githubAppId: values.GITHUB_APP_ID,
+    githubAppSlug: values.GITHUB_APP_SLUG,
+    githubAppClientId: values.GITHUB_APP_CLIENT_ID,
+    githubAppClientSecret: values.GITHUB_APP_CLIENT_SECRET,
+    githubAppPrivateKeyBase64: values.GITHUB_APP_PRIVATE_KEY_BASE64,
+    githubWebhookSecret: values.GITHUB_WEBHOOK_SECRET,
+    githubApiVersion: values.GITHUB_API_VERSION,
+    githubConnectStateTtlMinutes: values.GITHUB_CONNECT_STATE_TTL_MINUTES
   };
 };
 
