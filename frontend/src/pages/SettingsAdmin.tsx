@@ -15,7 +15,7 @@ import {
   Users
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 
 import { adminApi } from "../api/admin";
 import { getErrorMessage } from "../api/client";
@@ -215,8 +215,8 @@ function SettingsAdmin() {
       const next = await adminApi.getOverview();
       setOverview(next);
       setDraftRules(next.rules);
-      setTransferTargetId((current) =>
-        current || next.users.find((member) => member.role === "admin")?.id || 0
+      setTransferTargetId(
+        (current) => current || next.users.find((member) => member.role === "admin")?.id || 0
       );
       const selected = next.users.find((member) => member.id === selectedId) || next.users[0];
       setSelectedId(selected?.id || 0);
@@ -391,10 +391,15 @@ function SettingsAdmin() {
           <h1>Rules &amp; access</h1>
           <p>Control who can change work and which guardrails apply across WorkflowHQ.</p>
         </div>
-        <div className="admin-security-mark">
-          <ShieldCheck size={24} />
-          <span>Server enforced</span>
-          <small>{isDemo ? "Safe preview mode" : "Live policy"}</small>
+        <div className="admin-header-actions">
+          <Link className="button secondary" to="/settings/integrations/github">
+            <Github size={16} /> GitHub integration
+          </Link>
+          <div className="admin-security-mark">
+            <ShieldCheck size={24} />
+            <span>Server enforced</span>
+            <small>{isDemo ? "Safe preview mode" : "Live policy"}</small>
+          </div>
         </div>
       </header>
 
@@ -586,8 +591,8 @@ function SettingsAdmin() {
                 <span className="overline">03 / Platform ownership</span>
                 <h2>Transfer the highest authority</h2>
                 <p>
-                  Ownership can move only to an existing administrator. The transfer is audited,
-                  and both accounts are signed out immediately.
+                  Ownership can move only to an existing administrator. The transfer is audited, and
+                  both accounts are signed out immediately.
                 </p>
               </header>
               <div className="owner-transfer-current">

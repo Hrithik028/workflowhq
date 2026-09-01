@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
 
 import { getErrorMessage } from "../api/client";
+import { githubApi } from "../api/github";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
 import LabelPill from "../components/LabelPill";
@@ -23,7 +24,7 @@ import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { engineeringMetaFor, issueTypeLabel } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
-import type { Comment, Project, Task, TaskInput } from "../types";
+import type { Comment, DevelopmentLink, Project, Task, TaskInput } from "../types";
 import { formatDate, formatRelativeTime, initialsFor, statusLabel } from "../utils/format";
 
 const criteriaFor = (task: Task) => [
@@ -49,6 +50,9 @@ function TaskDetail() {
   const [isCommentBusy, setIsCommentBusy] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [developmentLinks, setDevelopmentLinks] = useState<DevelopmentLink[]>([]);
+  const [isDevelopmentLoading, setIsDevelopmentLoading] = useState(false);
+  const [developmentError, setDevelopmentError] = useState("");
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -78,9 +82,9 @@ function TaskDetail() {
   const meta = task ? engineeringMetaFor(task) : null;
   const isOverdue = Boolean(
     task &&
-      task.dueDate &&
-      task.dueDate < new Date().toISOString().slice(0, 10) &&
-      task.status !== "completed"
+    task.dueDate &&
+    task.dueDate < new Date().toISOString().slice(0, 10) &&
+    task.status !== "completed"
   );
   const currentProject = task ? projects.find((item) => item.id === task.projectId) : null;
   const canModerateComments =
@@ -104,6 +108,40 @@ function TaskDetail() {
     const timer = window.setTimeout(() => void loadComments(taskId), 0);
     return () => window.clearTimeout(timer);
   }, [taskId, loadComments]);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (taskId == null || isDemo) {
+        setDevelopmentLinks([]);
+        setDevelopmentError("");
+        setIsDevelopmentLoading(false);
+        return;
+      }
+      setIsDevelopmentLoading(true);
+      githubApi
+        .getTaskDevelopment(taskId)
+        .then((development) => {
+          if (!active) return;
+          setDevelopmentLinks(development.links);
+          setDevelopmentError("");
+        })
+        .catch((developmentLoadError: unknown) => {
+          if (!active) return;
+          setDevelopmentLinks([]);
+          setDevelopmentError(
+            getErrorMessage(developmentLoadError, "Unable to load verified GitHub activity.")
+          );
+        })
+        .finally(() => {
+          if (active) setIsDevelopmentLoading(false);
+        });
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [isDemo, taskId]);
 
   const postComment = async () => {
     if (!task || !commentBody.trim()) return;
@@ -426,148 +464,204 @@ function TaskDetail() {
           </header>
           {isDemo ? (
             <>
-          <section>
-            <h3>Repository</h3>
-            <a href="https://github.com/Hrithik028/workflowhq" rel="noreferrer" target="_blank">
-              <Github size={18} /> Hrithik028/workflowhq
-            </a>
-          </section>
-          <section>
-            <h3>Branch</h3>
-            <span className="development-link">
-              <GitBranch size={17} /> {meta.branch}
-            </span>
-          </section>
-          <section>
-            <h3>Commits (4)</h3>
-            {[
-              "Add the primary implementation",
-              "Add unit tests for valid and invalid paths",
-              "Handle the missing configuration path",
-              "Initial implementation"
-            ].map((copy, index) => (
-              <p className="commit-row" key={copy}>
+              <section>
+                <h3>Repository</h3>
                 <a href="https://github.com/Hrithik028/workflowhq" rel="noreferrer" target="_blank">
-                  {(Number.parseInt(meta.commit, 16) + index * 173)
-                    .toString(16)
-                    .padStart(7, "0")
-                    .slice(-7)}
+                  <Github size={18} /> Hrithik028/workflowhq
                 </a>
-                <span>{copy}</span>
-                <time>{index + 2}h ago</time>
-              </p>
-            ))}
-          </section>
-          <section>
-            <h3>Pull request</h3>
-            <a
-              className="development-link"
-              href="https://github.com/Hrithik028/workflowhq/pulls"
-              rel="noreferrer"
-              target="_blank"
-            >
-              #{meta.pullRequest}&nbsp;&nbsp; {task.title}
-            </a>
-            <p>
-              Opened by <b>{meta.assignee}</b>&nbsp;&nbsp;·&nbsp;&nbsp;2 hours ago
-            </p>
-            <p>
-              Reviewers&nbsp;&nbsp; <b>{meta.reviewer}</b>
-            </p>
-          </section>
-          <section>
-            <h3>Review status</h3>
-            <p className="review-status">
-              <span /> Changes requested{" "}
-              <b>
-                1 of 1&nbsp;&nbsp;
-                {meta.reviewer
-                  .split(" ")
-                  .map((part) => part[0])
-                  .join("")}
-              </b>
-            </p>
-          </section>
-          <section>
-            <h3>Checks</h3>
-            <p className="checks-status">
-              <CheckCircle2 size={17} /> {meta.checksPassed} passed&nbsp;&nbsp;·&nbsp;&nbsp;
-              <b>{meta.checksRunning || 1} running</b>
-              <a
-                href="https://github.com/Hrithik028/workflowhq/actions"
-                rel="noreferrer"
-                target="_blank"
-              >
-                View details
-              </a>
-            </p>
-          </section>
-          <section>
-            <h3>Deployment</h3>
-            <p className="deployment-status">
-              <Rocket size={17} />{" "}
-              {meta.environment.charAt(0).toUpperCase() + meta.environment.slice(1)} successful{" "}
-              <time>2 hours ago</time>
-              <a href="https://workflowhq.onrender.com" rel="noreferrer" target="_blank">
-                View deployment
-              </a>
-            </p>
-          </section>
+              </section>
+              <section>
+                <h3>Branch</h3>
+                <span className="development-link">
+                  <GitBranch size={17} /> {meta.branch}
+                </span>
+              </section>
+              <section>
+                <h3>Commits (4)</h3>
+                {[
+                  "Add the primary implementation",
+                  "Add unit tests for valid and invalid paths",
+                  "Handle the missing configuration path",
+                  "Initial implementation"
+                ].map((copy, index) => (
+                  <p className="commit-row" key={copy}>
+                    <a
+                      href="https://github.com/Hrithik028/workflowhq"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {(Number.parseInt(meta.commit, 16) + index * 173)
+                        .toString(16)
+                        .padStart(7, "0")
+                        .slice(-7)}
+                    </a>
+                    <span>{copy}</span>
+                    <time>{index + 2}h ago</time>
+                  </p>
+                ))}
+              </section>
+              <section>
+                <h3>Pull request</h3>
+                <a
+                  className="development-link"
+                  href="https://github.com/Hrithik028/workflowhq/pulls"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  #{meta.pullRequest}&nbsp;&nbsp; {task.title}
+                </a>
+                <p>
+                  Opened by <b>{meta.assignee}</b>&nbsp;&nbsp;·&nbsp;&nbsp;2 hours ago
+                </p>
+                <p>
+                  Reviewers&nbsp;&nbsp; <b>{meta.reviewer}</b>
+                </p>
+              </section>
+              <section>
+                <h3>Review status</h3>
+                <p className="review-status">
+                  <span /> Changes requested{" "}
+                  <b>
+                    1 of 1&nbsp;&nbsp;
+                    {meta.reviewer
+                      .split(" ")
+                      .map((part) => part[0])
+                      .join("")}
+                  </b>
+                </p>
+              </section>
+              <section>
+                <h3>Checks</h3>
+                <p className="checks-status">
+                  <CheckCircle2 size={17} /> {meta.checksPassed} passed&nbsp;&nbsp;·&nbsp;&nbsp;
+                  <b>{meta.checksRunning || 1} running</b>
+                  <a
+                    href="https://github.com/Hrithik028/workflowhq/actions"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    View details
+                  </a>
+                </p>
+              </section>
+              <section>
+                <h3>Deployment</h3>
+                <p className="deployment-status">
+                  <Rocket size={17} />{" "}
+                  {meta.environment.charAt(0).toUpperCase() + meta.environment.slice(1)} successful{" "}
+                  <time>2 hours ago</time>
+                  <a href="https://workflowhq.onrender.com" rel="noreferrer" target="_blank">
+                    View deployment
+                  </a>
+                </p>
+              </section>
             </>
+          ) : isDevelopmentLoading ? (
+            <section className="development-empty-state" aria-live="polite">
+              <Github className="spin" size={28} />
+              <h3>Loading verified development data…</h3>
+              <p>WorkflowHQ is checking linked repositories and GitHub activity for this issue.</p>
+            </section>
+          ) : developmentError ? (
+            <section className="development-empty-state error" role="alert">
+              <Github size={28} />
+              <h3>Development data unavailable</h3>
+              <p>{developmentError}</p>
+              <Link to="/settings/integrations/github">Check GitHub connection</Link>
+            </section>
+          ) : developmentLinks.length ? (
+            <div className="verified-development-list">
+              <section className="verified-development-summary">
+                <CheckCircle2 size={19} />
+                <span>
+                  <strong>Verified GitHub activity</strong>
+                  <small>
+                    {developmentLinks.length} linked item{developmentLinks.length === 1 ? "" : "s"}
+                  </small>
+                </span>
+              </section>
+              {Object.entries(
+                developmentLinks.reduce<Record<string, DevelopmentLink[]>>((groups, link) => {
+                  const key = link.type;
+                  groups[key] = [...(groups[key] || []), link];
+                  return groups;
+                }, {})
+              ).map(([type, links]) => (
+                <section className="verified-development-group" key={type}>
+                  <h3>
+                    {type.replaceAll("_", " ")} ({links.length})
+                  </h3>
+                  {links.map((link) => (
+                    <article key={link.id}>
+                      <a href={link.url} rel="noreferrer" target="_blank">
+                        {link.githubNumber ? `#${link.githubNumber} ` : ""}
+                        {link.title}
+                      </a>
+                      <span>{link.repositoryFullName}</span>
+                      <small>
+                        {link.actorLogin ? `${link.actorLogin} · ` : ""}
+                        {link.state ? `${link.state} · ` : ""}
+                        {formatRelativeTime(link.occurredAt)}
+                      </small>
+                    </article>
+                  ))}
+                </section>
+              ))}
+            </div>
           ) : (
             <section className="development-empty-state">
               <Github size={28} />
-              <h3>GitHub not connected</h3>
+              <h3>No linked GitHub activity</h3>
               <p>
-                This issue has no linked repository, branch, commits, pull requests, checks, or
-                deployments.
+                No verified branch, commit, pull request, check, release, or deployment is linked to{" "}
+                {task.issueKey} yet.
               </p>
-              <span>Verified development data will appear after the GitHub App is connected.</span>
+              <Link to="/settings/integrations/github">Manage GitHub connection</Link>
             </section>
           )}
         </aside>
       </section>
 
       {isDemo ? (
-      <section className="development-timeline">
-        <h2>Activity timeline</h2>
-        <div>
-          <article>
-            <i>
-              <GitBranch />
-            </i>
-            <strong>Push</strong>
-            <span>{meta.commit}</span>
-            <small>2 hours ago</small>
-          </article>
-          <article>
-            <i>
-              <GitPullRequest />
-            </i>
-            <strong>Pull request created</strong>
-            <span>#{meta.pullRequest} opened</span>
-            <small>2 hours ago</small>
-          </article>
-          <article>
-            <i>
-              <Circle />
-            </i>
-            <strong>CI checks</strong>
-            <span>
-              {meta.checksPassed} passed · {meta.checksRunning || 1} running
-            </span>
-            <small>1 hour ago</small>
-          </article>
-          <article>
-            <i>
-              <UserRound />
-            </i>
-            <strong>Awaiting review</strong>
-            <span>Changes requested</span>
-            <small>45 minutes ago</small>
-          </article>
-        </div>
-      </section>
+        <section className="development-timeline">
+          <h2>Activity timeline</h2>
+          <div>
+            <article>
+              <i>
+                <GitBranch />
+              </i>
+              <strong>Push</strong>
+              <span>{meta.commit}</span>
+              <small>2 hours ago</small>
+            </article>
+            <article>
+              <i>
+                <GitPullRequest />
+              </i>
+              <strong>Pull request created</strong>
+              <span>#{meta.pullRequest} opened</span>
+              <small>2 hours ago</small>
+            </article>
+            <article>
+              <i>
+                <Circle />
+              </i>
+              <strong>CI checks</strong>
+              <span>
+                {meta.checksPassed} passed · {meta.checksRunning || 1} running
+              </span>
+              <small>1 hour ago</small>
+            </article>
+            <article>
+              <i>
+                <UserRound />
+              </i>
+              <strong>Awaiting review</strong>
+              <span>Changes requested</span>
+              <small>45 minutes ago</small>
+            </article>
+          </div>
+        </section>
       ) : null}
 
       {isModalOpen ? (

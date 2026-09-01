@@ -1,4 +1,4 @@
-import { ArrowUpRight, FolderKanban, PencilLine, Plus } from "lucide-react";
+import { ArrowUpRight, FolderKanban, Github, PencilLine, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
@@ -163,6 +163,14 @@ function Projects() {
                 <div className="project-register-name">
                   <strong>{project.name}</strong>
                   <span>{project.description || "Outcome not defined yet."}</span>
+                  {!isDemo ? (
+                    <Link
+                      className="project-register-development"
+                      to={`/projects/${project.id}/development`}
+                    >
+                      <Github size={13} /> Development
+                    </Link>
+                  ) : null}
                 </div>
                 <div className="project-register-progress">
                   <div>

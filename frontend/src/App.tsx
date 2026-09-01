@@ -11,6 +11,8 @@ import Overview from "./pages/OverviewEngineering";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
 import Settings from "./pages/SettingsAdmin";
+import GitHubIntegration from "./pages/GitHubIntegration";
+import ProjectDevelopment from "./pages/ProjectDevelopment";
 import TaskDetail from "./pages/TaskDetail";
 import Tasks from "./pages/TasksHierarchy";
 import Workspace from "./pages/WorkspaceEngineering";
@@ -100,6 +102,7 @@ function App() {
         <Route path="/app" element={<Overview />} />
         <Route path="/workflow" element={<Workspace />} />
         <Route path="/projects" element={<Projects />} />
+        <Route path="/projects/:id/development" element={<ProjectDevelopment />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/calendar" element={<Calendar />} />
@@ -108,6 +111,7 @@ function App() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/integrations/github" element={<GitHubIntegration />} />
       </Route>
       <Route path="*" element={<Navigate replace to={authenticated ? "/app" : "/login"} />} />
     </Routes>

@@ -3,6 +3,10 @@ export type TaskPriority = "low" | "medium" | "high";
 export type TaskType = "initiative" | "epic" | "story" | "task" | "bug" | "subtask";
 export type ProjectRole = "owner" | "editor" | "viewer";
 export type WorkspaceRole = "user" | "admin" | "platform_owner";
+export type GitHubSyncState =
+  "never" | "queued" | "syncing" | "healthy" | "partial" | "failed" | "suspended";
+export type DevelopmentLinkType =
+  "branch" | "commit" | "pull_request" | "issue" | "deployment" | "release" | "check_run";
 
 export interface User {
   id: number;
@@ -31,6 +35,131 @@ export interface ProjectMember {
   email: string;
   role: ProjectRole;
   addedAt: string;
+}
+
+export interface GitHubInstallation {
+  id: number;
+  githubInstallationId: string;
+  accountLogin: string;
+  accountType: "User" | "Organization";
+  repositorySelection: "all" | "selected";
+  repositoryCount: number;
+  selectedRepositoryCount: number;
+  permissions: Record<string, string>;
+  suspendedAt: string | null;
+  syncState: GitHubSyncState;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  manageUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GitHubIntegrationStatus {
+  connected: boolean;
+  installations: GitHubInstallation[];
+}
+
+export interface GitHubRepository {
+  id: number;
+  installationId: number;
+  githubRepositoryId: string;
+  ownerLogin: string;
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  defaultBranch: string;
+  isPrivate: boolean;
+  isArchived: boolean;
+  selected: boolean;
+  projectId: number | null;
+  projectKey: string | null;
+  projectName: string | null;
+  syncState: GitHubSyncState;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DevelopmentLink {
+  id: number;
+  type: DevelopmentLinkType;
+  externalId: string;
+  githubNumber: number | null;
+  title: string;
+  url: string;
+  state: string | null;
+  actorLogin: string | null;
+  occurredAt: string;
+  metadata: Record<string, unknown>;
+  repositoryId: number;
+  repositoryFullName: string;
+  repositoryUrl: string;
+  linkSource: "automatic" | "manual";
+}
+
+export interface TaskDevelopment {
+  task: { id: number; issueKey: string; title: string };
+  links: DevelopmentLink[];
+}
+
+export interface GitHubDevelopmentEvent {
+  id: number;
+  type: DevelopmentLinkType;
+  externalId: string;
+  githubNumber: number | null;
+  title: string;
+  url: string;
+  state: string | null;
+  actorLogin: string | null;
+  occurredAt: string;
+  metadata: Record<string, unknown>;
+  repositoryFullName: string;
+  projectId: number | null;
+  projectKey: string | null;
+  projectName: string | null;
+}
+
+export interface GitHubCommandSummary {
+  connected: boolean;
+  installationCount: number;
+  repositoryCount: number;
+  contributorCount: number;
+  openPullRequestCount: number;
+  failingCheckCount: number;
+  deployedThisWeekCount: number;
+  lastSyncedAt: string | null;
+  recent: GitHubDevelopmentEvent[];
+}
+
+export interface ProjectDevelopment {
+  project: {
+    id: number;
+    key: string;
+    name: string;
+    description: string;
+    myRole: ProjectRole;
+  };
+  repositories: Array<{
+    id: number;
+    fullName: string;
+    htmlUrl: string;
+    defaultBranch: string;
+    isPrivate: boolean;
+    isArchived: boolean;
+    syncState: GitHubSyncState;
+    lastSyncedAt: string | null;
+    lastError: string | null;
+  }>;
+  events: GitHubDevelopmentEvent[];
+  taskLinks: Array<{
+    eventId: number;
+    linkSource: "automatic" | "manual";
+    taskId: number;
+    issueKey: string;
+    taskTitle: string;
+  }>;
 }
 
 export interface Label {
