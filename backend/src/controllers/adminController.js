@@ -89,7 +89,7 @@ const updateUserAccess = async (req, res, next) => {
     await client.query("BEGIN");
     await client.query(
       `UPDATE users
-       SET role = $1,
+       SET role = $1::varchar,
            auth_version = auth_version + CASE WHEN role <> $1 THEN 1 ELSE 0 END
        WHERE id = $2`,
       [req.body.role, targetId]
