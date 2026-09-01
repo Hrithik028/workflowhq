@@ -1,7 +1,19 @@
 const express = require("express");
 const { z } = require("zod");
 
-const { createComment, deleteComment, listComments, updateComment } = require("../controllers/commentController");
+const {
+  createAcceptanceCriterion,
+  deleteAcceptanceCriterion,
+  listAcceptanceCriteria,
+  reorderAcceptanceCriteria,
+  updateAcceptanceCriterion
+} = require("../controllers/acceptanceCriteriaController");
+const {
+  createComment,
+  deleteComment,
+  listComments,
+  updateComment
+} = require("../controllers/commentController");
 const { attachLabel, detachLabel } = require("../controllers/labelController");
 const {
   createChildTask,
@@ -19,6 +31,7 @@ const { enforceTaskRules, requirePermission, requireRule } = require("../middlew
 const authMiddleware = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validate");
 const {
+  acceptanceCriteriaSchemas,
   commentSchemas,
   taskLabelSchemas,
   taskRankSchema,
@@ -73,6 +86,39 @@ router.patch(
   asyncHandler(requirePermission("tasks.edit")),
   validate({ params: taskSchemas.params, body: taskRankSchema }),
   asyncHandler(updateTaskRank)
+);
+
+router.get(
+  "/:id/criteria",
+  validate({ params: acceptanceCriteriaSchemas.params }),
+  asyncHandler(listAcceptanceCriteria)
+);
+router.post(
+  "/:id/criteria",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: acceptanceCriteriaSchemas.params, body: acceptanceCriteriaSchemas.create }),
+  asyncHandler(createAcceptanceCriterion)
+);
+router.put(
+  "/:id/criteria/order",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: acceptanceCriteriaSchemas.params, body: acceptanceCriteriaSchemas.reorder }),
+  asyncHandler(reorderAcceptanceCriteria)
+);
+router.put(
+  "/:id/criteria/:criterionId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({
+    params: acceptanceCriteriaSchemas.criterionParams,
+    body: acceptanceCriteriaSchemas.update
+  }),
+  asyncHandler(updateAcceptanceCriterion)
+);
+router.delete(
+  "/:id/criteria/:criterionId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: acceptanceCriteriaSchemas.criterionParams }),
+  asyncHandler(deleteAcceptanceCriterion)
 );
 
 router.post(

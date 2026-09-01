@@ -1,4 +1,6 @@
 import type {
+  AcceptanceCriterion,
+  AcceptanceCriterionInput,
   Activity,
   Comment,
   CommentInput,
@@ -424,6 +426,26 @@ let comments: Comment[] = [
 ];
 let nextCommentId = 2;
 
+let acceptanceCriteria: AcceptanceCriterion[] = tasks.flatMap((task) => {
+  const completedCount = task.status === "completed" ? 4 : task.status === "in_progress" ? 2 : 1;
+  return [
+    `Complete ${task.title.toLowerCase()} for the agreed delivery scope`,
+    "Add automated coverage for the main success and failure paths",
+    "Pass required CI checks before the change is merged",
+    "Update the engineering notes and release handoff"
+  ].map((body, position) => ({
+    id: task.id * 10 + position + 1,
+    taskId: task.id,
+    body,
+    completed: position < completedCount,
+    position,
+    createdBy: DEMO_USER.id,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt
+  }));
+});
+let nextAcceptanceCriterionId = Math.max(...acceptanceCriteria.map((item) => item.id)) + 1;
+
 let sprints: Sprint[] = [
   {
     id: 1,
@@ -609,7 +631,10 @@ export const demoWorkspaceApi: WorkspaceClient = {
         return left.rank - right.rank;
       });
       if ((query.order || "desc") === "desc") {
-        result = [...result.filter((task) => task.rank != null).reverse(), ...result.filter((task) => task.rank == null)];
+        result = [
+          ...result.filter((task) => task.rank != null).reverse(),
+          ...result.filter((task) => task.rank == null)
+        ];
       }
     } else {
       const keyMap = {
@@ -734,6 +759,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
       throw new Error("Move or delete this task's children first.");
     }
     tasks = tasks.filter((item) => item.id !== id);
+    acceptanceCriteria = acceptanceCriteria.filter((item) => item.taskId !== id);
     refreshProjectCounts();
     refreshHierarchyMetadata();
     addActivity({
@@ -793,7 +819,10 @@ export const demoWorkspaceApi: WorkspaceClient = {
     if (members.some((member) => member.email.toLowerCase() === email)) {
       throw new Error("This user is already a member of the project.");
     }
-    const namePart = email.split("@")[0].replace(/[._-]+/g, " ").trim();
+    const namePart = email
+      .split("@")[0]
+      .replace(/[._-]+/g, " ")
+      .trim();
     const name =
       namePart
         .split(" ")
@@ -974,6 +1003,79 @@ export const demoWorkspaceApi: WorkspaceClient = {
     comments = comments.filter((item) => !(item.id === commentId && item.taskId === taskId));
   },
 
+  async listAcceptanceCriteria(taskId: number) {
+    await delay();
+    return acceptanceCriteria
+      .filter((item) => item.taskId === taskId)
+      .sort((left, right) => left.position - right.position || left.id - right.id)
+      .map((item) => ({ ...item }));
+  },
+
+  async createAcceptanceCriterion(taskId: number, input: AcceptanceCriterionInput) {
+    await delay();
+    if (!tasks.some((task) => task.id === taskId)) throw new Error("Task not found.");
+    const timestamp = new Date().toISOString();
+    const position = acceptanceCriteria.filter((item) => item.taskId === taskId).length;
+    const criterion: AcceptanceCriterion = {
+      id: nextAcceptanceCriterionId++,
+      taskId,
+      body: input.body,
+      completed: false,
+      position,
+      createdBy: DEMO_USER.id,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    acceptanceCriteria = [...acceptanceCriteria, criterion];
+    return { ...criterion };
+  },
+
+  async updateAcceptanceCriterion(
+    taskId: number,
+    criterionId: number,
+    input: AcceptanceCriterionInput & { completed: boolean }
+  ) {
+    await delay();
+    const criterion = acceptanceCriteria.find(
+      (item) => item.id === criterionId && item.taskId === taskId
+    );
+    if (!criterion) throw new Error("Acceptance criterion not found.");
+    Object.assign(criterion, input, { updatedAt: new Date().toISOString() });
+    return { ...criterion };
+  },
+
+  async reorderAcceptanceCriteria(taskId: number, criterionIds: number[]) {
+    await delay();
+    const current = acceptanceCriteria.filter((item) => item.taskId === taskId);
+    if (
+      current.length !== criterionIds.length ||
+      current.some((item) => !criterionIds.includes(item.id))
+    ) {
+      throw new Error("The submitted order is incomplete.");
+    }
+    const positions = new Map(criterionIds.map((criterionId, position) => [criterionId, position]));
+    acceptanceCriteria = acceptanceCriteria.map((item) =>
+      item.taskId === taskId ? { ...item, position: positions.get(item.id)! } : item
+    );
+    return acceptanceCriteria
+      .filter((item) => item.taskId === taskId)
+      .sort((left, right) => left.position - right.position)
+      .map((item) => ({ ...item }));
+  },
+
+  async deleteAcceptanceCriterion(taskId: number, criterionId: number) {
+    await delay();
+    acceptanceCriteria = acceptanceCriteria.filter(
+      (item) => !(item.id === criterionId && item.taskId === taskId)
+    );
+    acceptanceCriteria
+      .filter((item) => item.taskId === taskId)
+      .sort((left, right) => left.position - right.position)
+      .forEach((item, position) => {
+        item.position = position;
+      });
+  },
+
   async updateTaskRank(
     taskId: number,
     input: { previousTaskId: number | null; nextTaskId: number | null }
@@ -1028,7 +1130,9 @@ export const demoWorkspaceApi: WorkspaceClient = {
 
   async listSprints(projectId: number) {
     await delay();
-    return sprints.filter((sprint) => sprint.projectId === projectId).map((sprint) => ({ ...sprint }));
+    return sprints
+      .filter((sprint) => sprint.projectId === projectId)
+      .map((sprint) => ({ ...sprint }));
   },
 
   async createSprint(projectId: number, input: SprintInput) {

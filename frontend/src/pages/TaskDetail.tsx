@@ -1,6 +1,5 @@
 import {
   CalendarDays,
-  Check,
   CheckCircle2,
   Circle,
   GitBranch,
@@ -19,6 +18,7 @@ import { getErrorMessage } from "../api/client";
 import { githubApi } from "../api/github";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import AcceptanceCriteria from "../components/AcceptanceCriteria";
 import LabelPill from "../components/LabelPill";
 import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
@@ -26,13 +26,6 @@ import { engineeringMetaFor, issueTypeLabel } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Comment, DevelopmentLink, Project, Task, TaskInput } from "../types";
 import { formatDate, formatRelativeTime, initialsFor, statusLabel } from "../utils/format";
-
-const criteriaFor = (task: Task) => [
-  `Complete ${task.title.toLowerCase()} for the agreed delivery scope`,
-  "Add automated coverage for the main success and failure paths",
-  "Pass required CI checks before the change is merged",
-  "Update the engineering notes and release handoff"
-];
 
 function TaskDetail() {
   const { id } = useParams();
@@ -89,6 +82,11 @@ function TaskDetail() {
   const currentProject = task ? projects.find((item) => item.id === task.projectId) : null;
   const canModerateComments =
     currentProject?.myRole === "owner" || currentProject?.myRole === "editor";
+  const canEditCriteria = task
+    ? task.projectId == null
+      ? task.userId === user.id
+      : currentProject?.myRole === "owner" || currentProject?.myRole === "editor"
+    : false;
 
   const loadComments = useCallback(
     async (taskId: number) => {
@@ -246,7 +244,7 @@ function TaskDetail() {
               {task.projectName || "Inbox"} / {isDemo ? "Sample development" : "Issue details"}
             </span>
             <span className="task-detail-key">{task.issueKey}</span>
-            <div>
+            <div className="task-detail-title-row">
               <h1>{task.title}</h1>
               <span className="task-kind">{issueTypeLabel(task)}</span>
               <span className={`task-detail-status ${task.status}`}>
@@ -279,40 +277,14 @@ function TaskDetail() {
 
           <section className="task-copy-block">
             <h2>Description</h2>
-            <p>
+            <p className="task-description-copy">
               {task.description ||
                 "Add a clear description of the engineering outcome and expected behavior."}
             </p>
           </section>
           <section className="task-copy-block">
             <h2>Acceptance criteria</h2>
-            {isDemo ? (
-              <ul className="acceptance-list">
-                {criteriaFor(task).map((criterion, index) => (
-                  <li key={criterion}>
-                    <span
-                      className={
-                        index <
-                        (task.status === "completed" ? 4 : task.status === "in_progress" ? 2 : 1)
-                          ? "checked"
-                          : ""
-                      }
-                    >
-                      {index <
-                      (task.status === "completed" ? 4 : task.status === "in_progress" ? 2 : 1) ? (
-                        <Check size={14} />
-                      ) : null}
-                    </span>
-                    {criterion}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="truthful-empty-state">
-                No acceptance criteria are stored for this issue yet. Persisted criteria editing
-                will be added as ticket data.
-              </p>
-            )}
+            <AcceptanceCriteria canEdit={canEditCriteria} client={client} task={task} />
           </section>
 
           <section className="task-relations">

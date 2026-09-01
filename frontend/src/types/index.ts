@@ -190,6 +190,21 @@ export interface CommentInput {
   body: string;
 }
 
+export interface AcceptanceCriterion {
+  id: number;
+  taskId: number;
+  body: string;
+  completed: boolean;
+  position: number;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AcceptanceCriterionInput {
+  body: string;
+}
+
 export type SprintStatus = "planned" | "active" | "completed";
 
 export interface Sprint {
@@ -398,6 +413,18 @@ export interface WorkspaceClient {
   createComment(taskId: number, input: CommentInput): Promise<Comment>;
   updateComment(taskId: number, commentId: number, input: CommentInput): Promise<Comment>;
   deleteComment(taskId: number, commentId: number): Promise<void>;
+  listAcceptanceCriteria(taskId: number): Promise<AcceptanceCriterion[]>;
+  createAcceptanceCriterion(
+    taskId: number,
+    input: AcceptanceCriterionInput
+  ): Promise<AcceptanceCriterion>;
+  updateAcceptanceCriterion(
+    taskId: number,
+    criterionId: number,
+    input: AcceptanceCriterionInput & { completed: boolean }
+  ): Promise<AcceptanceCriterion>;
+  reorderAcceptanceCriteria(taskId: number, criterionIds: number[]): Promise<AcceptanceCriterion[]>;
+  deleteAcceptanceCriterion(taskId: number, criterionId: number): Promise<void>;
   updateTaskRank(
     taskId: number,
     input: { previousTaskId: number | null; nextTaskId: number | null }

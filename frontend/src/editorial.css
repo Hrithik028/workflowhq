@@ -4429,15 +4429,18 @@ html[data-motion="reduced"] *::after {
   font-size: 0.67rem;
 }
 
-.task-detail-header > div {
+.task-detail-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
-.task-detail-header h1 {
-  flex: 1;
+.task-detail-title-row h1 {
+  min-width: 0;
+  flex: 1 1 30rem;
   font-size: clamp(2.4rem, 3.5vw, 4.1rem);
+  overflow-wrap: anywhere;
 }
 
 .task-kind,
@@ -4508,6 +4511,11 @@ html[data-motion="reduced"] *::after {
   line-height: 1.5;
 }
 
+.task-description-copy {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .acceptance-list {
   display: grid;
   gap: 8px;
@@ -4523,7 +4531,7 @@ html[data-motion="reduced"] *::after {
   font-size: 0.7rem;
 }
 
-.acceptance-list li > span {
+.acceptance-list:not(.interactive) li > span {
   display: grid;
   width: 17px;
   height: 17px;
@@ -4531,10 +4539,154 @@ html[data-motion="reduced"] *::after {
   border: 1px solid #777;
 }
 
-.acceptance-list li > span.checked {
+.acceptance-list:not(.interactive) li > span.checked {
   border-color: var(--signal);
   background: var(--signal);
   color: white;
+}
+
+.acceptance-criteria-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.acceptance-list.interactive li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  min-height: 34px;
+  padding: 5px 0;
+  border-bottom: 1px solid #ded8ce;
+}
+
+.criterion-check,
+.criterion-actions button,
+.criterion-edit-form button {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--carbon);
+  background: transparent;
+  color: var(--carbon);
+}
+
+.criterion-check.checked {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: white;
+}
+
+.criterion-check:disabled,
+.criterion-actions button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.criterion-copy {
+  align-self: center;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.criterion-copy.completed {
+  color: #4a4640;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.criterion-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.criterion-actions button:not(:disabled):hover,
+.criterion-edit-form button:not(:disabled):hover {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.criterion-edit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 5px;
+}
+
+.criterion-edit-form input,
+.criterion-add-form input {
+  min-width: 0;
+  border: 1px solid #aaa49b;
+  background: rgba(255, 255, 255, 0.38);
+  color: var(--carbon);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.72rem;
+}
+
+.criterion-edit-form input {
+  padding: 4px 7px;
+}
+
+.criterion-add-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 2px;
+}
+
+.criterion-add-form input {
+  padding: 9px 10px;
+}
+
+.criterion-add-form button,
+.criteria-empty-state button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--carbon);
+  background: var(--carbon);
+  color: white;
+  font-family: "Courier New", monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.criterion-add-form button {
+  padding: 0 14px;
+}
+
+.criteria-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-left: 3px solid #aaa49b;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.criteria-empty-state p,
+.criteria-read-only,
+.criteria-error {
+  margin: 0;
+  font-family: "Courier New", monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.criteria-empty-state button {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+}
+
+.criteria-error {
+  border: 1px solid var(--signal);
+  padding: 8px 10px;
+  color: #a5280c;
+}
+
+.criteria-read-only {
+  color: #4a4640;
 }
 
 .task-relations {
@@ -5014,6 +5166,9 @@ html[data-motion="reduced"] *::after {
   .task-detail-grid {
     grid-template-columns: 1fr;
   }
+  .task-detail-title-row h1 {
+    flex-basis: 100%;
+  }
   .task-detail-main {
     border-right: 0;
     padding-right: 0;
@@ -5079,10 +5234,10 @@ html[data-motion="reduced"] *::after {
   .hierarchy-filters > label {
     grid-column: 1 / -1;
   }
-  .task-detail-header > div {
+  .task-detail-title-row {
     flex-wrap: wrap;
   }
-  .task-detail-header h1 {
+  .task-detail-title-row h1 {
     min-width: 100%;
   }
   .task-relations {

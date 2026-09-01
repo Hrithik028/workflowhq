@@ -180,6 +180,29 @@ const commentSchemas = {
   update: commentBodySchema
 };
 
+const acceptanceCriterionBodySchema = z.string().trim().min(1).max(1000);
+
+const acceptanceCriteriaSchemas = {
+  params: z.object({ id: idSchema }),
+  criterionParams: z.object({ id: idSchema, criterionId: idSchema }),
+  create: z.object({ body: acceptanceCriterionBodySchema }).strict(),
+  update: z
+    .object({
+      body: acceptanceCriterionBodySchema,
+      completed: z.boolean()
+    })
+    .strict(),
+  reorder: z
+    .object({
+      criterionIds: z.array(idSchema).max(100)
+    })
+    .strict()
+    .refine((value) => new Set(value.criterionIds).size === value.criterionIds.length, {
+      message: "Acceptance criterion IDs must be unique.",
+      path: ["criterionIds"]
+    })
+};
+
 const sprintCreateSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
@@ -213,6 +236,7 @@ const sprintSchemas = {
 };
 
 module.exports = {
+  acceptanceCriteriaSchemas,
   activitySchemas,
   authSchemas,
   commentSchemas,
