@@ -7,12 +7,14 @@ const { rateLimit } = require("express-rate-limit");
 const pool = require("./config/db");
 const { loadConfig } = require("./config/env");
 const { AppError } = require("./lib/errors");
+const { createGithubServices } = require("./lib/githubClient");
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 const { requestLogger } = require("./middleware/requestLogger");
 const activityRoutes = require("./routes/activityRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const authRoutes = require("./routes/authRoutes");
 const githubIntegrationRoutes = require("./routes/githubIntegrationRoutes");
+const githubWebhookRoutes = require("./routes/githubWebhookRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 
@@ -27,10 +29,11 @@ const createCorsOptions = (allowedOrigins) => ({
   }
 });
 
-const createApp = ({ db = pool, config = loadConfig() } = {}) => {
+const createApp = ({ db = pool, config = loadConfig(), github } = {}) => {
   const app = express();
   app.locals.db = db;
   app.locals.config = config;
+  app.locals.github = github === undefined ? createGithubServices(config) : github;
 
   if (config.trustProxy) {
     app.set("trust proxy", 1);
@@ -39,6 +42,7 @@ const createApp = ({ db = pool, config = loadConfig() } = {}) => {
   app.use(requestLogger);
   app.use(helmet());
   app.use(cors(createCorsOptions(config.corsOrigins)));
+  app.use("/api/github/webhooks", githubWebhookRoutes);
   app.use(express.json({ limit: "100kb" }));
   app.use(cookieParser());
 

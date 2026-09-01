@@ -17,7 +17,7 @@ const requestLogger = (req, res, next) => {
         message: "request_complete",
         requestId: req.id,
         method: req.method,
-        path: req.originalUrl,
+        path: req.path,
         status: res.statusCode,
         durationMs: Number(durationMs.toFixed(1))
       })}\n`
