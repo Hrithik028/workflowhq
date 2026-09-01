@@ -7,6 +7,7 @@ import TaskDetail from "./TaskDetail";
 
 const githubMocks = vi.hoisted(() => ({ getTaskDevelopment: vi.fn() }));
 const workspaceMocks = vi.hoisted(() => ({
+  listAcceptanceCriteria: vi.fn(),
   listComments: vi.fn(),
   listProjects: vi.fn(),
   listTasks: vi.fn()
@@ -74,6 +75,7 @@ describe("Task detail GitHub development data", () => {
     });
     workspaceMocks.listProjects.mockResolvedValue([project]);
     workspaceMocks.listComments.mockResolvedValue([]);
+    workspaceMocks.listAcceptanceCriteria.mockResolvedValue([]);
   });
 
   it("renders verified live development links returned by the GitHub API", async () => {

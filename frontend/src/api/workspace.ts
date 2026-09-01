@@ -1,5 +1,7 @@
 import { api } from "./client";
 import type {
+  AcceptanceCriterion,
+  AcceptanceCriterionInput,
   Activity,
   Comment,
   CommentInput,
@@ -62,6 +64,17 @@ const mapComment = (comment: Raw): Comment => ({
   body: String(comment.body),
   createdAt: String(comment.created_at),
   updatedAt: String(comment.updated_at)
+});
+
+const mapAcceptanceCriterion = (criterion: Raw): AcceptanceCriterion => ({
+  id: Number(criterion.id),
+  taskId: Number(criterion.task_id),
+  body: String(criterion.body),
+  completed: Boolean(criterion.completed),
+  position: Number(criterion.position),
+  createdBy: criterion.created_by == null ? null : Number(criterion.created_by),
+  createdAt: String(criterion.created_at),
+  updatedAt: String(criterion.updated_at)
 });
 
 const mapSprint = (sprint: Raw): Sprint => ({
@@ -218,14 +231,39 @@ export const workspaceApi: WorkspaceClient = {
     return mapComment(response.data.data);
   },
   async updateComment(taskId: number, commentId: number, input: CommentInput) {
-    const response = await api.put<{ data: Raw }>(
-      `/tasks/${taskId}/comments/${commentId}`,
-      input
-    );
+    const response = await api.put<{ data: Raw }>(`/tasks/${taskId}/comments/${commentId}`, input);
     return mapComment(response.data.data);
   },
   async deleteComment(taskId: number, commentId: number) {
     await api.delete(`/tasks/${taskId}/comments/${commentId}`);
+  },
+  async listAcceptanceCriteria(taskId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/tasks/${taskId}/criteria`);
+    return response.data.data.map(mapAcceptanceCriterion);
+  },
+  async createAcceptanceCriterion(taskId: number, input: AcceptanceCriterionInput) {
+    const response = await api.post<{ data: Raw }>(`/tasks/${taskId}/criteria`, input);
+    return mapAcceptanceCriterion(response.data.data);
+  },
+  async updateAcceptanceCriterion(
+    taskId: number,
+    criterionId: number,
+    input: AcceptanceCriterionInput & { completed: boolean }
+  ) {
+    const response = await api.put<{ data: Raw }>(
+      `/tasks/${taskId}/criteria/${criterionId}`,
+      input
+    );
+    return mapAcceptanceCriterion(response.data.data);
+  },
+  async reorderAcceptanceCriteria(taskId: number, criterionIds: number[]) {
+    const response = await api.put<{ data: Raw[] }>(`/tasks/${taskId}/criteria/order`, {
+      criterionIds
+    });
+    return response.data.data.map(mapAcceptanceCriterion);
+  },
+  async deleteAcceptanceCriterion(taskId: number, criterionId: number) {
+    await api.delete(`/tasks/${taskId}/criteria/${criterionId}`);
   },
   async updateTaskRank(
     taskId: number,
