@@ -5,6 +5,7 @@ import { authApi } from "./api/auth";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Calendar from "./pages/Calendar";
+import ArchivePage from "./pages/ArchivePage";
 import { demoCredentials } from "./demo/credentials";
 import Login from "./pages/Login";
 import Overview from "./pages/OverviewEngineering";
@@ -110,6 +111,7 @@ function App() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/inbox" element={<Inbox />} />
+        <Route path="/archive" element={<ArchivePage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/integrations/github" element={<GitHubIntegration />} />
       </Route>

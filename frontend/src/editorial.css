@@ -4422,6 +4422,224 @@ html[data-motion="reduced"] *::after {
   padding: 7px 8px 18px;
 }
 
+.task-detail-header .overline a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.task-detail-header .overline a:hover,
+.task-detail-header .overline a:focus-visible {
+  color: var(--carbon);
+}
+
+/* Reversible archive lifecycle */
+.confirmation-backdrop {
+  position: fixed;
+  z-index: 180;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(17 17 17 / 72%);
+  backdrop-filter: blur(4px);
+}
+
+.confirmation-dialog {
+  width: min(520px, 100%);
+  border: 1px solid var(--carbon);
+  border-top: 7px solid var(--signal);
+  padding: 24px;
+  background: var(--paper);
+  box-shadow: 10px 10px 0 var(--carbon);
+}
+
+.confirmation-dialog.danger {
+  border-top-color: #bd2216;
+}
+
+.confirmation-dialog > header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
+}
+
+.confirmation-dialog h2 {
+  margin: 4px 0 0;
+  color: var(--carbon);
+  font-size: 1.65rem;
+  letter-spacing: -0.04em;
+}
+
+.confirmation-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--carbon);
+  color: var(--signal);
+}
+
+.confirmation-dialog > header > button,
+.archive-delete {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--carbon);
+  background: transparent;
+  color: var(--carbon);
+}
+
+.confirmation-dialog > header > button {
+  width: 34px;
+  height: 34px;
+}
+
+.confirmation-dialog > p {
+  margin: 22px 0;
+  color: #29251f;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.confirmation-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--rule);
+  padding-top: 18px;
+}
+
+.archive-total {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 0 10px;
+  min-width: 175px;
+  border: 1px solid var(--carbon);
+  padding: 13px 18px;
+}
+
+.archive-total strong {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: 2rem;
+}
+
+.archive-total span {
+  grid-column: 1 / -1;
+  font-family: "Courier New", monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.archive-section {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.32fr) 1fr;
+  border-bottom: 1px solid var(--carbon);
+  padding: 30px 0;
+}
+
+.archive-section > header {
+  padding: 8px 28px 8px 0;
+}
+
+.archive-section > header h2 {
+  margin: 10px 0 8px;
+  color: var(--carbon);
+  font-size: 1.45rem;
+}
+
+.archive-section > header p {
+  color: #4d473f;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.archive-list {
+  border: 1px solid var(--carbon);
+}
+
+.archive-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--rule);
+  padding: 18px;
+}
+
+.archive-row:last-child {
+  border-bottom: 0;
+}
+
+.archive-row-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--carbon);
+}
+
+.archive-row small {
+  color: var(--signal);
+  font-family: "Courier New", monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.archive-row h3 {
+  margin: 4px 0;
+  color: var(--carbon);
+  font-size: 1rem;
+}
+
+.archive-row p {
+  margin: 0;
+  color: #4d473f;
+  font-size: 0.72rem;
+}
+
+.archive-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-delete {
+  width: 42px;
+  height: 42px;
+}
+
+.archive-delete:not(:disabled):hover {
+  background: #bd2216;
+  color: white;
+}
+
+.archive-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+@media (max-width: 760px) {
+  .archive-section {
+    grid-template-columns: 1fr;
+  }
+
+  .archive-section > header {
+    padding-right: 0;
+  }
+
+  .archive-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .archive-row-actions {
+    grid-column: 1 / -1;
+  }
+}
+
 .task-detail-key {
   display: block;
   margin-top: 17px;

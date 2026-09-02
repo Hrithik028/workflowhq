@@ -1,4 +1,4 @@
-import { Check, FolderPlus, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Archive, Check, FolderPlus, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 
 import type { Activity } from "../types";
 import { activityCopy, formatRelativeTime } from "../utils/format";
@@ -8,6 +8,7 @@ const iconFor = (activity: Activity) => {
   if (activity.action === "task_created") return Plus;
   if (activity.action === "project_created") return FolderPlus;
   if (activity.action.includes("deleted")) return Trash2;
+  if (activity.action.includes("archived")) return Archive;
   if (activity.action === "task_priority_changed") return Zap;
   return RefreshCw;
 };

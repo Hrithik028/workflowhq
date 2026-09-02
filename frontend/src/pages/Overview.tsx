@@ -105,10 +105,10 @@ function Overview() {
     }
   };
 
-  const deleteTask = async (task: Task) => {
+  const archiveTask = async (task: Task) => {
     setIsSaving(true);
     try {
-      await client.deleteTask(task.id);
+      await client.archiveTask(task.id);
       setEditingTask(null);
       setIsModalOpen(false);
       await loadOverview();
@@ -269,7 +269,7 @@ function Overview() {
             setIsModalOpen(false);
             setEditingTask(null);
           }}
-          onDelete={deleteTask}
+          onArchive={archiveTask}
           onSave={saveTask}
           projects={projects}
           task={editingTask}

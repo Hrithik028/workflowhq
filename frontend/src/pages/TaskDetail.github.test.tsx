@@ -112,6 +112,10 @@ describe("Task detail GitHub development data", () => {
 
     expect(await screen.findByText("Verified GitHub activity")).toBeInTheDocument();
     expect(githubMocks.getTaskDevelopment).toHaveBeenCalledWith(4);
+    expect(screen.getByRole("link", { name: "WorkflowHQ" })).toHaveAttribute(
+      "href",
+      "/workflow?project=2"
+    );
     expect(
       screen.getByRole("link", { name: /#42 whq-142 verify webhook signatures/i })
     ).toHaveAttribute("href", "https://github.com/workflowhq/app/pull/42");

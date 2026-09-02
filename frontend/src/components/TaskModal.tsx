@@ -1,4 +1,4 @@
-import { CalendarDays, Plus, Trash2, X } from "lucide-react";
+import { Archive, CalendarDays, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { getErrorMessage } from "../api/client";
@@ -15,6 +15,7 @@ import type {
   WorkspaceClient
 } from "../types";
 import LabelPill from "./LabelPill";
+import ConfirmationDialog from "./ConfirmationDialog";
 
 interface TaskModalProps {
   client: WorkspaceClient;
@@ -23,7 +24,7 @@ interface TaskModalProps {
   initialStatus?: TaskStatus;
   isSaving: boolean;
   onClose: () => void;
-  onDelete: (task: Task) => Promise<void>;
+  onArchive: (task: Task) => Promise<void>;
   onSave: (input: TaskInput) => Promise<void>;
   projects: Project[];
   task: Task | null;
@@ -94,12 +95,13 @@ function TaskModal({
   initialStatus = "todo",
   isSaving,
   onClose,
-  onDelete,
+  onArchive,
   onSave,
   projects,
   task,
   tasks = []
 }: TaskModalProps) {
+  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false);
   const [form, setForm] = useState<TaskInput>(() =>
     task ? taskToInput(task) : emptyTask(initialStatus, initialDueDate, initialParentTask)
   );
@@ -462,9 +464,7 @@ function TaskModal({
               <span className="date-input">
                 <CalendarDays size={16} />
                 <input
-                  onChange={(event) =>
-                    setForm({ ...form, startDate: event.target.value || null })
-                  }
+                  onChange={(event) => setForm({ ...form, startDate: event.target.value || null })}
                   type="date"
                   value={form.startDate ?? ""}
                 />
@@ -514,9 +514,15 @@ function TaskModal({
               </span>
               <div className="label-row">
                 {attachedLabels.map((label) => (
-                  <LabelPill key={label.id} label={label} onRemove={() => void removeLabel(label)} />
+                  <LabelPill
+                    key={label.id}
+                    label={label}
+                    onRemove={() => void removeLabel(label)}
+                  />
                 ))}
-                {attachedLabels.length === 0 ? <span className="no-labels">No labels yet.</span> : null}
+                {attachedLabels.length === 0 ? (
+                  <span className="no-labels">No labels yet.</span>
+                ) : null}
               </div>
               <div className="label-picker">
                 {attachableLabels.length > 0 ? (
@@ -574,12 +580,9 @@ function TaskModal({
                 className="button danger ghost"
                 disabled={isSaving}
                 type="button"
-                onClick={() => {
-                  if (window.confirm(`Delete “${task.title}”? This cannot be undone.`))
-                    void onDelete(task);
-                }}
+                onClick={() => setIsArchiveConfirmOpen(true)}
               >
-                <Trash2 size={16} /> Delete
+                <Archive size={16} /> Archive
               </button>
             ) : (
               <span />
@@ -600,6 +603,16 @@ function TaskModal({
           </footer>
         </form>
       </section>
+      {task && isArchiveConfirmOpen ? (
+        <ConfirmationDialog
+          confirmLabel="Archive ticket"
+          description={`“${task.title}” will leave active boards and reports, but its history, comments, criteria, and project link will be preserved. You can restore it later.`}
+          isBusy={isSaving}
+          onCancel={() => setIsArchiveConfirmOpen(false)}
+          onConfirm={() => void onArchive(task)}
+          title="Archive this ticket?"
+        />
+      ) : null}
     </div>
   );
 }

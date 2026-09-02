@@ -114,10 +114,10 @@ function Workspace() {
     }
   };
 
-  const deleteTask = async (task: Task) => {
+  const archiveTask = async (task: Task) => {
     setIsSaving(true);
     try {
-      await client.deleteTask(task.id);
+      await client.archiveTask(task.id);
       setIsTaskModalOpen(false);
       setEditingTask(null);
       setNotice({ tone: "success", message: "Task deleted." });
@@ -250,7 +250,7 @@ function Workspace() {
             setIsTaskModalOpen(false);
             setEditingTask(null);
           }}
-          onDelete={deleteTask}
+          onArchive={archiveTask}
           onSave={saveTask}
           projects={projects}
           task={editingTask}

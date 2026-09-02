@@ -490,9 +490,10 @@ const addActivity = (activity: Omit<Activity, "id" | "createdAt">) => {
 const refreshProjectCounts = () => {
   projects = projects.map((project) => ({
     ...project,
-    taskCount: tasks.filter((task) => task.projectId === project.id).length,
+    taskCount: tasks.filter((task) => task.projectId === project.id && !task.archivedAt).length,
+    totalTaskCount: tasks.filter((task) => task.projectId === project.id).length,
     completedCount: tasks.filter(
-      (task) => task.projectId === project.id && task.status === "completed"
+      (task) => task.projectId === project.id && !task.archivedAt && task.status === "completed"
     ).length
   }));
 };
@@ -516,10 +517,12 @@ const refreshHierarchyMetadata = () => {
 };
 
 export const demoWorkspaceApi: WorkspaceClient = {
-  async listProjects() {
+  async listProjects(query = {}) {
     await delay();
     refreshProjectCounts();
-    return projects.map((project) => ({ ...project }));
+    return projects
+      .filter((project) => Boolean(project.archivedAt) === Boolean(query.archived))
+      .map((project) => ({ ...project }));
   },
 
   async createProject(input: ProjectInput) {
@@ -530,8 +533,11 @@ export const demoWorkspaceApi: WorkspaceClient = {
       userId: 1,
       ...input,
       taskCount: 0,
+      totalTaskCount: 0,
       completedCount: 0,
       myRole: "owner",
+      archivedAt: null,
+      archivedBy: null,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -559,6 +565,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const project = projects.find((item) => item.id === id);
     if (!project) throw new Error("Project not found.");
+    if (project.archivedAt) throw new Error("Restore this project before editing it.");
     if (project.key !== input.key && project.taskCount > 0) {
       throw new Error("A project key cannot change after its first ticket is created.");
     }
@@ -567,10 +574,45 @@ export const demoWorkspaceApi: WorkspaceClient = {
     return { ...project };
   },
 
+  async archiveProject(id: number) {
+    await delay();
+    const project = projects.find((item) => item.id === id);
+    if (!project) throw new Error("Project not found.");
+    project.archivedAt ||= new Date().toISOString();
+    project.archivedBy = DEMO_USER.id;
+    addActivity({
+      action: "project_archived",
+      entityType: "project",
+      entityId: project.id,
+      entityTitle: project.name,
+      details: {}
+    });
+    return { ...project };
+  },
+
+  async restoreProject(id: number) {
+    await delay();
+    const project = projects.find((item) => item.id === id);
+    if (!project) throw new Error("Project not found.");
+    project.archivedAt = null;
+    project.archivedBy = null;
+    addActivity({
+      action: "project_restored",
+      entityType: "project",
+      entityId: project.id,
+      entityTitle: project.name,
+      details: {}
+    });
+    return { ...project };
+  },
+
   async deleteProject(id: number) {
     await delay();
     const project = projects.find((item) => item.id === id);
     if (!project) throw new Error("Project not found.");
+    if (tasks.some((task) => task.projectId === id)) {
+      throw new Error("Archive this project or move its tasks before deleting it permanently.");
+    }
     projects = projects.filter((item) => item.id !== id);
     delete membersByProject[id];
     const removedLabelIds = new Set(
@@ -582,19 +624,6 @@ export const demoWorkspaceApi: WorkspaceClient = {
         (labelId) => !removedLabelIds.has(labelId)
       );
     });
-    tasks = tasks.map((task) =>
-      task.projectId === id
-        ? {
-            ...task,
-            projectId: null,
-            projectName: null,
-            projectKey: null,
-            assigneeId: null,
-            assigneeName: null,
-            assigneeEmail: null
-          }
-        : task
-    );
     refreshHierarchyMetadata();
     addActivity({
       action: "project_deleted",
@@ -607,7 +636,14 @@ export const demoWorkspaceApi: WorkspaceClient = {
 
   async listTasks(query: TaskQuery = {}) {
     await delay();
-    let result = [...tasks];
+    const archivedProjectIds = new Set(
+      projects.filter((project) => project.archivedAt).map((project) => project.id)
+    );
+    let result = tasks.filter((task) =>
+      query.archived
+        ? Boolean(task.archivedAt) && !archivedProjectIds.has(task.projectId || -1)
+        : !task.archivedAt && !archivedProjectIds.has(task.projectId || -1)
+    );
     if (query.status) result = result.filter((task) => task.status === query.status);
     if (query.priority) result = result.filter((task) => task.priority === query.priority);
     if (query.projectId) result = result.filter((task) => task.projectId === query.projectId);
@@ -662,6 +698,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
     await delay();
     const timestamp = new Date().toISOString();
     const project = projects.find((item) => item.id === input.projectId);
+    if (project?.archivedAt) throw new Error("Restore this project before changing its work.");
     const assignee = findMember(input.projectId, input.assigneeId);
     const sprint = sprints.find(
       (item) => item.id === input.sprintId && item.projectId === input.projectId
@@ -707,6 +744,8 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const previousStatus = task.status;
     const previousPriority = task.priority;
     const project = projects.find((item) => item.id === input.projectId);
+    if (task.archivedAt) throw new Error("Restore this task before editing it.");
+    if (project?.archivedAt) throw new Error("Restore this project before changing its work.");
     const assignee = findMember(input.projectId, input.assigneeId);
     const sprint = sprints.find(
       (item) => item.id === input.sprintId && item.projectId === input.projectId
@@ -751,6 +790,49 @@ export const demoWorkspaceApi: WorkspaceClient = {
     return { ...task };
   },
 
+  async archiveTask(id: number) {
+    await delay();
+    const task = tasks.find((item) => item.id === id);
+    if (!task) throw new Error("Task not found.");
+    const project = projects.find((item) => item.id === task.projectId);
+    if (project?.archivedAt) throw new Error("Restore this project before changing its work.");
+    if (tasks.some((item) => item.parentId === id && !item.archivedAt)) {
+      throw new Error("Archive this task's active children first, or archive the whole project.");
+    }
+    task.archivedAt ||= new Date().toISOString();
+    task.archivedBy = DEMO_USER.id;
+    refreshProjectCounts();
+    addActivity({
+      action: "task_archived",
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      details: {}
+    });
+    return { ...task };
+  },
+
+  async restoreTask(id: number) {
+    await delay();
+    const task = tasks.find((item) => item.id === id);
+    if (!task) throw new Error("Task not found.");
+    const project = projects.find((item) => item.id === task.projectId);
+    const parent = tasks.find((item) => item.id === task.parentId);
+    if (project?.archivedAt) throw new Error("Restore the project before this task.");
+    if (parent?.archivedAt) throw new Error("Restore the parent task before this child.");
+    task.archivedAt = null;
+    task.archivedBy = null;
+    refreshProjectCounts();
+    addActivity({
+      action: "task_restored",
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      details: {}
+    });
+    return { ...task };
+  },
+
   async deleteTask(id: number) {
     await delay();
     const task = tasks.find((item) => item.id === id);
@@ -773,7 +855,15 @@ export const demoWorkspaceApi: WorkspaceClient = {
 
   async getStats(projectId?: number) {
     await delay();
-    const scoped = projectId ? tasks.filter((task) => task.projectId === projectId) : tasks;
+    const archivedProjectIds = new Set(
+      projects.filter((project) => project.archivedAt).map((project) => project.id)
+    );
+    const activeTasks = tasks.filter(
+      (task) => !task.archivedAt && !archivedProjectIds.has(task.projectId || -1)
+    );
+    const scoped = projectId
+      ? activeTasks.filter((task) => task.projectId === projectId)
+      : activeTasks;
     const today = new Date().toISOString().slice(0, 10);
     const dailyCompletions: DailyCompletion[] = [];
     for (let offset = 13; offset >= 0; offset -= 1) {

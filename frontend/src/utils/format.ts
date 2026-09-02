@@ -44,10 +44,18 @@ export const activityCopy = (activity: Activity) => {
       return `Commented on ${title}`;
     case "task_deleted":
       return `Deleted ${title}`;
+    case "task_archived":
+      return `Archived ${title}`;
+    case "task_restored":
+      return `Restored ${title}`;
     case "project_created":
       return `Created project ${title}`;
     case "project_deleted":
       return `Deleted project ${title}`;
+    case "project_archived":
+      return `Archived project ${title}`;
+    case "project_restored":
+      return `Restored project ${title}`;
     default:
       return `Updated ${title}`;
   }

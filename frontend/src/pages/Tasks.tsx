@@ -78,10 +78,10 @@ function Tasks() {
     }
   };
 
-  const deleteTask = async (task: Task) => {
+  const archiveTask = async (task: Task) => {
     setIsSaving(true);
     try {
-      await client.deleteTask(task.id);
+      await client.archiveTask(task.id);
       setEditingTask(null);
       setInitialParentTask(null);
       setIsModalOpen(false);
@@ -337,7 +337,7 @@ function Tasks() {
             setEditingTask(null);
             setInitialParentTask(null);
           }}
-          onDelete={deleteTask}
+          onArchive={archiveTask}
           onSave={saveTask}
           projects={projects}
           task={editingTask}

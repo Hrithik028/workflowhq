@@ -31,8 +31,11 @@ const mapProject = (project: Raw): Project => ({
   name: String(project.name),
   description: String(project.description || ""),
   taskCount: Number(project.task_count || 0),
+  totalTaskCount: Number(project.total_task_count ?? project.task_count ?? 0),
   completedCount: Number(project.completed_count || 0),
   myRole: project.my_role as Project["myRole"],
+  archivedAt: project.archived_at == null ? null : String(project.archived_at),
+  archivedBy: project.archived_by == null ? null : Number(project.archived_by),
   createdAt: String(project.created_at),
   updatedAt: String(project.updated_at)
 });
@@ -113,6 +116,9 @@ const mapTask = (task: Raw): Task => ({
   rank: task.rank == null ? null : Number(task.rank),
   sprintId: task.sprint_id == null ? null : Number(task.sprint_id),
   sprintName: task.sprint_name == null ? null : String(task.sprint_name),
+  archivedAt: task.archived_at == null ? null : String(task.archived_at),
+  archivedBy: task.archived_by == null ? null : Number(task.archived_by),
+  projectArchivedAt: task.project_archived_at == null ? null : String(task.project_archived_at),
   createdAt: String(task.created_at),
   updatedAt: String(task.updated_at)
 });
@@ -143,8 +149,8 @@ const mapActivity = (activity: Raw): Activity => ({
 });
 
 export const workspaceApi: WorkspaceClient = {
-  async listProjects() {
-    const response = await api.get<{ data: Raw[] }>("/projects");
+  async listProjects(query = {}) {
+    const response = await api.get<{ data: Raw[] }>("/projects", { params: query });
     return response.data.data.map(mapProject);
   },
   async createProject(input: ProjectInput) {
@@ -153,6 +159,14 @@ export const workspaceApi: WorkspaceClient = {
   },
   async updateProject(id: number, input: ProjectInput) {
     const response = await api.put<{ data: Raw }>(`/projects/${id}`, input);
+    return mapProject(response.data.data);
+  },
+  async archiveProject(id: number) {
+    const response = await api.post<{ data: Raw }>(`/projects/${id}/archive`);
+    return mapProject(response.data.data);
+  },
+  async restoreProject(id: number) {
+    const response = await api.post<{ data: Raw }>(`/projects/${id}/restore`);
     return mapProject(response.data.data);
   },
   async deleteProject(id: number) {
@@ -170,6 +184,14 @@ export const workspaceApi: WorkspaceClient = {
   },
   async updateTask(id: number, input: TaskInput) {
     const response = await api.put<{ data: Raw }>(`/tasks/${id}`, input);
+    return mapTask(response.data.data);
+  },
+  async archiveTask(id: number) {
+    const response = await api.post<{ data: Raw }>(`/tasks/${id}/archive`);
+    return mapTask(response.data.data);
+  },
+  async restoreTask(id: number) {
+    const response = await api.post<{ data: Raw }>(`/tasks/${id}/restore`);
     return mapTask(response.data.data);
   },
   async deleteTask(id: number) {

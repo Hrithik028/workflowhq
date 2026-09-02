@@ -47,6 +47,12 @@ const authSchemas = {
 
 const projectSchemas = {
   params: z.object({ id: idSchema }),
+  list: z.object({
+    archived: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true")
+  }),
   create: z
     .object({
       key: projectKeySchema,
@@ -93,6 +99,10 @@ const taskSchemas = {
     status: statusSchema.optional(),
     priority: prioritySchema.optional(),
     projectId: idSchema.optional(),
+    archived: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     search: z.string().trim().max(100).optional(),
     sort: z
       .enum(["updated_at", "created_at", "due_date", "title", "priority", "rank"])

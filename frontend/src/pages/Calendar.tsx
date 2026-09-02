@@ -90,10 +90,10 @@ function Calendar() {
     }
   };
 
-  const deleteTask = async (task: Task) => {
+  const archiveTask = async (task: Task) => {
     setIsSaving(true);
     try {
-      await client.deleteTask(task.id);
+      await client.archiveTask(task.id);
       setEditingTask(null);
       setIsModalOpen(false);
       await loadCalendar();
@@ -287,7 +287,7 @@ function Calendar() {
             setEditingTask(null);
             setNewTaskDate(null);
           }}
-          onDelete={deleteTask}
+          onArchive={archiveTask}
           onSave={saveTask}
           projects={projects}
           task={editingTask}

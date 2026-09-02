@@ -8,6 +8,7 @@ const taskFields = `
   t.project_id,
   p.name AS project_name,
   p.key AS project_key,
+  p.archived_at AS project_archived_at,
   t.issue_key,
   t.task_type,
   t.parent_task_id,
@@ -24,6 +25,8 @@ const taskFields = `
   t.sprint_id,
   sprint.name AS sprint_name,
   t.rank,
+  t.archived_at,
+  t.archived_by,
   t.created_at,
   t.updated_at,
   COALESCE(child_stats.child_count, 0)::int AS child_count,
@@ -43,7 +46,7 @@ const taskJoins = `
            COUNT(*)::int AS child_count,
            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)::int AS completed_child_count
     FROM tasks
-    WHERE parent_task_id IS NOT NULL
+    WHERE parent_task_id IS NOT NULL AND archived_at IS NULL
     GROUP BY parent_task_id
   ) child_stats ON child_stats.parent_task_id = t.id`;
 
@@ -71,14 +74,21 @@ const verifyProjectAccess = async (db, projectId, userId, allowedRoles) => {
     return { key: "INB", role: null };
   }
   const result = await db.query(
-    `SELECT p.key, pm.role
+    `SELECT p.key, p.archived_at, pm.role
      FROM projects p
      LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
      WHERE p.id = $1`,
     [projectId, userId]
   );
-  if (result.rows.length === 0 || !result.rows[0].role || !allowedRoles.includes(result.rows[0].role)) {
+  if (
+    result.rows.length === 0 ||
+    !result.rows[0].role ||
+    !allowedRoles.includes(result.rows[0].role)
+  ) {
     throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found.");
+  }
+  if (result.rows[0].archived_at) {
+    throw new AppError(409, "PROJECT_ARCHIVED", "Restore this project before changing its work.");
   }
   return { key: result.rows[0].key, role: result.rows[0].role };
 };
@@ -94,21 +104,33 @@ const validateAssignee = async (db, projectId, assigneeId) => {
   }
   const role = await getProjectRole(db, projectId, assigneeId);
   if (!role) {
-    throw new AppError(422, "ASSIGNEE_NOT_A_MEMBER", "The assignee must be a member of this project.");
+    throw new AppError(
+      422,
+      "ASSIGNEE_NOT_A_MEMBER",
+      "The assignee must be a member of this project."
+    );
   }
 };
 
 const validateSprint = async (db, projectId, sprintId) => {
   if (!sprintId) return;
   if (!projectId) {
-    throw new AppError(422, "SPRINT_NOT_IN_PROJECT", "Only shared project tickets can join a sprint.");
+    throw new AppError(
+      422,
+      "SPRINT_NOT_IN_PROJECT",
+      "Only shared project tickets can join a sprint."
+    );
   }
   const result = await db.query("SELECT id FROM sprints WHERE id = $1 AND project_id = $2", [
     sprintId,
     projectId
   ]);
   if (result.rows.length === 0) {
-    throw new AppError(422, "SPRINT_NOT_IN_PROJECT", "The sprint must belong to this task's project.");
+    throw new AppError(
+      422,
+      "SPRINT_NOT_IN_PROJECT",
+      "The sprint must belong to this task's project."
+    );
   }
 };
 
@@ -120,7 +142,7 @@ const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId
 
   while (cursorId) {
     const result = await db.query(
-      `SELECT id, project_id, parent_task_id, task_type, user_id
+      `SELECT id, project_id, parent_task_id, task_type, user_id, archived_at
        FROM tasks WHERE id = $1`,
       [cursorId]
     );
@@ -128,6 +150,9 @@ const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId
       throw new AppError(404, "PARENT_TASK_NOT_FOUND", "Parent task not found.");
     }
     const current = result.rows[0];
+    if (current.archived_at) {
+      throw new AppError(409, "PARENT_TASK_ARCHIVED", "Restore the parent task before using it.");
+    }
     if (!parent) parent = current;
     if (taskId && Number(current.id) === Number(taskId)) {
       throw new AppError(409, "TASK_HIERARCHY_CYCLE", "A task cannot become its own ancestor.");
@@ -205,9 +230,17 @@ const selectTaskById = async (db, id, userId) => {
 };
 
 const getTasks = async (req, res) => {
-  const { page, limit, status, priority, projectId, search, sort, order } = req.query;
+  const { page, limit, status, priority, projectId, search, sort, order, archived } = req.query;
   const values = [req.user.id];
   const conditions = [visibleTaskCondition(1)];
+
+  if (archived) {
+    conditions.push("t.archived_at IS NOT NULL");
+    conditions.push("(t.project_id IS NULL OR p.archived_at IS NULL)");
+  } else {
+    conditions.push("t.archived_at IS NULL");
+    conditions.push("(t.project_id IS NULL OR p.archived_at IS NULL)");
+  }
 
   const addCondition = (sql, value) => {
     values.push(value);
@@ -225,7 +258,10 @@ const getTasks = async (req, res) => {
 
   const where = conditions.join(" AND ");
   const countResult = await req.app.locals.db.query(
-    `SELECT COUNT(*)::int AS total FROM tasks t WHERE ${where}`,
+    `SELECT COUNT(*)::int AS total
+     FROM tasks t
+     LEFT JOIN projects p ON p.id = t.project_id
+     WHERE ${where}`,
     values
   );
   const total = countResult.rows[0].total;
@@ -239,15 +275,45 @@ const getTasks = async (req, res) => {
   };
   const offset = (page - 1) * limit;
   const listValues = [...values, limit, offset];
-  const rows = await req.app.locals.db.query(
-    `SELECT ${taskFields}
-     FROM tasks t
-     ${taskJoins}
-     WHERE ${where}
-     ORDER BY ${sortColumns[sort]} ${order.toUpperCase()} NULLS LAST, t.id DESC
-     LIMIT $${listValues.length - 1} OFFSET $${listValues.length}`,
-    listValues
-  );
+  let rows;
+  if (archived) {
+    // Select the page of IDs before loading the richer joined row. This keeps
+    // archived pagination stable even on PostgreSQL-compatible test adapters
+    // that can mis-plan LIMIT/OFFSET across the hierarchy aggregate join.
+    const idRows = await req.app.locals.db.query(
+      `SELECT t.id
+       FROM tasks t
+       LEFT JOIN projects p ON p.id = t.project_id
+       WHERE ${where}
+       ORDER BY ${sortColumns[sort]} ${order.toUpperCase()} NULLS LAST, t.id DESC
+       LIMIT $${listValues.length - 1} OFFSET $${listValues.length}`,
+      listValues
+    );
+    if (idRows.rows.length === 0) {
+      rows = { rows: [] };
+    } else {
+      const ids = idRows.rows.map((row) => row.id);
+      const placeholders = ids.map((_, index) => `$${index + 1}`).join(", ");
+      rows = await req.app.locals.db.query(
+        `SELECT ${taskFields}
+         FROM tasks t
+         ${taskJoins}
+         WHERE t.id IN (${placeholders})
+         ORDER BY ${sortColumns[sort]} ${order.toUpperCase()} NULLS LAST, t.id DESC`,
+        ids
+      );
+    }
+  } else {
+    rows = await req.app.locals.db.query(
+      `SELECT ${taskFields}
+       FROM tasks t
+       ${taskJoins}
+       WHERE ${where}
+       ORDER BY ${sortColumns[sort]} ${order.toUpperCase()} NULLS LAST, t.id DESC
+       LIMIT $${listValues.length - 1} OFFSET $${listValues.length}`,
+      listValues
+    );
+  }
   const data = await attachLabels(req.app.locals.db, rows.rows);
 
   return res.status(200).json({
@@ -357,7 +423,7 @@ const getTaskChildren = async (req, res, next) => {
     `SELECT ${taskFields}
      FROM tasks t
      ${taskJoins}
-     WHERE t.parent_task_id = $1
+     WHERE t.parent_task_id = $1 AND t.archived_at IS NULL
      ORDER BY t.created_at ASC, t.id ASC`,
     [req.params.id]
   );
@@ -392,6 +458,10 @@ const updateTask = async (req, res, next) => {
     if (!(await canAccessTask(client, existing, req.user.id))) {
       await client.query("ROLLBACK");
       return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    if (existing.archived_at) {
+      await client.query("ROLLBACK");
+      return next(new AppError(409, "TASK_ARCHIVED", "Restore this task before editing it."));
     }
     const projectChanged = Number(existing.project_id || 0) !== Number(projectId || 0);
     // Moving a task into the inbox makes it visible only to its original
@@ -545,6 +615,82 @@ const deleteTask = async (req, res, next) => {
   }
 };
 
+const setTaskArchivedState = async (req, res, next, archived) => {
+  const db = req.app.locals.db;
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const existingResult = await client.query("SELECT * FROM tasks WHERE id = $1 FOR UPDATE", [
+      req.params.id
+    ]);
+    if (existingResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    const existing = existingResult.rows[0];
+    if (!(await canAccessTask(client, existing, req.user.id))) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    await verifyProjectAccess(client, existing.project_id, req.user.id, ["owner", "editor"]);
+
+    if (archived) {
+      const children = await client.query(
+        "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1 AND archived_at IS NULL",
+        [req.params.id]
+      );
+      if (children.rows[0].count > 0) {
+        await client.query("ROLLBACK");
+        return next(
+          new AppError(
+            409,
+            "TASK_HAS_ACTIVE_CHILDREN",
+            "Archive this task's active children first, or archive the whole project."
+          )
+        );
+      }
+    } else if (existing.parent_task_id) {
+      const parent = await client.query("SELECT archived_at FROM tasks WHERE id = $1", [
+        existing.parent_task_id
+      ]);
+      if (parent.rows[0]?.archived_at) {
+        await client.query("ROLLBACK");
+        return next(
+          new AppError(409, "PARENT_TASK_ARCHIVED", "Restore the parent task before this child.")
+        );
+      }
+    }
+
+    const result = await client.query(
+      `UPDATE tasks
+       SET archived_at = ${archived ? "COALESCE(archived_at, CURRENT_TIMESTAMP)" : "NULL"},
+           archived_by = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, title`,
+      [archived ? req.user.id : null, req.params.id]
+    );
+    await logActivity(client, {
+      userId: req.user.id,
+      action: archived ? "task_archived" : "task_restored",
+      entityType: "task",
+      entityId: result.rows[0].id,
+      entityTitle: result.rows[0].title
+    });
+    const task = await selectTaskById(client, req.params.id, req.user.id);
+    await client.query("COMMIT");
+    return res.status(200).json({ data: task });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const archiveTask = (req, res, next) => setTaskArchivedState(req, res, next, true);
+const restoreTask = (req, res, next) => setTaskArchivedState(req, res, next, false);
+
 // Fractional ranking: moving a task only ever computes a value strictly
 // between its two new neighbors, so a reorder is always a single UPDATE - the
 // rest of the list never needs renumbering. The rebalance path only runs when
@@ -574,6 +720,10 @@ const updateTaskRank = async (req, res, next) => {
     if (!(await canAccessTask(client, task, req.user.id))) {
       await client.query("ROLLBACK");
       return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
+    }
+    if (task.archived_at) {
+      await client.query("ROLLBACK");
+      return next(new AppError(409, "TASK_ARCHIVED", "Restore this task before reordering it."));
     }
     await verifyProjectAccess(client, task.project_id, req.user.id, ["owner", "editor"]);
 
@@ -621,7 +771,9 @@ const updateTaskRank = async (req, res, next) => {
       (previousRank != null && newRank <= previousRank) ||
       (nextRank != null && newRank >= nextRank);
     if (exhausted) {
-      const scopeCondition = task.project_id ? "project_id = $1" : "project_id IS NULL AND user_id = $1";
+      const scopeCondition = task.project_id
+        ? "project_id = $1"
+        : "project_id IS NULL AND user_id = $1";
       const scopeValue = task.project_id || req.user.id;
       const allResult = await client.query(
         `SELECT id FROM tasks WHERE ${scopeCondition} ORDER BY rank ASC NULLS LAST, id ASC`,
@@ -650,7 +802,9 @@ const updateTaskRank = async (req, res, next) => {
 // Zero-fills the last 14 days (including today) so the chart always has a
 // complete series - the query only returns rows for days with completions.
 const buildDailyCompletions = (rows) => {
-  const byDay = new Map(rows.map((row) => [new Date(row.day).toISOString().slice(0, 10), row.count]));
+  const byDay = new Map(
+    rows.map((row) => [new Date(row.day).toISOString().slice(0, 10), row.count])
+  );
   const days = [];
   for (let offset = 13; offset >= 0; offset -= 1) {
     const date = new Date();
@@ -679,17 +833,23 @@ const getTaskStats = async (req, res) => {
        COALESCE(SUM(CASE WHEN priority = 'low' THEN 1 ELSE 0 END), 0)::int AS low_priority_tasks,
        COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE AND status <> 'completed' THEN 1 ELSE 0 END), 0)::int AS overdue_tasks
      FROM tasks t
-     WHERE ${visibleTaskCondition(1)}${projectCondition}`,
+     LEFT JOIN projects p ON p.id = t.project_id
+     WHERE ${visibleTaskCondition(1)}${projectCondition}
+       AND t.archived_at IS NULL
+       AND (t.project_id IS NULL OR p.archived_at IS NULL)`,
     values
   );
   // Grouped on a plain ::date cast rather than to_char(), which pg-mem (used
   // by the test suite) doesn't implement - the day is stringified in JS instead.
   const trendResult = await req.app.locals.db.query(
-    `SELECT updated_at::date AS day, COUNT(*)::int AS count
+    `SELECT t.updated_at::date AS day, COUNT(*)::int AS count
      FROM tasks t
+     LEFT JOIN projects p ON p.id = t.project_id
      WHERE ${visibleTaskCondition(1)}${projectCondition}
+       AND t.archived_at IS NULL
+       AND (t.project_id IS NULL OR p.archived_at IS NULL)
        AND status = 'completed'
-       AND updated_at::date >= (CURRENT_DATE - 13)
+       AND t.updated_at::date >= (CURRENT_DATE - 13)
      GROUP BY day
      ORDER BY day ASC`,
     values
@@ -700,6 +860,7 @@ const getTaskStats = async (req, res) => {
 };
 
 module.exports = {
+  archiveTask,
   createChildTask,
   createTask,
   deleteTask,
@@ -707,6 +868,7 @@ module.exports = {
   getTaskChildren,
   getTasks,
   getTaskStats,
+  restoreTask,
   updateTask,
   updateTaskRank
 };

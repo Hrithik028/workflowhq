@@ -16,6 +16,7 @@ const {
 } = require("../controllers/commentController");
 const { attachLabel, detachLabel } = require("../controllers/labelController");
 const {
+  archiveTask,
   createChildTask,
   createTask,
   deleteTask,
@@ -23,6 +24,7 @@ const {
   getTaskChildren,
   getTasks,
   getTaskStats,
+  restoreTask,
   updateTask,
   updateTaskRank
 } = require("../controllers/taskController");
@@ -73,6 +75,18 @@ router.put(
   validate({ params: taskSchemas.params, body: taskSchemas.update }),
   asyncHandler(enforceTaskRules()),
   asyncHandler(updateTask)
+);
+router.post(
+  "/:id/archive",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: taskSchemas.params }),
+  asyncHandler(archiveTask)
+);
+router.post(
+  "/:id/restore",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: taskSchemas.params }),
+  asyncHandler(restoreTask)
 );
 router.delete(
   "/:id",

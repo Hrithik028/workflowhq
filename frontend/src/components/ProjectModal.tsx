@@ -1,15 +1,16 @@
-import { LogOut, Trash2, UserPlus, X } from "lucide-react";
+import { Archive, LogOut, Trash2, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { getErrorMessage } from "../api/client";
 import type { Project, ProjectInput, ProjectMember, ProjectRole, WorkspaceClient } from "../types";
+import ConfirmationDialog from "./ConfirmationDialog";
 
 interface ProjectModalProps {
   client: WorkspaceClient;
   currentUserId: number;
   isSaving: boolean;
   onClose: () => void;
-  onDelete?: (project: Project) => Promise<void>;
+  onArchive?: (project: Project) => Promise<void>;
   onSave: (input: ProjectInput) => Promise<void>;
   project?: Project | null;
 }
@@ -25,10 +26,11 @@ function ProjectModal({
   currentUserId,
   isSaving,
   onClose,
-  onDelete,
+  onArchive,
   onSave,
   project
 }: ProjectModalProps) {
+  const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false);
   const [form, setForm] = useState<ProjectInput>(() =>
     project
       ? { key: project.key, name: project.name, description: project.description }
@@ -208,17 +210,14 @@ function ProjectModal({
           </label>
           {error ? <p className="form-alert error">{error}</p> : null}
           <footer className="modal-actions">
-            {project && onDelete && isOwner ? (
+            {project && onArchive && isOwner ? (
               <button
                 className="button danger ghost"
                 disabled={isSaving}
                 type="button"
-                onClick={() => {
-                  if (window.confirm(`Delete “${project.name}”? Tasks will move to Inbox.`))
-                    void onDelete(project);
-                }}
+                onClick={() => setIsArchiveConfirmOpen(true)}
               >
-                <Trash2 size={16} /> Delete
+                <Archive size={16} /> Archive
               </button>
             ) : (
               <span />
@@ -265,7 +264,9 @@ function ProjectModal({
                       <select
                         aria-label={`Change role for ${member.name}`}
                         disabled={isMemberBusy}
-                        onChange={(event) => void changeRole(member, event.target.value as ProjectRole)}
+                        onChange={(event) =>
+                          void changeRole(member, event.target.value as ProjectRole)
+                        }
                         value={member.role}
                       >
                         <option value="owner">Owner</option>
@@ -338,6 +339,16 @@ function ProjectModal({
           </section>
         ) : null}
       </section>
+      {project && isArchiveConfirmOpen ? (
+        <ConfirmationDialog
+          confirmLabel="Archive project"
+          description={`“${project.name}” and its ${project.taskCount} active ticket${project.taskCount === 1 ? "" : "s"} will leave the active workspace together. Nothing moves to Inbox and the complete project can be restored later.`}
+          isBusy={isSaving}
+          onCancel={() => setIsArchiveConfirmOpen(false)}
+          onConfirm={() => void onArchive?.(project)}
+          title="Archive this project?"
+        />
+      ) : null}
     </div>
   );
 }

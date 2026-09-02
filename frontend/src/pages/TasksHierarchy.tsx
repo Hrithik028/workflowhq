@@ -125,10 +125,10 @@ function TasksHierarchy() {
     }
   };
 
-  const deleteTask = async (task: Task) => {
+  const archiveTask = async (task: Task) => {
     setIsSaving(true);
     try {
-      await client.deleteTask(task.id);
+      await client.archiveTask(task.id);
       setIsModalOpen(false);
       setEditingTask(null);
       await load();
@@ -543,7 +543,7 @@ function TasksHierarchy() {
             setEditingTask(null);
             setInitialParentTask(null);
           }}
-          onDelete={deleteTask}
+          onArchive={archiveTask}
           onSave={saveTask}
           projects={projects}
           task={editingTask}
