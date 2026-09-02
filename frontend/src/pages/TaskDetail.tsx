@@ -204,10 +204,10 @@ function TaskDetail() {
     }
   };
 
-  const deleteTask = async (target: Task) => {
+  const archiveTask = async (target: Task) => {
     setIsSaving(true);
     try {
-      await client.deleteTask(target.id);
+      await client.archiveTask(target.id);
       navigate("/tasks");
     } catch (deleteError) {
       setError(getErrorMessage(deleteError, "Unable to delete this issue."));
@@ -241,7 +241,12 @@ function TaskDetail() {
         <div className="task-detail-main">
           <header className="task-detail-header">
             <span className="overline">
-              {task.projectName || "Inbox"} / {isDemo ? "Sample development" : "Issue details"}
+              {task.projectId && task.projectName ? (
+                <Link to={`/workflow?project=${task.projectId}`}>{task.projectName}</Link>
+              ) : (
+                <Link to="/inbox">Inbox</Link>
+              )}{" "}
+              / {isDemo ? "Sample development" : "Issue details"}
             </span>
             <span className="task-detail-key">{task.issueKey}</span>
             <div className="task-detail-title-row">
@@ -641,7 +646,7 @@ function TaskDetail() {
           client={client}
           isSaving={isSaving}
           onClose={() => setIsModalOpen(false)}
-          onDelete={deleteTask}
+          onArchive={archiveTask}
           onSave={saveTask}
           projects={projects}
           task={task}

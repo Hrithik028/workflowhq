@@ -23,8 +23,11 @@ export interface Project {
   name: string;
   description: string;
   taskCount: number;
+  totalTaskCount?: number;
   completedCount: number;
   myRole: ProjectRole;
+  archivedAt?: string | null;
+  archivedBy?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -249,6 +252,9 @@ export interface Task {
   rank: number | null;
   sprintId: number | null;
   sprintName: string | null;
+  archivedAt?: string | null;
+  archivedBy?: number | null;
+  projectArchivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -302,8 +308,12 @@ export interface Activity {
     | "task_label_added"
     | "task_comment_added"
     | "task_deleted"
+    | "task_archived"
+    | "task_restored"
     | "project_created"
-    | "project_deleted";
+    | "project_deleted"
+    | "project_archived"
+    | "project_restored";
   entityType: "task" | "project";
   entityId: number | null;
   entityTitle: string;
@@ -324,6 +334,7 @@ export interface TaskQuery {
   status?: TaskStatus;
   priority?: TaskPriority;
   projectId?: number;
+  archived?: boolean;
   search?: string;
   sort?: "updated_at" | "created_at" | "due_date" | "title" | "priority" | "rank";
   order?: "asc" | "desc";
@@ -389,13 +400,17 @@ export interface AdminOverview {
 }
 
 export interface WorkspaceClient {
-  listProjects(): Promise<Project[]>;
+  listProjects(query?: { archived?: boolean }): Promise<Project[]>;
   createProject(input: ProjectInput): Promise<Project>;
   updateProject(id: number, input: ProjectInput): Promise<Project>;
+  archiveProject(id: number): Promise<Project>;
+  restoreProject(id: number): Promise<Project>;
   deleteProject(id: number): Promise<void>;
   listTasks(query?: TaskQuery): Promise<{ data: Task[]; pagination: PaginationMetadata }>;
   createTask(input: TaskInput): Promise<Task>;
   updateTask(id: number, input: TaskInput): Promise<Task>;
+  archiveTask(id: number): Promise<Task>;
+  restoreTask(id: number): Promise<Task>;
   deleteTask(id: number): Promise<void>;
   getStats(projectId?: number): Promise<TaskStats>;
   getActivity(limit?: number): Promise<Activity[]>;

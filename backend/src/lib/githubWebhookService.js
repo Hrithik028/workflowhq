@@ -338,6 +338,19 @@ const developmentEvent = async (client, installation, name, payload) => {
   }
   const repository = await upsertRepository(client, installation, payload.repository);
   if (!repository) return false;
+  const linkedProjects = await client.query(
+    `SELECT p.archived_at
+     FROM project_github_repositories link
+     JOIN projects p ON p.id = link.project_id
+     WHERE link.repository_id = $1`,
+    [repository.id]
+  );
+  if (
+    linkedProjects.rows.length > 0 &&
+    linkedProjects.rows.every((project) => project.archived_at)
+  ) {
+    return false;
+  }
   for (const item of items.filter((candidate) => candidate.externalId)) {
     const stored = await storeEvent(client, repository, item);
     await linkEvent(client, repository, stored, item);

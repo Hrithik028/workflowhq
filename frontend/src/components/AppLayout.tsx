@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Archive,
   CalendarDays,
   Columns3,
   FileText,
@@ -74,6 +75,10 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
           <NavLink aria-label="Inbox" to="/inbox">
             <Inbox size={18} strokeWidth={2} />
             <span>Inbox</span>
+          </NavLink>
+          <NavLink aria-label="Archive" to="/archive">
+            <Archive size={18} strokeWidth={2} />
+            <span>Archive</span>
           </NavLink>
           <NavLink aria-label="Settings" to="/settings">
             <Settings size={18} strokeWidth={2} />

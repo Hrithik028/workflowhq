@@ -3,15 +3,24 @@ const { AppError } = require("../lib/errors");
 const { getProjectRole } = require("../lib/projectAccess");
 
 const getProjects = async (req, res) => {
+  const archivedCondition = req.query.archived ? "IS NOT NULL" : "IS NULL";
   const result = await req.app.locals.db.query(
-    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.created_at, p.updated_at,
+    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+            p.created_at, p.updated_at,
             pm.role AS my_role,
             COUNT(t.id)::int AS task_count,
+            COALESCE(all_task_counts.total_task_count, 0)::int AS total_task_count,
             COALESCE(SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END), 0)::int AS completed_count
      FROM projects p
      JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $1
-     LEFT JOIN tasks t ON t.project_id = p.id
-     GROUP BY p.id, pm.role
+     LEFT JOIN tasks t ON t.project_id = p.id AND t.archived_at IS NULL
+     LEFT JOIN (
+       SELECT project_id, COUNT(*)::int AS total_task_count
+       FROM tasks
+       GROUP BY project_id
+     ) all_task_counts ON all_task_counts.project_id = p.id
+     WHERE p.archived_at ${archivedCondition}
+     GROUP BY p.id, pm.role, all_task_counts.total_task_count
      ORDER BY p.updated_at DESC, p.id DESC`,
     [req.user.id]
   );
@@ -20,15 +29,22 @@ const getProjects = async (req, res) => {
 
 const getProjectById = async (req, res, next) => {
   const result = await req.app.locals.db.query(
-    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.created_at, p.updated_at,
+    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+            p.created_at, p.updated_at,
             pm.role AS my_role,
             COUNT(t.id)::int AS task_count,
+            COALESCE(all_task_counts.total_task_count, 0)::int AS total_task_count,
             COALESCE(SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END), 0)::int AS completed_count
      FROM projects p
      JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
-     LEFT JOIN tasks t ON t.project_id = p.id
+     LEFT JOIN tasks t ON t.project_id = p.id AND t.archived_at IS NULL
+     LEFT JOIN (
+       SELECT project_id, COUNT(*)::int AS total_task_count
+       FROM tasks
+       GROUP BY project_id
+     ) all_task_counts ON all_task_counts.project_id = p.id
      WHERE p.id = $1
-     GROUP BY p.id, pm.role`,
+     GROUP BY p.id, pm.role, all_task_counts.total_task_count`,
     [req.params.id, req.user.id]
   );
   if (result.rows.length === 0) {
@@ -45,7 +61,7 @@ const createProject = async (req, res) => {
     const result = await client.query(
       `INSERT INTO projects (user_id, key, name, description)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, user_id, key, name, description, created_at, updated_at`,
+       RETURNING id, user_id, key, name, description, archived_at, archived_by, created_at, updated_at`,
       [req.user.id, req.body.key, req.body.name, req.body.description]
     );
     const project = result.rows[0];
@@ -65,9 +81,15 @@ const createProject = async (req, res) => {
       entityTitle: project.name
     });
     await client.query("COMMIT");
-    return res
-      .status(201)
-      .json({ data: { ...project, my_role: "owner", task_count: 0, completed_count: 0 } });
+    return res.status(201).json({
+      data: {
+        ...project,
+        my_role: "owner",
+        task_count: 0,
+        total_task_count: 0,
+        completed_count: 0
+      }
+    });
   } catch (error) {
     await client.query("ROLLBACK");
     if (error.code === "23505") {
@@ -87,7 +109,7 @@ const updateProject = async (req, res, next) => {
     return next(new AppError(404, "PROJECT_NOT_FOUND", "Project not found."));
   }
   const current = await db.query(
-    `SELECT p.id, p.key, COUNT(t.id)::int AS task_count
+    `SELECT p.id, p.key, p.archived_at, COUNT(t.id)::int AS task_count
      FROM projects p
      LEFT JOIN tasks t ON t.project_id = p.id
      WHERE p.id = $1
@@ -96,6 +118,9 @@ const updateProject = async (req, res, next) => {
   );
   if (current.rows.length === 0) {
     return next(new AppError(404, "PROJECT_NOT_FOUND", "Project not found."));
+  }
+  if (current.rows[0].archived_at) {
+    return next(new AppError(409, "PROJECT_ARCHIVED", "Restore this project before editing it."));
   }
   if (current.rows[0].key !== req.body.key && current.rows[0].task_count > 0) {
     return next(
@@ -111,7 +136,7 @@ const updateProject = async (req, res, next) => {
     const result = await db.query(
       `UPDATE projects SET key = $1, name = $2, description = $3, updated_at = CURRENT_TIMESTAMP
        WHERE id = $4
-       RETURNING id, user_id, key, name, description, created_at, updated_at`,
+       RETURNING id, user_id, key, name, description, archived_at, archived_by, created_at, updated_at`,
       [req.body.key, req.body.name, req.body.description, req.params.id]
     );
     return res.status(200).json({ data: { ...result.rows[0], my_role: "owner" } });
@@ -133,13 +158,31 @@ const deleteProject = async (req, res, next) => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    const result = await client.query("DELETE FROM projects WHERE id = $1 RETURNING id, name", [
-      req.params.id
-    ]);
-    if (result.rows.length === 0) {
+    const projectResult = await client.query(
+      "SELECT id, name FROM projects WHERE id = $1 FOR UPDATE",
+      [req.params.id]
+    );
+    if (projectResult.rows.length === 0) {
       await client.query("ROLLBACK");
       return next(new AppError(404, "PROJECT_NOT_FOUND", "Project not found."));
     }
+    const taskResult = await client.query(
+      "SELECT COUNT(*)::int AS count FROM tasks WHERE project_id = $1",
+      [req.params.id]
+    );
+    if (taskResult.rows[0].count > 0) {
+      await client.query("ROLLBACK");
+      return next(
+        new AppError(
+          409,
+          "PROJECT_NOT_EMPTY",
+          "Archive this project or move its tasks before deleting it permanently."
+        )
+      );
+    }
+    const result = await client.query("DELETE FROM projects WHERE id = $1 RETURNING id, name", [
+      req.params.id
+    ]);
     await logActivity(client, {
       userId: req.user.id,
       action: "project_deleted",
@@ -156,4 +199,54 @@ const deleteProject = async (req, res, next) => {
   }
 };
 
-module.exports = { createProject, deleteProject, getProjectById, getProjects, updateProject };
+const setProjectArchivedState = async (req, res, next, archived) => {
+  const db = req.app.locals.db;
+  const role = await getProjectRole(db, req.params.id, req.user.id);
+  if (role !== "owner") {
+    return next(new AppError(404, "PROJECT_NOT_FOUND", "Project not found."));
+  }
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `UPDATE projects
+       SET archived_at = ${archived ? "COALESCE(archived_at, CURRENT_TIMESTAMP)" : "NULL"},
+           archived_by = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, user_id, key, name, description, archived_at, archived_by, created_at, updated_at`,
+      [archived ? req.user.id : null, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return next(new AppError(404, "PROJECT_NOT_FOUND", "Project not found."));
+    }
+    await logActivity(client, {
+      userId: req.user.id,
+      action: archived ? "project_archived" : "project_restored",
+      entityType: "project",
+      entityId: result.rows[0].id,
+      entityTitle: result.rows[0].name
+    });
+    await client.query("COMMIT");
+    return res.status(200).json({ data: { ...result.rows[0], my_role: role } });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const archiveProject = (req, res, next) => setProjectArchivedState(req, res, next, true);
+const restoreProject = (req, res, next) => setProjectArchivedState(req, res, next, false);
+
+module.exports = {
+  archiveProject,
+  createProject,
+  deleteProject,
+  getProjectById,
+  getProjects,
+  restoreProject,
+  updateProject
+};

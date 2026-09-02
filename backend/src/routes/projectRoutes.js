@@ -1,10 +1,12 @@
 const express = require("express");
 
 const {
+  archiveProject,
   createProject,
   deleteProject,
   getProjectById,
   getProjects,
+  restoreProject,
   updateProject
 } = require("../controllers/projectController");
 const {
@@ -39,7 +41,7 @@ const {
 const router = express.Router();
 router.use(authMiddleware);
 
-router.get("/", asyncHandler(getProjects));
+router.get("/", validate({ query: projectSchemas.list }), asyncHandler(getProjects));
 router.post(
   "/",
   asyncHandler(requirePermission("projects.create")),
@@ -52,6 +54,18 @@ router.put(
   asyncHandler(requirePermission("projects.edit")),
   validate({ params: projectSchemas.params, body: projectSchemas.update }),
   asyncHandler(updateProject)
+);
+router.post(
+  "/:id/archive",
+  asyncHandler(requirePermission("projects.edit")),
+  validate({ params: projectSchemas.params }),
+  asyncHandler(archiveProject)
+);
+router.post(
+  "/:id/restore",
+  asyncHandler(requirePermission("projects.edit")),
+  validate({ params: projectSchemas.params }),
+  asyncHandler(restoreProject)
 );
 router.delete(
   "/:id",

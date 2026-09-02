@@ -422,7 +422,7 @@ function WorkspaceEngineering() {
           client={client}
           isSaving={isSaving}
           onClose={() => setIsModalOpen(false)}
-          onDelete={async () => undefined}
+          onArchive={async () => undefined}
           onSave={saveTask}
           projects={projects}
           task={null}

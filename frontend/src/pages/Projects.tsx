@@ -64,10 +64,10 @@ function Projects() {
     }
   };
 
-  const deleteProject = async (project: Project) => {
+  const archiveProject = async (project: Project) => {
     setIsSaving(true);
     try {
-      await client.deleteProject(project.id);
+      await client.archiveProject(project.id);
       setIsModalOpen(false);
       setEditing(null);
       await loadProjects();
@@ -218,7 +218,7 @@ function Projects() {
             setIsModalOpen(false);
             setEditing(null);
           }}
-          onDelete={deleteProject}
+          onArchive={archiveProject}
           onSave={saveProject}
           project={editing}
         />
