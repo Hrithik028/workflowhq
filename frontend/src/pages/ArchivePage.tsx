@@ -26,13 +26,19 @@ function ArchivePage() {
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const fetchArchive = useCallback(
+    () =>
+      Promise.all([
+        client.listProjects({ archived: true }),
+        client.listTasks({ archived: true, limit: 100, sort: "updated_at", order: "desc" })
+      ]),
+    [client]
+  );
+
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [archivedProjects, archivedTasks] = await Promise.all([
-        client.listProjects({ archived: true }),
-        client.listTasks({ archived: true, limit: 100, sort: "updated_at", order: "desc" })
-      ]);
+      const [archivedProjects, archivedTasks] = await fetchArchive();
       setProjects(archivedProjects);
       setTasks(archivedTasks.data);
       setError("");
@@ -41,11 +47,30 @@ function ArchivePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [client]);
+  }, [fetchArchive]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+
+    void fetchArchive()
+      .then(([archivedProjects, archivedTasks]) => {
+        if (cancelled) return;
+        setProjects(archivedProjects);
+        setTasks(archivedTasks.data);
+        setError("");
+      })
+      .catch((loadError: unknown) => {
+        if (cancelled) return;
+        setError(getErrorMessage(loadError, "Unable to load archived work."));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchArchive]);
 
   const restoreProject = async (project: Project) => {
     setIsBusy(true);
