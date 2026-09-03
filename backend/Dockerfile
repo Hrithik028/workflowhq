@@ -12,4 +12,4 @@ ENV NODE_ENV=production
 EXPOSE 5000
 USER node
 
-CMD ["sh", "-c", "npm run migrate && npm start"]
+CMD ["sh", "-c", "npm run migrate && npm run migrate:status && npm start"]

@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { mapDevelopmentLink, mapGitHubInstallation, mapGitHubRepository } from "./github";
+import { api } from "./client";
+import {
+  githubApi,
+  mapDevelopmentLink,
+  mapGitHubInstallation,
+  mapGitHubRepository
+} from "./github";
 
 describe("GitHub API mappers", () => {
   it("maps an installation and treats suspension as the authoritative state", () => {
@@ -75,5 +81,33 @@ describe("GitHub API mappers", () => {
       githubNumber: 42,
       repositoryFullName: "workflowhq/app"
     });
+  });
+
+  it("allows bounded history imports to outlive the default request timeout", async () => {
+    const post = vi.spyOn(api, "post").mockResolvedValue({
+      data: {
+        data: {
+          runId: 9,
+          status: "completed",
+          repositoryCount: 1,
+          imported: 66,
+          failedRepositories: 0,
+          historySince: "2026-06-05T00:00:00.000Z"
+        }
+      }
+    });
+
+    await expect(githubApi.syncInstallation(7)).resolves.toMatchObject({
+      runId: 9,
+      status: "completed",
+      imported: 66,
+      failedRepositories: 0
+    });
+    expect(post).toHaveBeenCalledWith(
+      "/github/installations/7/sync",
+      {},
+      { timeout: 120_000 }
+    );
+    post.mockRestore();
   });
 });
