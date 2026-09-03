@@ -6,6 +6,7 @@ import type {
   GitHubDevelopmentEvent,
   GitHubIntegrationStatus,
   GitHubRepository,
+  GitHubSyncResult,
   GitHubSyncState,
   Project,
   ProjectDevelopment,
@@ -136,8 +137,21 @@ export const githubApi = {
     return mapGitHubRepository(response.data.data);
   },
 
-  async syncInstallation(installationId: number): Promise<void> {
-    await api.post(`/github/installations/${installationId}/sync`);
+  async syncInstallation(installationId: number): Promise<GitHubSyncResult> {
+    const response = await api.post<{ data: Raw }>(
+      `/github/installations/${installationId}/sync`,
+      {},
+      { timeout: 120_000 }
+    );
+    const result = response.data.data;
+    return {
+      runId: Number(result.runId),
+      status: result.status === "partial" ? "partial" : "completed",
+      repositoryCount: Number(result.repositoryCount || 0),
+      imported: Number(result.imported || 0),
+      failedRepositories: Number(result.failedRepositories || 0),
+      historySince: result.historySince == null ? null : String(result.historySince)
+    };
   },
 
   async getTaskDevelopment(taskId: number): Promise<TaskDevelopment> {

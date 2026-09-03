@@ -139,17 +139,22 @@ function GitHubIntegration() {
     setBusyKey(`sync-${installation.id}`);
     setNotice(null);
     try {
-      await githubApi.syncInstallation(installation.id);
-      setStatus((current) => ({
-        ...current,
-        installations: current.installations.map((item) =>
-          item.id === installation.id ? { ...item, syncState: "queued", lastError: null } : item
-        )
-      }));
-      setNotice({
-        tone: "success",
-        text: `Repository refresh queued for ${installation.accountLogin}.`
-      });
+      const result = await githubApi.syncInstallation(installation.id);
+      await load();
+      if (result.failedRepositories > 0) {
+        setNotice({
+          tone: "error",
+          text: `Repository refresh completed with ${result.failedRepositories} failed repository${result.failedRepositories === 1 ? "" : "ies"}.`
+        });
+      } else {
+        setNotice({
+          tone: "success",
+          text:
+            result.imported > 0
+              ? `Repository refresh complete for ${installation.accountLogin}: ${result.imported} development event${result.imported === 1 ? "" : "s"} imported.`
+              : `Repository refresh complete for ${installation.accountLogin}. No new development events were found.`
+        });
+      }
     } catch (error) {
       setNotice({ tone: "error", text: getErrorMessage(error, "Unable to refresh repositories.") });
     } finally {

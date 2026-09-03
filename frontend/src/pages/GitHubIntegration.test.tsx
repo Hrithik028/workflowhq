@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -150,5 +150,42 @@ describe("GitHub integration page", () => {
     expect(isAllowedGitHubInstallUrl("http://github.com/apps/workflowhq")).toBe(false);
     expect(isAllowedGitHubInstallUrl("https://github.example.com/apps/workflowhq")).toBe(false);
     expect(isAllowedGitHubInstallUrl("not a url")).toBe(false);
+  });
+
+  it("reports the completed development history import instead of calling it queued", async () => {
+    const installation = {
+      id: 7,
+      githubInstallationId: "7001",
+      accountLogin: "Hrithik028",
+      accountType: "User" as const,
+      repositorySelection: "selected" as const,
+      repositoryCount: 1,
+      selectedRepositoryCount: 1,
+      permissions: {},
+      suspendedAt: null,
+      syncState: "healthy" as const,
+      lastSyncedAt: "2026-09-03T00:00:00.000Z",
+      lastError: null,
+      manageUrl: "https://github.com/settings/installations/7001",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-09-03T00:00:00.000Z"
+    };
+    githubMocks.getStatus.mockResolvedValue({ connected: true, installations: [installation] });
+    githubMocks.syncInstallation.mockResolvedValue({
+      runId: 9,
+      status: "completed",
+      repositoryCount: 1,
+      imported: 66,
+      failedRepositories: 0,
+      historySince: "2026-06-05T00:00:00.000Z"
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /refresh repositories/i }));
+
+    expect(
+      await screen.findByText(/repository refresh complete for hrithik028: 66 development events imported/i)
+    ).toBeInTheDocument();
+    expect(githubMocks.getStatus).toHaveBeenCalledTimes(2);
   });
 });

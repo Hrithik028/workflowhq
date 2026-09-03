@@ -45,6 +45,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run migrate
+      - run: npm run migrate:status
       - run: npm audit --omit=dev --audit-level=high
 
   frontend:

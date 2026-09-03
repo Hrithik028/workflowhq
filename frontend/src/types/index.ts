@@ -63,6 +63,15 @@ export interface GitHubIntegrationStatus {
   installations: GitHubInstallation[];
 }
 
+export interface GitHubSyncResult {
+  runId: number;
+  status: "completed" | "partial";
+  repositoryCount: number;
+  imported: number;
+  failedRepositories: number;
+  historySince: string | null;
+}
+
 export interface GitHubRepository {
   id: number;
   installationId: number;

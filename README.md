@@ -144,6 +144,18 @@ cd frontend && npm run typecheck && npm test && npm run build
 
 Backend tests use an isolated PostgreSQL-compatible database and exercise the HTTP API. The frontend tests cover protected routing and core task interactions.
 
+To audit a configured database without changing it, run:
+
+```bash
+cd backend
+npm run migrate:status
+```
+
+The command compares the checked-in SQL files with `schema_migrations`, reports every applied,
+pending, or unknown migration, and exits unsuccessfully when the database and repository differ.
+It never prints the configured database URL. CI runs this check after applying migrations, and the
+backend container runs it before starting the API.
+
 ## Deployment
 
 Both applications are containerised. Production requires a managed PostgreSQL database, HTTPS, a long random `JWT_SECRET`, the deployed frontend origin in `CORS_ORIGIN`, and `Secure` cross-site cookies when the frontend and API use different sites. Database TLS is controlled explicitly with `DATABASE_SSL`, and certificate verification remains enabled by default.
