@@ -8,6 +8,7 @@ const pool = require("./config/db");
 const { loadConfig } = require("./config/env");
 const { AppError } = require("./lib/errors");
 const { createGithubServices } = require("./lib/githubClient");
+const { createInvitationMailer } = require("./lib/invitationMailer");
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 const { requestLogger } = require("./middleware/requestLogger");
 const activityRoutes = require("./routes/activityRoutes");
@@ -15,6 +16,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const authRoutes = require("./routes/authRoutes");
 const githubIntegrationRoutes = require("./routes/githubIntegrationRoutes");
 const githubWebhookRoutes = require("./routes/githubWebhookRoutes");
+const invitationRoutes = require("./routes/invitationRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 
@@ -29,11 +31,12 @@ const createCorsOptions = (allowedOrigins) => ({
   }
 });
 
-const createApp = ({ db = pool, config = loadConfig(), github } = {}) => {
+const createApp = ({ db = pool, config = loadConfig(), github, invitationMailer } = {}) => {
   const app = express();
   app.locals.db = db;
   app.locals.config = config;
   app.locals.github = github === undefined ? createGithubServices(config) : github;
+  app.locals.invitationMailer = invitationMailer || createInvitationMailer(config);
 
   if (config.trustProxy) {
     app.set("trust proxy", 1);
@@ -89,6 +92,7 @@ const createApp = ({ db = pool, config = loadConfig(), github } = {}) => {
   app.use("/api/auth", authRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/github", githubIntegrationRoutes);
+  app.use("/api/invitations", invitationRoutes);
   app.use("/api/projects", projectRoutes);
   app.use("/api/tasks", taskRoutes);
   app.use("/api/activity", activityRoutes);

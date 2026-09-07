@@ -151,6 +151,54 @@ const projectMemberSchemas = {
     .strict()
 };
 
+const invitationTokenSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9_-]{43}$/, "Invitation token is invalid.");
+
+const invitationSchemas = {
+  params: z.object({ id: idSchema }),
+  invitationParams: z.object({ id: idSchema, invitationId: idSchema }),
+  create: z
+    .object({
+      email: memberEmailSchema,
+      role: z.enum(["editor", "viewer"])
+    })
+    .strict(),
+  token: z.object({ token: invitationTokenSchema }).strict()
+};
+
+const workflowTriggerSchema = z.enum([
+  "commit_pushed",
+  "pull_request_opened",
+  "pull_request_merged",
+  "check_run_succeeded",
+  "deployment_succeeded"
+]);
+const statusOrder = { todo: 1, in_progress: 2, completed: 3 };
+const workflowRuleSchema = z
+  .object({
+    trigger: workflowTriggerSchema,
+    enabled: z.boolean(),
+    fromStatus: statusSchema,
+    toStatus: statusSchema
+  })
+  .strict()
+  .refine((rule) => statusOrder[rule.toStatus] > statusOrder[rule.fromStatus], {
+    message: "GitHub automations can only move work forward.",
+    path: ["toStatus"]
+  });
+
+const workflowSchemas = {
+  params: z.object({ id: idSchema }),
+  update: z
+    .object({ rules: z.array(workflowRuleSchema).length(5) })
+    .strict()
+    .refine(
+      (value) => new Set(value.rules.map((rule) => rule.trigger)).size === value.rules.length,
+      { message: "Each workflow trigger must appear exactly once.", path: ["rules"] }
+    )
+};
+
 const labelColorSchema = z
   .string()
   .trim()
@@ -251,10 +299,12 @@ module.exports = {
   authSchemas,
   commentSchemas,
   labelSchemas,
+  invitationSchemas,
   projectMemberSchemas,
   projectSchemas,
   sprintSchemas,
   taskLabelSchemas,
   taskRankSchema,
-  taskSchemas
+  taskSchemas,
+  workflowSchemas
 };

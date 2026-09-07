@@ -13,7 +13,9 @@ import Projects from "./pages/Projects";
 import Register from "./pages/Register";
 import Settings from "./pages/SettingsAdmin";
 import GitHubIntegration from "./pages/GitHubIntegration";
+import InvitationPage from "./pages/InvitationPage";
 import ProjectDevelopment from "./pages/ProjectDevelopment";
+import ProjectWorkflowSettings from "./pages/ProjectWorkflowSettings";
 import TaskDetail from "./pages/TaskDetail";
 import Tasks from "./pages/TasksHierarchy";
 import Workspace from "./pages/WorkspaceEngineering";
@@ -104,6 +106,7 @@ function App() {
         <Route path="/workflow" element={<Workspace />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id/development" element={<ProjectDevelopment />} />
+        <Route path="/projects/:id/workflow-settings" element={<ProjectWorkflowSettings />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />
         <Route path="/calendar" element={<Calendar />} />
@@ -114,6 +117,7 @@ function App() {
         <Route path="/archive" element={<ArchivePage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/integrations/github" element={<GitHubIntegration />} />
+        <Route path="/invitations/:token" element={<InvitationPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to={authenticated ? "/app" : "/login"} />} />
     </Routes>

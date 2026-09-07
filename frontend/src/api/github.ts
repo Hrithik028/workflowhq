@@ -1,6 +1,8 @@
 import { api } from "./client";
 import type {
   DevelopmentLink,
+  GitHubIdentityDirectory,
+  GitHubIdentityMapping,
   GitHubInstallation,
   GitHubCommandSummary,
   GitHubDevelopmentEvent,
@@ -8,6 +10,7 @@ import type {
   GitHubRepository,
   GitHubSyncResult,
   GitHubSyncState,
+  GitHubWebhookFailure,
   Project,
   ProjectDevelopment,
   TaskDevelopment
@@ -83,6 +86,8 @@ export const mapDevelopmentLink = (link: Raw): DevelopmentLink => ({
   url: String(link.url),
   state: link.state == null ? null : String(link.state),
   actorLogin: link.actor_login == null ? null : String(link.actor_login),
+  actorUserId: link.actor_user_id == null ? null : Number(link.actor_user_id),
+  actorName: link.actor_name == null ? null : String(link.actor_name),
   occurredAt: String(link.occurred_at),
   metadata: (link.metadata || {}) as Record<string, unknown>,
   repositoryId: Number(link.repository_id),
@@ -100,6 +105,8 @@ const mapDevelopmentEvent = (event: Raw): GitHubDevelopmentEvent => ({
   url: String(event.url),
   state: event.state == null ? null : String(event.state),
   actorLogin: event.actor_login == null ? null : String(event.actor_login),
+  actorUserId: event.actor_user_id == null ? null : Number(event.actor_user_id),
+  actorName: event.actor_name == null ? null : String(event.actor_name),
   occurredAt: String(event.occurred_at),
   metadata: (event.metadata || {}) as Record<string, unknown>,
   repositoryFullName: String(event.repository_full_name),
@@ -151,6 +158,110 @@ export const githubApi = {
       imported: Number(result.imported || 0),
       failedRepositories: Number(result.failedRepositories || 0),
       historySince: result.historySince == null ? null : String(result.historySince)
+    };
+  },
+
+  async getIdentityDirectory(): Promise<GitHubIdentityDirectory> {
+    const response = await api.get<{ data: { actors: Raw[]; members: Raw[] } }>(
+      "/github/identities"
+    );
+    return {
+      actors: response.data.data.actors.map((actor) => {
+        const mapping = actor.mapping as Raw | null;
+        return {
+          installationId: Number(actor.installation_id),
+          accountLogin: String(actor.account_login),
+          actorLogin: String(actor.actor_login),
+          eventCount: Number(actor.event_count || 0),
+          lastSeenAt: String(actor.last_seen_at),
+          mapping: mapping
+            ? {
+                id: Number(mapping.id),
+                installationId: Number(mapping.installation_id),
+                githubLogin: String(mapping.github_login),
+                mappedUserId: Number(mapping.mapped_user_id),
+                mappedUserName: String(mapping.mapped_user_name),
+                mappedUserEmail: String(mapping.mapped_user_email),
+                updatedAt: String(mapping.updated_at)
+              }
+            : null
+        };
+      }),
+      members: response.data.data.members.map((member) => ({
+        installationId: Number(member.installation_id),
+        userId: Number(member.user_id),
+        name: String(member.name),
+        email: String(member.email)
+      }))
+    };
+  },
+
+  async setIdentityMapping(
+    installationId: number,
+    githubLogin: string,
+    userId: number
+  ): Promise<GitHubIdentityMapping> {
+    const response = await api.put<{ data: Raw }>("/github/identities", {
+      installationId,
+      githubLogin,
+      userId
+    });
+    const mapping = response.data.data;
+    return {
+      id: Number(mapping.id),
+      installationId: Number(mapping.installation_id),
+      githubLogin: String(mapping.github_login),
+      mappedUserId: Number(mapping.mapped_user_id),
+      mappedUserName: String(mapping.mapped_user_name),
+      mappedUserEmail: String(mapping.mapped_user_email),
+      updatedAt: String(mapping.updated_at)
+    };
+  },
+
+  async deleteIdentityMapping(mappingId: number): Promise<void> {
+    await api.delete(`/github/identities/${mappingId}`);
+  },
+
+  async listWebhookFailures(): Promise<GitHubWebhookFailure[]> {
+    const response = await api.get<{ data: Raw[] }>("/github/webhook-deliveries/failed");
+    return response.data.data.map((delivery) => ({
+      id: Number(delivery.id),
+      githubDeliveryId: String(delivery.github_delivery_id),
+      eventName: String(delivery.event_name),
+      eventAction: delivery.event_action == null ? null : String(delivery.event_action),
+      status: "failed",
+      attemptCount: Number(delivery.attempt_count || 0),
+      errorMessage: String(delivery.error_message || "Webhook processing failed."),
+      receivedAt: String(delivery.received_at),
+      processedAt: delivery.processed_at == null ? null : String(delivery.processed_at),
+      redeliveryRequestedAt:
+        delivery.redelivery_requested_at == null
+          ? null
+          : String(delivery.redelivery_requested_at),
+      redeliveryRequestCount: Number(delivery.redelivery_request_count || 0),
+      redeliveryAvailable: Boolean(delivery.redelivery_available),
+      redeliveryBlockedReason:
+        delivery.redelivery_blocked_reason === "expired" ||
+        delivery.redelivery_blocked_reason === "limit_reached" ||
+        delivery.redelivery_blocked_reason === "cooldown"
+          ? delivery.redelivery_blocked_reason
+          : null,
+      accountLogin: String(delivery.account_login)
+    }));
+  },
+
+  async redeliverWebhook(deliveryId: number): Promise<{
+    id: number;
+    redeliveryRequestedAt: string;
+    redeliveryRequestCount: number;
+  }> {
+    const response = await api.post<{ data: Raw }>(
+      `/github/webhook-deliveries/${deliveryId}/redeliver`
+    );
+    return {
+      id: Number(response.data.data.id),
+      redeliveryRequestedAt: String(response.data.data.redeliveryRequestedAt),
+      redeliveryRequestCount: Number(response.data.data.redeliveryRequestCount)
     };
   },
 

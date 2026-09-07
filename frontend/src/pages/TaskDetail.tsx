@@ -576,7 +576,9 @@ function TaskDetail() {
                       </a>
                       <span>{link.repositoryFullName}</span>
                       <small>
-                        {link.actorLogin ? `${link.actorLogin} · ` : ""}
+                        {link.actorName || link.actorLogin
+                          ? `${link.actorName || link.actorLogin}${link.actorName && link.actorLogin ? ` (@${link.actorLogin})` : ""} · `
+                          : ""}
                         {link.state ? `${link.state} · ` : ""}
                         {formatRelativeTime(link.occurredAt)}
                       </small>

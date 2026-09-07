@@ -10,6 +10,10 @@ import type {
   PaginationMetadata,
   Project,
   ProjectInput,
+  ProjectInvitation,
+  ProjectInvitationReceipt,
+  ProjectWorkflow,
+  ProjectWorkflowRule,
   ProjectMember,
   ProjectRole,
   Sprint,
@@ -49,6 +53,42 @@ const mapMember = (member: Raw): ProjectMember => ({
   // to "now" since the membership was in fact just created.
   addedAt: member.addedAt == null ? new Date().toISOString() : String(member.addedAt)
 });
+
+export const mapProjectInvitation = (invitation: Raw): ProjectInvitation => ({
+  id: Number(invitation.id),
+  projectId: Number(invitation.projectId),
+  projectKey: String(invitation.projectKey),
+  projectName: String(invitation.projectName),
+  email: String(invitation.email),
+  role: invitation.role as ProjectInvitation["role"],
+  status: invitation.status as ProjectInvitation["status"],
+  invitedByName: invitation.invitedByName == null ? null : String(invitation.invitedByName),
+  deliveryStatus: invitation.deliveryStatus as ProjectInvitation["deliveryStatus"],
+  expiresAt: String(invitation.expiresAt),
+  createdAt: String(invitation.createdAt),
+  updatedAt: String(invitation.updatedAt)
+});
+
+const mapProjectWorkflow = (workflow: Raw): ProjectWorkflow => {
+  const project = workflow.project as Raw;
+  return {
+    project: {
+      id: Number(project.id),
+      key: String(project.key),
+      name: String(project.name)
+    },
+    rules: ((workflow.rules || []) as Raw[]).map(
+      (rule): ProjectWorkflowRule => ({
+        id: Number(rule.id),
+        trigger: rule.trigger as ProjectWorkflowRule["trigger"],
+        enabled: Boolean(rule.enabled),
+        fromStatus: rule.fromStatus as ProjectWorkflowRule["fromStatus"],
+        toStatus: rule.toStatus as ProjectWorkflowRule["toStatus"],
+        updatedAt: String(rule.updatedAt)
+      })
+    )
+  };
+};
 
 const mapLabel = (label: Raw): Label => ({
   id: Number(label.id),
@@ -213,6 +253,33 @@ export const workspaceApi: WorkspaceClient = {
     // The response is deliberately generic (never reveals whether the email
     // matched an account) - reload the member list to see what happened.
     await api.post(`/projects/${projectId}/members`, input);
+  },
+  async listProjectInvitations(projectId: number) {
+    const response = await api.get<{ data: Raw[] }>(`/projects/${projectId}/invitations`);
+    return response.data.data.map(mapProjectInvitation);
+  },
+  async inviteProjectMember(
+    projectId: number,
+    input: { email: string; role: "editor" | "viewer" }
+  ) {
+    const response = await api.post<{ data: Raw }>(`/projects/${projectId}/invitations`, input);
+    const data = response.data.data;
+    return {
+      invitation: mapProjectInvitation(data.invitation as Raw),
+      inviteUrl: String(data.inviteUrl),
+      deliveryStatus: data.deliveryStatus as ProjectInvitationReceipt["deliveryStatus"]
+    };
+  },
+  async revokeProjectInvitation(projectId: number, invitationId: number) {
+    await api.delete(`/projects/${projectId}/invitations/${invitationId}`);
+  },
+  async getProjectWorkflow(projectId: number) {
+    const response = await api.get<{ data: Raw }>(`/projects/${projectId}/workflow`);
+    return mapProjectWorkflow(response.data.data);
+  },
+  async updateProjectWorkflow(projectId: number, rules) {
+    const response = await api.put<{ data: Raw }>(`/projects/${projectId}/workflow`, { rules });
+    return mapProjectWorkflow(response.data.data);
   },
   async updateMemberRole(projectId: number, userId: number, role: ProjectRole) {
     await api.patch(`/projects/${projectId}/members/${userId}`, { role });

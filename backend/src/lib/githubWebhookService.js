@@ -1,4 +1,8 @@
 const { AppError } = require("./errors");
+const {
+  applyProjectWorkflowAutomation,
+  workflowTriggerFor
+} = require("./projectWorkflow");
 
 const DEVELOPMENT_EVENTS = new Set([
   "push",
@@ -310,11 +314,14 @@ const storeEvent = async (client, repository, item) => {
 };
 
 const linkEvent = async (client, repository, stored, item) => {
-  if (!item.issueKeys.length) return;
+  if (!item.issueKeys.length) return [];
   const tasks = await client.query(
-    `SELECT DISTINCT t.id,t.user_id FROM project_github_repositories link
+    `SELECT DISTINCT t.id, t.user_id, t.project_id, t.title, t.status
+     FROM project_github_repositories link
      JOIN tasks t ON t.project_id=link.project_id
-     WHERE link.repository_id=$1 AND t.issue_key=ANY($2::text[])`,
+     JOIN projects project ON project.id = t.project_id
+     WHERE link.repository_id=$1 AND t.issue_key=ANY($2::text[])
+       AND t.archived_at IS NULL AND project.archived_at IS NULL`,
     [repository.id, item.issueKeys]
   );
   for (const task of tasks.rows) {
@@ -324,9 +331,16 @@ const linkEvent = async (client, repository, stored, item) => {
       [stored.id, task.id]
     );
   }
+  return tasks.rows;
 };
 
-const developmentEvent = async (client, installation, name, payload) => {
+const developmentEvent = async (
+  client,
+  installation,
+  name,
+  payload,
+  { applyAutomations = false } = {}
+) => {
   const items = normalizeDevelopmentEvents(name, payload);
   if (
     items === null ||
@@ -351,9 +365,22 @@ const developmentEvent = async (client, installation, name, payload) => {
   ) {
     return false;
   }
-  for (const item of items.filter((candidate) => candidate.externalId)) {
+  for (const normalizedItem of items.filter((candidate) => candidate.externalId)) {
+    const item = {
+      ...normalizedItem,
+      workflowTrigger: workflowTriggerFor(name, payload, normalizedItem)
+    };
     const stored = await storeEvent(client, repository, item);
-    await linkEvent(client, repository, stored, item);
+    const tasks = await linkEvent(client, repository, stored, item);
+    if (applyAutomations) {
+      await applyProjectWorkflowAutomation({
+        client,
+        repository,
+        eventId: stored.id,
+        item,
+        tasks
+      });
+    }
   }
   return true;
 };
@@ -447,7 +474,11 @@ const processGithubWebhook = async ({ db, deliveryId, eventName, payload, payloa
       handled = await installationEvent(client, installation, payload);
     else if (eventName === "installation_repositories")
       handled = await repositoriesEvent(client, installation, payload);
-    else handled = await developmentEvent(client, installation, eventName, payload);
+    else {
+      handled = await developmentEvent(client, installation, eventName, payload, {
+        applyAutomations: true
+      });
+    }
     const status = handled ? "processed" : "ignored";
     await client.query(
       `UPDATE github_webhook_deliveries SET status=$1,processed_at=CURRENT_TIMESTAMP

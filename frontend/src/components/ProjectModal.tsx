@@ -1,8 +1,15 @@
-import { Archive, LogOut, Trash2, UserPlus, X } from "lucide-react";
+import { Archive, Check, Copy, LogOut, Mail, Settings2, Trash2, UserPlus, X, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { getErrorMessage } from "../api/client";
-import type { Project, ProjectInput, ProjectMember, ProjectRole, WorkspaceClient } from "../types";
+import type {
+  Project,
+  ProjectInput,
+  ProjectInvitation,
+  ProjectMember,
+  ProjectRole,
+  WorkspaceClient
+} from "../types";
 import ConfirmationDialog from "./ConfirmationDialog";
 
 interface ProjectModalProps {
@@ -11,6 +18,7 @@ interface ProjectModalProps {
   isSaving: boolean;
   onClose: () => void;
   onArchive?: (project: Project) => Promise<void>;
+  onOpenWorkflowSettings?: (project: Project) => void;
   onSave: (input: ProjectInput) => Promise<void>;
   project?: Project | null;
 }
@@ -27,6 +35,7 @@ function ProjectModal({
   isSaving,
   onClose,
   onArchive,
+  onOpenWorkflowSettings,
   onSave,
   project
 }: ProjectModalProps) {
@@ -42,18 +51,26 @@ function ProjectModal({
   const isReadOnlyFields = Boolean(project) && !isOwner;
 
   const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [invitations, setInvitations] = useState<ProjectInvitation[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [memberError, setMemberError] = useState("");
   const [memberNotice, setMemberNotice] = useState("");
   const [isMemberBusy, setIsMemberBusy] = useState(false);
   const [addEmail, setAddEmail] = useState("");
   const [addRole, setAddRole] = useState<"editor" | "viewer">("editor");
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [isInviteCopied, setIsInviteCopied] = useState(false);
 
   const loadMembers = useCallback(async () => {
     if (!project) return;
     setIsLoadingMembers(true);
     try {
-      setMembers(await client.listMembers(project.id));
+      const [nextMembers, nextInvitations] = await Promise.all([
+        client.listMembers(project.id),
+        project.myRole === "owner" ? client.listProjectInvitations(project.id) : Promise.resolve([])
+      ]);
+      setMembers(nextMembers);
+      setInvitations(nextInvitations);
       setMemberError("");
     } catch (loadError) {
       setMemberError(getErrorMessage(loadError, "Unable to load project members."));
@@ -84,23 +101,59 @@ function ProjectModal({
     });
   };
 
-  const addMember = async (event: FormEvent) => {
+  const inviteMember = async (event: FormEvent) => {
     event.preventDefault();
     if (!project || !addEmail.trim()) return;
     setIsMemberBusy(true);
     try {
-      await client.addMember(project.id, { email: addEmail.trim(), role: addRole });
+      const receipt = await client.inviteProjectMember(project.id, {
+        email: addEmail.trim(),
+        role: addRole
+      });
       setAddEmail("");
       setAddRole("editor");
+      setInviteUrl(receipt.inviteUrl);
+      setIsInviteCopied(false);
       await loadMembers();
       setMemberError("");
-      // The backend won't confirm whether that email had an account (so this
-      // can't be used to check who's registered) - the member list above is
-      // the real signal for whether it worked.
-      setMemberNotice("If that email has a WorkflowHQ account, they've been added below.");
+      setMemberNotice(
+        receipt.deliveryStatus === "sent"
+          ? `Invitation emailed to ${receipt.invitation.email}.`
+          : receipt.deliveryStatus === "failed"
+            ? "The invitation is active, but email delivery failed. Copy and send the secure link below."
+            : "The invitation is active. Copy and send the secure link below."
+      );
     } catch (addError) {
       setMemberNotice("");
-      setMemberError(getErrorMessage(addError, "Unable to add this member."));
+      setInviteUrl("");
+      setMemberError(getErrorMessage(addError, "Unable to invite this member."));
+    } finally {
+      setIsMemberBusy(false);
+    }
+  };
+
+  const copyInviteLink = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setIsInviteCopied(true);
+    } catch {
+      setMemberError("Copy was blocked by the browser. Select the link and copy it manually.");
+    }
+  };
+
+  const revokeInvitation = async (invitation: ProjectInvitation) => {
+    if (!project) return;
+    setIsMemberBusy(true);
+    setMemberNotice("");
+    try {
+      await client.revokeProjectInvitation(project.id, invitation.id);
+      await loadMembers();
+      setMemberError("");
+      setMemberNotice(`Invitation for ${invitation.email} revoked.`);
+      setInviteUrl("");
+    } catch (revokeError) {
+      setMemberError(getErrorMessage(revokeError, "Unable to revoke this invitation."));
     } finally {
       setIsMemberBusy(false);
     }
@@ -244,10 +297,33 @@ function ProjectModal({
           <section className="member-section">
             <header className="member-section-header">
               <span className="overline">Members</span>
-              {!isOwner ? <small>Read only — ask an owner to make changes.</small> : null}
+              <div className="member-section-actions">
+                {!isOwner ? <small>Read only — ask an owner to make changes.</small> : null}
+                {isOwner && onOpenWorkflowSettings ? (
+                  <button
+                    className="text-link"
+                    onClick={() => onOpenWorkflowSettings(project)}
+                    type="button"
+                  >
+                    <Settings2 size={14} /> Workflow rules
+                  </button>
+                ) : null}
+              </div>
             </header>
             {memberError ? <p className="form-alert error">{memberError}</p> : null}
             {memberNotice ? <p className="form-alert notice">{memberNotice}</p> : null}
+            {inviteUrl ? (
+              <div className="invitation-copy-row">
+                <label>
+                  <span>Secure invitation link</span>
+                  <input readOnly value={inviteUrl} onFocus={(event) => event.target.select()} />
+                </label>
+                <button className="button secondary" onClick={() => void copyInviteLink()} type="button">
+                  {isInviteCopied ? <Check size={15} /> : <Copy size={15} />}
+                  {isInviteCopied ? "Copied" : "Copy link"}
+                </button>
+              </div>
+            ) : null}
             {isLoadingMembers ? <p className="register-loading">Loading members…</p> : null}
             <ul className="member-list">
               {members.map((member) => {
@@ -309,32 +385,76 @@ function ProjectModal({
             </ul>
 
             {isOwner ? (
-              <form className="member-add-row" onSubmit={addMember}>
-                <input
-                  aria-label="Add member by email"
-                  disabled={isMemberBusy}
-                  onChange={(event) => setAddEmail(event.target.value)}
-                  placeholder="teammate@company.com"
-                  type="email"
-                  value={addEmail}
-                />
-                <select
-                  aria-label="New member role"
-                  disabled={isMemberBusy}
-                  onChange={(event) => setAddRole(event.target.value as "editor" | "viewer")}
-                  value={addRole}
-                >
-                  <option value="editor">Editor</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-                <button
-                  className="button secondary"
-                  disabled={isMemberBusy || !addEmail.trim()}
-                  type="submit"
-                >
-                  <UserPlus size={15} /> Add
-                </button>
-              </form>
+              <>
+                <section className="pending-invitations" aria-labelledby="pending-invitations-title">
+                  <header>
+                    <span className="overline" id="pending-invitations-title">
+                      Pending invitations
+                    </span>
+                    <strong>{invitations.length}</strong>
+                  </header>
+                  {invitations.length ? (
+                    <ul>
+                      {invitations.map((invitation) => (
+                        <li key={invitation.id}>
+                          <Mail aria-hidden="true" size={16} />
+                          <div>
+                            <strong>{invitation.email}</strong>
+                            <span>
+                              {roleLabel[invitation.role]} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <span className={`invitation-delivery ${invitation.deliveryStatus}`}>
+                            {invitation.deliveryStatus === "sent" ? "Emailed" : "Link only"}
+                          </span>
+                          <button
+                            aria-label={`Revoke invitation for ${invitation.email}`}
+                            className="icon-button"
+                            disabled={isMemberBusy}
+                            onClick={() => void revokeInvitation(invitation)}
+                            title="Revoke invitation"
+                            type="button"
+                          >
+                            <XCircle size={16} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No one is waiting to join this project.</p>
+                  )}
+                </section>
+
+                <form className="member-add-row" onSubmit={inviteMember}>
+                  <input
+                    aria-label="Invite member by email"
+                    disabled={isMemberBusy}
+                    onChange={(event) => setAddEmail(event.target.value)}
+                    placeholder="teammate@company.com"
+                    type="email"
+                    value={addEmail}
+                  />
+                  <select
+                    aria-label="Invited member role"
+                    disabled={isMemberBusy}
+                    onChange={(event) => setAddRole(event.target.value as "editor" | "viewer")}
+                    value={addRole}
+                  >
+                    <option value="editor">Editor</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                  <button
+                    className="button secondary"
+                    disabled={isMemberBusy || !addEmail.trim()}
+                    type="submit"
+                  >
+                    <UserPlus size={15} /> Invite
+                  </button>
+                </form>
+                <p className="member-invite-help">
+                  Membership starts only after the recipient signs in with this exact email and accepts.
+                </p>
+              </>
             ) : null}
           </section>
         ) : null}

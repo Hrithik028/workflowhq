@@ -40,6 +40,59 @@ export interface ProjectMember {
   addedAt: string;
 }
 
+export type ProjectInvitationStatus = "pending" | "accepted" | "declined" | "revoked" | "expired";
+export type InvitationDeliveryStatus = "pending" | "sent" | "failed" | "not_configured";
+
+export interface ProjectInvitation {
+  id: number;
+  projectId: number;
+  projectKey: string;
+  projectName: string;
+  email: string;
+  role: "editor" | "viewer";
+  status: ProjectInvitationStatus;
+  invitedByName: string | null;
+  deliveryStatus: InvitationDeliveryStatus;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectInvitationReceipt {
+  invitation: ProjectInvitation;
+  inviteUrl: string;
+  deliveryStatus: InvitationDeliveryStatus;
+}
+
+export interface InvitationAcceptance {
+  projectId: number;
+  projectKey: string;
+  projectName: string;
+  role: "editor" | "viewer";
+  alreadyAccepted: boolean;
+}
+
+export type WorkflowTrigger =
+  | "commit_pushed"
+  | "pull_request_opened"
+  | "pull_request_merged"
+  | "check_run_succeeded"
+  | "deployment_succeeded";
+
+export interface ProjectWorkflowRule {
+  id: number;
+  trigger: WorkflowTrigger;
+  enabled: boolean;
+  fromStatus: TaskStatus;
+  toStatus: TaskStatus;
+  updatedAt: string;
+}
+
+export interface ProjectWorkflow {
+  project: { id: number; key: string; name: string };
+  rules: ProjectWorkflowRule[];
+}
+
 export interface GitHubInstallation {
   id: number;
   githubInstallationId: string;
@@ -94,6 +147,54 @@ export interface GitHubRepository {
   updatedAt: string;
 }
 
+export interface GitHubIdentityMapping {
+  id: number;
+  installationId: number;
+  githubLogin: string;
+  mappedUserId: number;
+  mappedUserName: string;
+  mappedUserEmail: string;
+  updatedAt: string;
+}
+
+export interface GitHubActorIdentity {
+  installationId: number;
+  accountLogin: string;
+  actorLogin: string;
+  eventCount: number;
+  lastSeenAt: string;
+  mapping: GitHubIdentityMapping | null;
+}
+
+export interface GitHubIdentityMember {
+  installationId: number;
+  userId: number;
+  name: string;
+  email: string;
+}
+
+export interface GitHubIdentityDirectory {
+  actors: GitHubActorIdentity[];
+  members: GitHubIdentityMember[];
+}
+
+export interface GitHubWebhookFailure {
+  id: number;
+  githubDeliveryId: string;
+  eventName: string;
+  eventAction: string | null;
+  status: "failed";
+  attemptCount: number;
+  errorMessage: string;
+  receivedAt: string;
+  processedAt: string | null;
+  redeliveryRequestedAt: string | null;
+  redeliveryRequestCount: number;
+  redeliveryAvailable: boolean;
+  redeliveryBlockedReason: "expired" | "limit_reached" | "cooldown" | null;
+  accountLogin: string;
+}
+
 export interface DevelopmentLink {
   id: number;
   type: DevelopmentLinkType;
@@ -103,6 +204,8 @@ export interface DevelopmentLink {
   url: string;
   state: string | null;
   actorLogin: string | null;
+  actorUserId: number | null;
+  actorName: string | null;
   occurredAt: string;
   metadata: Record<string, unknown>;
   repositoryId: number;
@@ -125,6 +228,8 @@ export interface GitHubDevelopmentEvent {
   url: string;
   state: string | null;
   actorLogin: string | null;
+  actorUserId: number | null;
+  actorName: string | null;
   occurredAt: string;
   metadata: Record<string, unknown>;
   repositoryFullName: string;
@@ -322,11 +427,16 @@ export interface Activity {
     | "project_created"
     | "project_deleted"
     | "project_archived"
-    | "project_restored";
-  entityType: "task" | "project";
+    | "project_restored"
+    | "project_workflow_updated"
+    | "task_workflow_automated"
+    | "github_identity_mapped"
+    | "github_identity_unmapped"
+    | "github_webhook_redelivery_requested";
+  entityType: "task" | "project" | "github";
   entityId: number | null;
   entityTitle: string;
-  details: Record<string, string>;
+  details: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -425,6 +535,17 @@ export interface WorkspaceClient {
   getActivity(limit?: number): Promise<Activity[]>;
   listMembers(projectId: number): Promise<ProjectMember[]>;
   addMember(projectId: number, input: { email: string; role: "editor" | "viewer" }): Promise<void>;
+  listProjectInvitations(projectId: number): Promise<ProjectInvitation[]>;
+  inviteProjectMember(
+    projectId: number,
+    input: { email: string; role: "editor" | "viewer" }
+  ): Promise<ProjectInvitationReceipt>;
+  revokeProjectInvitation(projectId: number, invitationId: number): Promise<void>;
+  getProjectWorkflow(projectId: number): Promise<ProjectWorkflow>;
+  updateProjectWorkflow(
+    projectId: number,
+    rules: Array<Pick<ProjectWorkflowRule, "trigger" | "enabled" | "fromStatus" | "toStatus">>
+  ): Promise<ProjectWorkflow>;
   updateMemberRole(projectId: number, userId: number, role: ProjectRole): Promise<void>;
   removeMember(projectId: number, userId: number): Promise<void>;
   listLabels(projectId: number): Promise<Label[]>;

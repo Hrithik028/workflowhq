@@ -376,12 +376,18 @@ const getTaskDevelopmentLinks = async (req, res, next) => {
     `SELECT gde.id, gde.event_type AS link_type, gde.external_id, gde.github_node_id,
             gde.github_number, gde.title, gde.url, gde.state, gde.actor_login,
             gde.occurred_at, gde.metadata, gde.created_at, gde.updated_at,
+            identity.mapped_user_id AS actor_user_id,
+            actor.name AS actor_name,
             gdet.link_source,
             gr.id AS repository_id, gr.full_name AS repository_full_name,
             gr.html_url AS repository_url
      FROM github_development_event_tasks gdet
      JOIN github_development_events gde ON gde.id = gdet.event_id
      JOIN github_repositories gr ON gr.id = gde.repository_id
+     LEFT JOIN github_identity_mappings identity
+       ON identity.installation_id = gr.installation_id
+      AND identity.github_login_normalized = LOWER(gde.actor_login)
+     LEFT JOIN users actor ON actor.id = identity.mapped_user_id
      WHERE gdet.task_id = $1
      ORDER BY gde.occurred_at DESC, gde.id DESC`,
     [req.params.taskId]
@@ -390,11 +396,17 @@ const getTaskDevelopmentLinks = async (req, res, next) => {
     `SELECT tdl.id, tdl.link_type, tdl.external_id, tdl.github_node_id,
             tdl.github_number, tdl.title, tdl.url, tdl.state, tdl.actor_login,
             tdl.occurred_at, tdl.metadata, tdl.created_at, tdl.updated_at,
+            identity.mapped_user_id AS actor_user_id,
+            actor.name AS actor_name,
             'automatic' AS link_source,
             gr.id AS repository_id, gr.full_name AS repository_full_name,
             gr.html_url AS repository_url
      FROM task_development_links tdl
      JOIN github_repositories gr ON gr.id = tdl.repository_id
+     LEFT JOIN github_identity_mappings identity
+       ON identity.installation_id = gr.installation_id
+      AND identity.github_login_normalized = LOWER(tdl.actor_login)
+     LEFT JOIN users actor ON actor.id = identity.mapped_user_id
      WHERE tdl.task_id = $1
      ORDER BY tdl.occurred_at DESC, tdl.id DESC`,
     [req.params.taskId]
@@ -468,6 +480,8 @@ const getCommandSummary = async (req, res) => {
   const recent = await db.query(
     `SELECT gde.id, gde.event_type, gde.external_id, gde.github_number,
             gde.title, gde.url, gde.state, gde.actor_login, gde.occurred_at,
+            identity.mapped_user_id AS actor_user_id,
+            actor.name AS actor_name,
             gde.metadata, gr.full_name AS repository_full_name,
             p.id AS project_id, p.key AS project_key, p.name AS project_name
      FROM github_development_events gde
@@ -475,6 +489,10 @@ const getCommandSummary = async (req, res) => {
      JOIN project_github_repositories pgr ON pgr.repository_id = gr.id
      JOIN projects p ON p.id = pgr.project_id
      JOIN project_members pm ON pm.project_id = p.id
+     LEFT JOIN github_identity_mappings identity
+       ON identity.installation_id = gr.installation_id
+      AND identity.github_login_normalized = LOWER(gde.actor_login)
+     LEFT JOIN users actor ON actor.id = identity.mapped_user_id
      WHERE pm.user_id = $1 AND gr.removed_at IS NULL
      ORDER BY gde.occurred_at DESC, gde.id DESC
      LIMIT 12`,
@@ -519,10 +537,16 @@ const getProjectDevelopment = async (req, res, next) => {
   const events = await db.query(
     `SELECT gde.id, gde.event_type, gde.external_id, gde.github_number,
             gde.title, gde.url, gde.state, gde.actor_login, gde.occurred_at,
+            identity.mapped_user_id AS actor_user_id,
+            actor.name AS actor_name,
             gde.metadata, gr.full_name AS repository_full_name
      FROM project_github_repositories pgr
      JOIN github_repositories gr ON gr.id = pgr.repository_id
      JOIN github_development_events gde ON gde.repository_id = gr.id
+     LEFT JOIN github_identity_mappings identity
+       ON identity.installation_id = gr.installation_id
+      AND identity.github_login_normalized = LOWER(gde.actor_login)
+     LEFT JOIN users actor ON actor.id = identity.mapped_user_id
      WHERE pgr.project_id = $1
      ORDER BY gde.occurred_at DESC, gde.id DESC
      LIMIT 200`,

@@ -22,6 +22,8 @@ interface TaskModalProps {
   initialDueDate?: string | null;
   initialParentTask?: Task | null;
   initialStatus?: TaskStatus;
+  initialProjectId?: number | null;
+  initialSprintId?: number | null;
   isSaving: boolean;
   onClose: () => void;
   onArchive: (task: Task) => Promise<void>;
@@ -93,6 +95,8 @@ function TaskModal({
   initialDueDate = null,
   initialParentTask = null,
   initialStatus = "todo",
+  initialProjectId = null,
+  initialSprintId = null,
   isSaving,
   onClose,
   onArchive,
@@ -103,7 +107,13 @@ function TaskModal({
 }: TaskModalProps) {
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false);
   const [form, setForm] = useState<TaskInput>(() =>
-    task ? taskToInput(task) : emptyTask(initialStatus, initialDueDate, initialParentTask)
+    task
+      ? taskToInput(task)
+      : {
+          ...emptyTask(initialStatus, initialDueDate, initialParentTask),
+          projectId: initialParentTask?.projectId ?? initialProjectId,
+          sprintId: initialSprintId
+        }
   );
   const [error, setError] = useState("");
   const [members, setMembers] = useState<ProjectMember[]>([]);

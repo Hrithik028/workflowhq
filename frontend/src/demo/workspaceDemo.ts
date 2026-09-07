@@ -9,8 +9,11 @@ import type {
   LabelInput,
   Project,
   ProjectInput,
+  ProjectInvitation,
+  ProjectInvitationReceipt,
   ProjectMember,
   ProjectRole,
+  ProjectWorkflowRule,
   Sprint,
   SprintInput,
   SprintStatus,
@@ -380,6 +383,73 @@ const membersByProject: Record<number, ProjectMember[]> = Object.fromEntries(
 );
 let nextMemberUserId = 1000;
 
+const invitationsByProject: Record<number, ProjectInvitation[]> = {
+  1: [
+    {
+      id: 1,
+      projectId: 1,
+      projectKey: "LAUNCH",
+      projectName: "Product launch",
+      email: "jordan@workflowhq.dev",
+      role: "editor",
+      status: "pending",
+      invitedByName: DEMO_USER.name,
+      deliveryStatus: "sent",
+      expiresAt: new Date(now.getTime() + 5 * 86_400_000).toISOString(),
+      createdAt: isoMinutesAgo(42),
+      updatedAt: isoMinutesAgo(42)
+    }
+  ]
+};
+let nextInvitationId = 2;
+
+let nextWorkflowRuleId = 100;
+const createDefaultWorkflowRules = (): ProjectWorkflowRule[] => [
+  {
+    id: nextWorkflowRuleId++,
+    trigger: "commit_pushed",
+    enabled: true,
+    fromStatus: "todo",
+    toStatus: "in_progress",
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: nextWorkflowRuleId++,
+    trigger: "pull_request_opened",
+    enabled: true,
+    fromStatus: "todo",
+    toStatus: "in_progress",
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: nextWorkflowRuleId++,
+    trigger: "pull_request_merged",
+    enabled: true,
+    fromStatus: "in_progress",
+    toStatus: "completed",
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: nextWorkflowRuleId++,
+    trigger: "check_run_succeeded",
+    enabled: false,
+    fromStatus: "in_progress",
+    toStatus: "completed",
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: nextWorkflowRuleId++,
+    trigger: "deployment_succeeded",
+    enabled: false,
+    fromStatus: "in_progress",
+    toStatus: "completed",
+    updatedAt: new Date().toISOString()
+  }
+];
+const workflowRulesByProject: Record<number, ProjectWorkflowRule[]> = Object.fromEntries(
+  projects.map((project) => [project.id, createDefaultWorkflowRules()])
+);
+
 let labels: Label[] = [
   { id: 1, projectId: 1, name: "Launch blocker", color: "#cb5a43", createdAt: isoDaysAgo(17) },
   { id: 2, projectId: 1, name: "Customer facing", color: "#4c6ef5", createdAt: isoDaysAgo(16) },
@@ -551,6 +621,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
         addedAt: timestamp
       }
     ];
+    workflowRulesByProject[project.id] = createDefaultWorkflowRules();
     addActivity({
       action: "project_created",
       entityType: "project",
@@ -615,6 +686,8 @@ export const demoWorkspaceApi: WorkspaceClient = {
     }
     projects = projects.filter((item) => item.id !== id);
     delete membersByProject[id];
+    delete invitationsByProject[id];
+    delete workflowRulesByProject[id];
     const removedLabelIds = new Set(
       labels.filter((label) => label.projectId === id).map((label) => label.id)
     );
@@ -927,6 +1000,88 @@ export const demoWorkspaceApi: WorkspaceClient = {
       addedAt: new Date().toISOString()
     };
     membersByProject[projectId] = [...members, member];
+  },
+
+  async listProjectInvitations(projectId: number) {
+    await delay();
+    return (invitationsByProject[projectId] || []).map((invitation) => ({ ...invitation }));
+  },
+
+  async inviteProjectMember(
+    projectId: number,
+    input: { email: string; role: "editor" | "viewer" }
+  ): Promise<ProjectInvitationReceipt> {
+    await delay();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    const email = input.email.trim().toLowerCase();
+    if ((membersByProject[projectId] || []).some((member) => member.email.toLowerCase() === email)) {
+      throw new Error("This email already belongs to a project member.");
+    }
+    const invitation: ProjectInvitation = {
+      id: nextInvitationId++,
+      projectId,
+      projectKey: project.key,
+      projectName: project.name,
+      email,
+      role: input.role,
+      status: "pending",
+      invitedByName: DEMO_USER.name,
+      deliveryStatus: "not_configured",
+      expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    invitationsByProject[projectId] = [
+      invitation,
+      ...(invitationsByProject[projectId] || []).filter((item) => item.email !== email)
+    ];
+    return {
+      invitation: { ...invitation },
+      inviteUrl: `https://workflowhq.app/invitations/${`${invitation.id}`.padStart(43, "d")}`,
+      deliveryStatus: invitation.deliveryStatus
+    };
+  },
+
+  async revokeProjectInvitation(projectId: number, invitationId: number) {
+    await delay();
+    invitationsByProject[projectId] = (invitationsByProject[projectId] || []).filter(
+      (invitation) => invitation.id !== invitationId
+    );
+  },
+
+  async getProjectWorkflow(projectId: number) {
+    await delay();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    return {
+      project: { id: project.id, key: project.key, name: project.name },
+      rules: (workflowRulesByProject[projectId] || []).map((rule) => ({ ...rule }))
+    };
+  },
+
+  async updateProjectWorkflow(projectId: number, rules) {
+    await delay();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    const timestamp = new Date().toISOString();
+    workflowRulesByProject[projectId] = rules.map((rule) => {
+      const existing = workflowRulesByProject[projectId]?.find(
+        (candidate) => candidate.trigger === rule.trigger
+      );
+      return { id: existing?.id || nextWorkflowRuleId++, ...rule, updatedAt: timestamp };
+    });
+    addActivity({
+      action: "project_workflow_updated",
+      entityType: "project",
+      entityId: project.id,
+      entityTitle: project.name,
+      details: { enabledTriggers: rules.filter((rule) => rule.enabled).map((rule) => rule.trigger) }
+    });
+    return {
+      project: { id: project.id, key: project.key, name: project.name },
+      rules: workflowRulesByProject[projectId].map((rule) => ({ ...rule }))
+    };
   },
 
   async updateMemberRole(projectId: number, userId: number, role: ProjectRole) {
