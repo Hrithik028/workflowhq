@@ -33,4 +33,19 @@ describe("Login demo account", () => {
     expect(onDemo).toHaveBeenCalledOnce();
     expect(screen.getByText("Populated demo workspace")).toBeInTheDocument();
   });
+
+  it("preserves a secure invitation return path and hides demo entry", () => {
+    const invitationPath = `/invitations/${"a".repeat(43)}`;
+    render(
+      <MemoryRouter initialEntries={[`/login?next=${encodeURIComponent(invitationPath)}`]}>
+        <Login onDemo={vi.fn()} onSuccess={vi.fn()} />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByLabelText("Demo login")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /create an account/i })).toHaveAttribute(
+      "href",
+      `/register?next=${encodeURIComponent(invitationPath)}`
+    );
+  });
 });

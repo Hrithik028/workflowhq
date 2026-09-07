@@ -17,10 +17,15 @@ const testConfig = {
   corsOrigins: ["http://localhost:5173"],
   cookieSameSite: "lax",
   secureCookies: false,
-  trustProxy: false
+  trustProxy: false,
+  appBaseUrl: "http://localhost:5173",
+  invitationEmailProvider: "disabled",
+  invitationFromEmail: undefined,
+  invitationTtlHours: 168,
+  resendApiKey: undefined
 };
 
-const buildTestApp = async () => {
+const buildTestApp = async ({ config = {}, github, invitationMailer } = {}) => {
   const memoryDb = newDb({ autoCreateForeignKeyIndices: true });
   const adapter = memoryDb.adapters.createPg();
   const db = new adapter.Pool();
@@ -37,7 +42,15 @@ const buildTestApp = async () => {
     await db.query(sql);
   }
 
-  return { app: createApp({ db, config: testConfig }), db };
+  return {
+    app: createApp({
+      db,
+      config: { ...testConfig, ...config },
+      github,
+      invitationMailer
+    }),
+    db
+  };
 };
 
 const registerUser = async (app, suffix = "one") => {

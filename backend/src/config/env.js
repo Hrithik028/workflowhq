@@ -23,31 +23,52 @@ const envSchema = z
     GITHUB_APP_PRIVATE_KEY_BASE64: z.string().min(1).optional(),
     GITHUB_WEBHOOK_SECRET: z.string().min(16).optional(),
     GITHUB_API_VERSION: z.literal("2026-03-10").default("2026-03-10"),
-    GITHUB_CONNECT_STATE_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(10)
+    GITHUB_CONNECT_STATE_TTL_MINUTES: z.coerce.number().int().min(5).max(30).default(10),
+    APP_BASE_URL: z.string().url().optional(),
+    INVITATION_EMAIL_PROVIDER: z.enum(["disabled", "resend"]).default("disabled"),
+    INVITATION_FROM_EMAIL: z.string().trim().min(3).max(320).optional(),
+    INVITATION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(168),
+    RESEND_API_KEY: z.string().min(1).optional()
   })
   .superRefine((values, context) => {
-    if (values.GITHUB_INTEGRATION_ENABLED !== "true") return;
+    if (values.GITHUB_INTEGRATION_ENABLED === "true") {
+      for (const key of [
+        "GITHUB_APP_ID",
+        "GITHUB_APP_SLUG",
+        "GITHUB_APP_CLIENT_ID",
+        "GITHUB_APP_CLIENT_SECRET",
+        "GITHUB_APP_PRIVATE_KEY_BASE64",
+        "GITHUB_WEBHOOK_SECRET"
+      ]) {
+        if (!values[key]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when GitHub integration is enabled.`
+          });
+        }
+      }
+    }
 
-    for (const key of [
-      "GITHUB_APP_ID",
-      "GITHUB_APP_SLUG",
-      "GITHUB_APP_CLIENT_ID",
-      "GITHUB_APP_CLIENT_SECRET",
-      "GITHUB_APP_PRIVATE_KEY_BASE64",
-      "GITHUB_WEBHOOK_SECRET"
-    ]) {
-      if (!values[key]) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [key],
-          message: `${key} is required when GitHub integration is enabled.`
-        });
+    if (values.INVITATION_EMAIL_PROVIDER === "resend") {
+      for (const key of ["INVITATION_FROM_EMAIL", "RESEND_API_KEY"]) {
+        if (!values[key]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when invitation email delivery uses Resend.`
+          });
+        }
       }
     }
   });
 
 const loadConfig = (overrides = {}) => {
   const values = envSchema.parse({ ...process.env, ...overrides });
+
+  const corsOrigins = values.CORS_ORIGIN.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   return {
     nodeEnv: values.NODE_ENV,
@@ -57,9 +78,7 @@ const loadConfig = (overrides = {}) => {
     accessTokenTtl: values.ACCESS_TOKEN_TTL,
     refreshTokenDays: values.REFRESH_TOKEN_DAYS,
     refreshCookieName: values.REFRESH_COOKIE_NAME,
-    corsOrigins: values.CORS_ORIGIN.split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+    corsOrigins,
     cookieSameSite: values.COOKIE_SAME_SITE || (values.NODE_ENV === "production" ? "none" : "lax"),
     secureCookies: values.NODE_ENV === "production",
     trustProxy: values.TRUST_PROXY === "true",
@@ -71,7 +90,12 @@ const loadConfig = (overrides = {}) => {
     githubAppPrivateKeyBase64: values.GITHUB_APP_PRIVATE_KEY_BASE64,
     githubWebhookSecret: values.GITHUB_WEBHOOK_SECRET,
     githubApiVersion: values.GITHUB_API_VERSION,
-    githubConnectStateTtlMinutes: values.GITHUB_CONNECT_STATE_TTL_MINUTES
+    githubConnectStateTtlMinutes: values.GITHUB_CONNECT_STATE_TTL_MINUTES,
+    appBaseUrl: values.APP_BASE_URL || corsOrigins[0],
+    invitationEmailProvider: values.INVITATION_EMAIL_PROVIDER,
+    invitationFromEmail: values.INVITATION_FROM_EMAIL,
+    invitationTtlHours: values.INVITATION_TTL_HOURS,
+    resendApiKey: values.RESEND_API_KEY
   };
 };
 

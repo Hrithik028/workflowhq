@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -8,6 +8,7 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ children, isAuthenticated, isChecking }: ProtectedRouteProps) {
+  const location = useLocation();
   if (isChecking) {
     return (
       <main className="loading-screen">
@@ -17,7 +18,10 @@ function ProtectedRoute({ children, isAuthenticated, isChecking }: ProtectedRout
       </main>
     );
   }
-  if (!isAuthenticated) return <Navigate replace to="/login" />;
+  if (!isAuthenticated) {
+    const returnTo = `${location.pathname}${location.search}`;
+    return <Navigate replace to={`/login?next=${encodeURIComponent(returnTo)}`} />;
+  }
   return children;
 }
 

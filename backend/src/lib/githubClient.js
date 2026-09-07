@@ -102,7 +102,7 @@ const createGithubServices = (
     try {
       payload = response.status === 204 ? null : await response.json();
     } catch {
-      if (response.ok) throw githubUnavailable();
+      if (response.ok) payload = null;
     }
 
     if (!response.ok) {
@@ -209,6 +209,31 @@ const createGithubServices = (
     return repositories;
   };
 
+  const redeliverAppWebhook = async ({ guid, installationId }) => {
+    const safeInstallationId = requirePositiveInteger(installationId, "Installation ID");
+    const deliveries = await request(
+      GITHUB_API_ORIGIN,
+      "/app/hook/deliveries?per_page=100&status=failure",
+      { token: appJwt() }
+    );
+    const delivery = (Array.isArray(deliveries) ? deliveries : []).find(
+      (candidate) =>
+        candidate.guid === guid && Number(candidate.installation_id) === safeInstallationId
+    );
+    if (!delivery || !Number.isSafeInteger(Number(delivery.id))) {
+      throw new AppError(
+        409,
+        "GITHUB_REDELIVERY_NOT_AVAILABLE",
+        "GitHub no longer lists this delivery for redelivery."
+      );
+    }
+    await request(GITHUB_API_ORIGIN, `/app/hook/deliveries/${delivery.id}/attempts`, {
+      method: "POST",
+      token: appJwt()
+    });
+    return { id: Number(delivery.id), guid: delivery.guid };
+  };
+
   const listRepositoryPages = async (installationId, owner, repository, pathForPage) => {
     const token = await getInstallationToken(installationId);
     const safeOwner = encodeURIComponent(String(owner));
@@ -297,6 +322,7 @@ const createGithubServices = (
     getRateLimitState: () => ({ ...rateLimitState }),
     listInstallationRepositories,
     listRepositoryHistory,
+    redeliverAppWebhook,
     verifyInstallationForUser
   };
 };

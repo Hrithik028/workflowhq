@@ -89,4 +89,32 @@ describe("GitHub App API client", () => {
       fetchImpl.mock.calls.filter(([url]) => url.endsWith("/app/installations/7001/access_tokens"))
     ).toHaveLength(1);
   });
+
+  it("redelivers only a failed App webhook matching its guid and installation", async () => {
+    const fetchImpl = globalThis.vi
+      .fn()
+      .mockResolvedValueOnce(
+        response([
+          { id: 44, guid: "other", installation_id: 7001 },
+          { id: 45, guid: "delivery-guid", installation_id: 7001 }
+        ])
+      )
+      .mockResolvedValueOnce(response(null, 202));
+    const github = createGithubServices(config, { fetchImpl });
+
+    const result = await github.redeliverAppWebhook({
+      guid: "delivery-guid",
+      installationId: 7001
+    });
+
+    expect(result).toEqual({ id: 45, guid: "delivery-guid" });
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://api.github.com/app/hook/deliveries?per_page=100&status=failure"
+    );
+    expect(fetchImpl.mock.calls[1][0]).toBe(
+      "https://api.github.com/app/hook/deliveries/45/attempts"
+    );
+    expect(fetchImpl.mock.calls[1][1].method).toBe("POST");
+    expect(fetchImpl.mock.calls[1][1].headers.Authorization).toMatch(/^Bearer /);
+  });
 });

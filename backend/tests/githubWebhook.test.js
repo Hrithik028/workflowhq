@@ -4,6 +4,8 @@ const express = require("express");
 const request = require("supertest");
 
 const { verifyGithubWebhookSignature } = require("../src/lib/githubWebhookSecurity");
+const { importGithubDevelopmentPayload } = require("../src/lib/githubWebhookService");
+const { ensureProjectWorkflowRules } = require("../src/lib/projectWorkflow");
 const { errorHandler } = require("../src/middleware/errorMiddleware");
 const githubWebhookRoutes = require("../src/routes/githubWebhookRoutes");
 const { buildTestApp, testConfig } = require("./helpers/testApp");
@@ -378,6 +380,158 @@ describe("GitHub webhook security and processing", () => {
     expect(linked.rows).toHaveLength(5);
     expect(linked.rows.every((row) => Number(row.task_id) === Number(task.id))).toBe(true);
     expect(linked.rows.some((row) => Number(row.task_id) === Number(otherTask.id))).toBe(false);
+  });
+
+  it("moves a linked ticket forward from signed push and merged pull-request events", async () => {
+    await ensureProjectWorkflowRules(db, project.id, installation.user_id);
+    const mappedMember = (
+      await db.query(
+        `INSERT INTO users (name,email,password_hash)
+         VALUES ('Mapped contributor','mapped-contributor@example.com','hash') RETURNING id`
+      )
+    ).rows[0];
+    await db.query(
+      `INSERT INTO project_members (project_id,user_id,role) VALUES ($1,$2,'editor')`,
+      [project.id, mappedMember.id]
+    );
+    await db.query(
+      `INSERT INTO github_identity_mappings
+         (installation_id,github_login,github_login_normalized,mapped_user_id,mapped_by)
+       VALUES ($1,'octocat','octocat',$2,$3)`,
+      [installation.id, mappedMember.id, installation.user_id]
+    );
+    const base = {
+      installation: { id: 7001 },
+      repository: repositoryPayload,
+      sender: { login: "octocat" }
+    };
+    const pushed = await signedRequest(
+      app,
+      "push",
+      {
+        ...base,
+        ref: "refs/heads/feature/WHQ-1-automation",
+        commits: [
+          {
+            id: "automation-commit",
+            message: "WHQ-1 start workflow automation",
+            timestamp: "2026-09-03T10:00:00Z"
+          }
+        ]
+      },
+      "automation-push"
+    );
+    const afterPush = (
+      await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])
+    ).rows[0];
+    const merged = await signedRequest(
+      app,
+      "pull_request",
+      {
+        ...base,
+        action: "closed",
+        number: 77,
+        pull_request: {
+          id: 77,
+          number: 77,
+          title: "WHQ-1 finish workflow automation",
+          body: "Ready to ship.",
+          state: "closed",
+          merged: true,
+          updated_at: "2026-09-03T11:00:00Z",
+          user: { login: "octocat" },
+          head: { ref: "feature/WHQ-1-automation" }
+        }
+      },
+      "automation-merge"
+    );
+    const afterMerge = (
+      await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])
+    ).rows[0];
+    const runs = await db.query(
+      `SELECT trigger_name, outcome FROM task_workflow_automation_runs
+       WHERE task_id=$1 ORDER BY id`,
+      [task.id]
+    );
+    const activity = await db.query(
+      `SELECT user_id, action, details FROM activities
+       WHERE entity_id=$1 AND action='task_workflow_automated' ORDER BY id`,
+      [task.id]
+    );
+
+    expect(pushed.status).toBe(202);
+    expect(afterPush.status).toBe("in_progress");
+    expect(merged.status).toBe(202);
+    expect(afterMerge.status).toBe("completed");
+    expect(runs.rows).toEqual([
+      { trigger_name: "commit_pushed", outcome: "applied" },
+      { trigger_name: "pull_request_merged", outcome: "applied" }
+    ]);
+    expect(activity.rows).toHaveLength(2);
+    expect(activity.rows[0].details.source).toBe("github");
+    expect(activity.rows.every((row) => Number(row.user_id) === Number(mappedMember.id))).toBe(
+      true
+    );
+  });
+
+  it("does not automate disabled signals, historical imports, or duplicate deliveries", async () => {
+    await ensureProjectWorkflowRules(db, project.id, installation.user_id);
+    const checkPayload = {
+      installation: { id: 7001 },
+      repository: repositoryPayload,
+      action: "completed",
+      check_run: {
+        id: 901,
+        name: "WHQ-1 tests",
+        status: "completed",
+        conclusion: "success",
+        completed_at: "2026-09-03T12:00:00Z"
+      }
+    };
+    await db.query("UPDATE tasks SET status='in_progress' WHERE id=$1", [task.id]);
+    const disabled = await signedRequest(app, "check_run", checkPayload, "disabled-check");
+    const historicalPayload = {
+      installation: { id: 7001 },
+      repository: repositoryPayload,
+      ref: "refs/heads/WHQ-1-history",
+      commits: [
+        {
+          id: "historical-commit",
+          message: "WHQ-1 historical work",
+          timestamp: "2026-08-01T10:00:00Z"
+        }
+      ]
+    };
+    await db.query("UPDATE tasks SET status='todo' WHERE id=$1", [task.id]);
+    await importGithubDevelopmentPayload({
+      db,
+      installation,
+      eventName: "push",
+      payload: historicalPayload
+    });
+    const pushPayload = {
+      ...historicalPayload,
+      commits: [
+        {
+          id: "deduplicated-commit",
+          message: "WHQ-1 current work",
+          timestamp: "2026-09-03T13:00:00Z"
+        }
+      ]
+    };
+    await signedRequest(app, "push", pushPayload, "same-delivery");
+    await signedRequest(app, "push", pushPayload, "same-delivery");
+    const current = (
+      await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])
+    ).rows[0];
+    const runs = await db.query(
+      "SELECT trigger_name, outcome FROM task_workflow_automation_runs WHERE task_id=$1",
+      [task.id]
+    );
+
+    expect(disabled.status).toBe(202);
+    expect(current.status).toBe("in_progress");
+    expect(runs.rows).toEqual([{ trigger_name: "commit_pushed", outcome: "applied" }]);
   });
 
   it("enforces the one-megabyte raw-body limit", async () => {

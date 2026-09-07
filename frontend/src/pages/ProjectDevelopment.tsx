@@ -197,7 +197,9 @@ function ProjectDevelopment() {
                         {event.title} <ArrowUpRight size={12} />
                       </a>
                       <small>
-                        {event.actorLogin || "GitHub"} · {formatRelativeTime(event.occurredAt)}
+                        {event.actorName || event.actorLogin || "GitHub"}
+                        {event.actorName && event.actorLogin ? ` (@${event.actorLogin})` : ""} ·{" "}
+                        {formatRelativeTime(event.occurredAt)}
                         {event.state ? ` · ${event.state}` : ""}
                       </small>
                     </div>

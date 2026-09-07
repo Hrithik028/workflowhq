@@ -8,9 +8,14 @@ import GitHubIntegration from "./GitHubIntegration";
 
 const githubMocks = vi.hoisted(() => ({
   connect: vi.fn(),
+  deleteIdentityMapping: vi.fn(),
+  getIdentityDirectory: vi.fn(),
   getStatus: vi.fn(),
   getTaskDevelopment: vi.fn(),
+  listWebhookFailures: vi.fn(),
   listRepositories: vi.fn(),
+  redeliverWebhook: vi.fn(),
+  setIdentityMapping: vi.fn(),
   setRepositorySelection: vi.fn(),
   syncInstallation: vi.fn()
 }));
@@ -44,6 +49,8 @@ describe("GitHub integration page", () => {
     vi.clearAllMocks();
     workspaceMocks.listProjects.mockResolvedValue([]);
     githubMocks.listRepositories.mockResolvedValue([]);
+    githubMocks.getIdentityDirectory.mockResolvedValue({ actors: [], members: [] });
+    githubMocks.listWebhookFailures.mockResolvedValue([]);
   });
 
   it("shows a truthful disconnected state when no installation exists", async () => {
@@ -141,6 +148,11 @@ describe("GitHub integration page", () => {
     expect(
       screen.getByText(/illustrative and is never presented as synchronized/i)
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /identity and recovery controls/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/read-only example/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ask github to redeliver/i })).toBeDisabled();
   });
 
   it("accepts only secure github.com installation URLs", () => {
@@ -187,5 +199,94 @@ describe("GitHub integration page", () => {
       await screen.findByText(/repository refresh complete for hrithik028: 66 development events imported/i)
     ).toBeInTheDocument();
     expect(githubMocks.getStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("maps observed contributors and requests safe webhook redelivery", async () => {
+    const installation = {
+      id: 7,
+      githubInstallationId: "7001",
+      accountLogin: "Hrithik028",
+      accountType: "User" as const,
+      repositorySelection: "selected" as const,
+      repositoryCount: 1,
+      selectedRepositoryCount: 1,
+      permissions: {},
+      suspendedAt: null,
+      syncState: "healthy" as const,
+      lastSyncedAt: "2026-09-04T00:00:00.000Z",
+      lastError: null,
+      manageUrl: "https://github.com/settings/installations/7001",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-09-04T00:00:00.000Z"
+    };
+    const actor = {
+      installationId: 7,
+      accountLogin: "Hrithik028",
+      actorLogin: "hrithik-contributor",
+      eventCount: 12,
+      lastSeenAt: new Date().toISOString(),
+      mapping: null
+    };
+    const failure = {
+      id: 11,
+      githubDeliveryId: "delivery-guid",
+      eventName: "pull_request",
+      eventAction: "opened",
+      status: "failed" as const,
+      attemptCount: 1,
+      errorMessage: "Temporary database error.",
+      receivedAt: new Date().toISOString(),
+      processedAt: null,
+      redeliveryRequestedAt: null,
+      redeliveryRequestCount: 0,
+      redeliveryAvailable: true,
+      redeliveryBlockedReason: null,
+      accountLogin: "Hrithik028"
+    };
+    githubMocks.getStatus.mockResolvedValue({ connected: true, installations: [installation] });
+    githubMocks.getIdentityDirectory.mockResolvedValue({
+      actors: [actor],
+      members: [
+        {
+          installationId: 7,
+          userId: 2,
+          name: "Ananya Singh",
+          email: "ananya@example.com"
+        }
+      ]
+    });
+    githubMocks.listWebhookFailures.mockResolvedValue([failure]);
+    githubMocks.setIdentityMapping.mockResolvedValue({
+      id: 3,
+      installationId: 7,
+      githubLogin: actor.actorLogin,
+      mappedUserId: 2,
+      mappedUserName: "Ananya Singh",
+      mappedUserEmail: "ananya@example.com",
+      updatedAt: new Date().toISOString()
+    });
+    githubMocks.redeliverWebhook.mockResolvedValue({
+      id: 11,
+      redeliveryRequestedAt: new Date().toISOString(),
+      redeliveryRequestCount: 1
+    });
+
+    renderPage();
+
+    const memberSelect = await screen.findByRole("combobox", {
+      name: /member for hrithik-contributor/i
+    });
+    fireEvent.change(memberSelect, { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^map$/i }));
+
+    await waitFor(() =>
+      expect(githubMocks.setIdentityMapping).toHaveBeenCalledWith(7, "hrithik-contributor", 2)
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /ask github to redeliver/i }));
+    await waitFor(() => expect(githubMocks.redeliverWebhook).toHaveBeenCalledWith(11));
+    expect(
+      await screen.findByText(/github accepted the redelivery request/i)
+    ).toBeInTheDocument();
   });
 });

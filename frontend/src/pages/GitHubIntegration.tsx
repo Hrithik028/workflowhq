@@ -17,16 +17,83 @@ import { getErrorMessage } from "../api/client";
 import { githubApi } from "../api/github";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import GitHubOperationsPanels from "../components/GitHubOperationsPanels";
 import type {
+  GitHubActorIdentity,
+  GitHubIdentityDirectory,
   GitHubInstallation,
   GitHubIntegrationStatus,
   GitHubRepository,
+  GitHubWebhookFailure,
   Project
 } from "../types";
 import { formatRelativeTime } from "../utils/format";
 import { isAllowedGitHubInstallUrl } from "../utils/github";
 
 const disconnectedStatus: GitHubIntegrationStatus = { connected: false, installations: [] };
+const emptyIdentityDirectory: GitHubIdentityDirectory = { actors: [], members: [] };
+const localPreviewIdentities: GitHubIdentityDirectory = {
+  actors: [
+    {
+      installationId: 7,
+      accountLogin: "Hrithik028",
+      actorLogin: "hrithik-kapoor",
+      eventCount: 18,
+      lastSeenAt: "2026-09-04T00:00:00.000Z",
+      mapping: {
+        id: 3,
+        installationId: 7,
+        githubLogin: "hrithik-kapoor",
+        mappedUserId: 2,
+        mappedUserName: "Hrithik Kapoor",
+        mappedUserEmail: "hrithik@example.com",
+        updatedAt: "2026-09-04T00:00:00.000Z"
+      }
+    },
+    {
+      installationId: 7,
+      accountLogin: "Hrithik028",
+      actorLogin: "ananya-singh",
+      eventCount: 9,
+      lastSeenAt: "2026-09-03T23:45:00.000Z",
+      mapping: null
+    }
+  ],
+  members: [
+    {
+      installationId: 7,
+      userId: 2,
+      name: "Hrithik Kapoor",
+      email: "hrithik@example.com"
+    },
+    {
+      installationId: 7,
+      userId: 3,
+      name: "Ananya Singh",
+      email: "ananya@example.com"
+    }
+  ]
+};
+const localPreviewFailures: GitHubWebhookFailure[] = [
+  {
+    id: 11,
+    githubDeliveryId: "preview-delivery",
+    eventName: "pull_request",
+    eventAction: "synchronize",
+    status: "failed",
+    attemptCount: 2,
+    errorMessage: "The event could not be linked during a temporary database interruption.",
+    receivedAt: "2026-09-04T00:05:00.000Z",
+    processedAt: null,
+    redeliveryRequestedAt: null,
+    redeliveryRequestCount: 0,
+    redeliveryAvailable: true,
+    redeliveryBlockedReason: null,
+    accountLogin: "Hrithik028"
+  }
+];
+const identityKey = (actor: GitHubActorIdentity) =>
+  `${actor.installationId}:${actor.actorLogin.toLowerCase()}`;
 
 const statusCopy = (installation: GitHubInstallation) => {
   if (installation.suspendedAt || installation.syncState === "suspended") {
@@ -76,6 +143,10 @@ function GitHubIntegration() {
   const [status, setStatus] = useState<GitHubIntegrationStatus>(disconnectedStatus);
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [identityDirectory, setIdentityDirectory] =
+    useState<GitHubIdentityDirectory>(emptyIdentityDirectory);
+  const [identityDrafts, setIdentityDrafts] = useState<Record<string, string>>({});
+  const [webhookFailures, setWebhookFailures] = useState<GitHubWebhookFailure[]>([]);
   const [projectDrafts, setProjectDrafts] = useState<Record<number, string>>({});
   const [isLoading, setIsLoading] = useState(!isDemo);
   const [busyKey, setBusyKey] = useState("");
@@ -86,24 +157,40 @@ function GitHubIntegration() {
       setStatus(disconnectedStatus);
       setRepositories([]);
       setProjects([]);
+      setIdentityDirectory(emptyIdentityDirectory);
+      setWebhookFailures([]);
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
       const nextStatus = await githubApi.getStatus();
-      const [nextProjects, nextRepositories] = await Promise.all([
+      const [nextProjects, nextRepositories, nextIdentities, nextFailures] = await Promise.all([
         workspaceApi.listProjects(),
-        nextStatus.connected ? githubApi.listRepositories() : Promise.resolve([])
+        nextStatus.connected ? githubApi.listRepositories() : Promise.resolve([]),
+        nextStatus.connected
+          ? githubApi.getIdentityDirectory()
+          : Promise.resolve(emptyIdentityDirectory),
+        nextStatus.connected ? githubApi.listWebhookFailures() : Promise.resolve([])
       ]);
       setStatus(nextStatus);
       setProjects(nextProjects);
       setRepositories(nextRepositories);
+      setIdentityDirectory(nextIdentities);
+      setWebhookFailures(nextFailures);
       setProjectDrafts(
         Object.fromEntries(
           nextRepositories.map((repository) => [
             repository.id,
             repository.projectId ? String(repository.projectId) : ""
+          ])
+        )
+      );
+      setIdentityDrafts(
+        Object.fromEntries(
+          nextIdentities.actors.map((actor) => [
+            identityKey(actor),
+            actor.mapping ? String(actor.mapping.mappedUserId) : ""
           ])
         )
       );
@@ -230,6 +317,68 @@ function GitHubIntegration() {
     [repositories]
   );
 
+  const saveIdentity = async (actor: GitHubActorIdentity) => {
+    const key = identityKey(actor);
+    const userId = Number(identityDrafts[key]);
+    if (!Number.isSafeInteger(userId) || userId <= 0) return;
+    setBusyKey(`identity-${key}`);
+    setNotice(null);
+    try {
+      await githubApi.setIdentityMapping(actor.installationId, actor.actorLogin, userId);
+      await load();
+      setNotice({ tone: "success", text: `@${actor.actorLogin} is now mapped to a project member.` });
+    } catch (error) {
+      setNotice({ tone: "error", text: getErrorMessage(error, "Unable to map this GitHub actor.") });
+    } finally {
+      setBusyKey("");
+    }
+  };
+
+  const removeIdentity = async (actor: GitHubActorIdentity) => {
+    if (!actor.mapping) return;
+    const key = identityKey(actor);
+    setBusyKey(`identity-${key}`);
+    setNotice(null);
+    try {
+      await githubApi.deleteIdentityMapping(actor.mapping.id);
+      await load();
+      setNotice({ tone: "success", text: `The @${actor.actorLogin} member mapping was removed.` });
+    } catch (error) {
+      setNotice({ tone: "error", text: getErrorMessage(error, "Unable to remove this mapping.") });
+    } finally {
+      setBusyKey("");
+    }
+  };
+
+  const retryDelivery = async (delivery: GitHubWebhookFailure) => {
+    setBusyKey(`delivery-${delivery.id}`);
+    setNotice(null);
+    try {
+      const receipt = await githubApi.redeliverWebhook(delivery.id);
+      setWebhookFailures((current) =>
+        current.map((item) =>
+          item.id === delivery.id
+            ? {
+                ...item,
+                redeliveryRequestedAt: receipt.redeliveryRequestedAt,
+                redeliveryRequestCount: receipt.redeliveryRequestCount,
+                redeliveryAvailable: false,
+                redeliveryBlockedReason: "cooldown"
+              }
+            : item
+        )
+      );
+      setNotice({
+        tone: "success",
+        text: "GitHub accepted the redelivery request. The receipt will update when it arrives."
+      });
+    } catch (error) {
+      setNotice({ tone: "error", text: getErrorMessage(error, "Unable to request redelivery.") });
+    } finally {
+      setBusyKey("");
+    }
+  };
+
   return (
     <main className="workspace-page github-integration-page" aria-busy={isLoading}>
       <header className="engineering-page-header github-integration-header">
@@ -258,17 +407,41 @@ function GitHubIntegration() {
       ) : null}
 
       {isDemo ? (
-        <section className="github-demo-notice">
-          <Github size={26} />
-          <div>
-            <span className="overline">Preview mode</span>
-            <h2>Live GitHub connection is disabled in the demo.</h2>
-            <p>
-              Sample development data elsewhere in the demo is illustrative and is never presented
-              as synchronized account data.
-            </p>
-          </div>
-        </section>
+        <>
+          <section className="github-demo-notice">
+            <Github size={26} />
+            <div>
+              <span className="overline">Preview mode</span>
+              <h2>Live GitHub connection is disabled in the demo.</h2>
+              <p>
+                Sample development data elsewhere in the demo is illustrative and is never
+                presented as synchronized account data.
+              </p>
+            </div>
+          </section>
+          {import.meta.env.DEV ? (
+            <section className="github-local-operations-preview">
+              <header>
+                <div>
+                  <span className="overline">Local Phase 9 preview</span>
+                  <h2>Identity and recovery controls</h2>
+                </div>
+                <strong>Read-only example</strong>
+              </header>
+              <GitHubOperationsPanels
+                busyKey=""
+                failures={localPreviewFailures}
+                identityDirectory={localPreviewIdentities}
+                identityDrafts={{ "7:hrithik-kapoor": "2", "7:ananya-singh": "" }}
+                onIdentityDraft={() => undefined}
+                onMapIdentity={() => undefined}
+                onRemoveIdentity={() => undefined}
+                onRetryDelivery={() => undefined}
+                readOnly
+              />
+            </section>
+          ) : null}
+        </>
       ) : isLoading ? (
         <p className="register-loading">Checking GitHub connection…</p>
       ) : !status.connected ? (
@@ -469,6 +642,18 @@ function GitHubIntegration() {
               })
             )}
           </section>
+          <GitHubOperationsPanels
+            busyKey={busyKey}
+            failures={webhookFailures}
+            identityDirectory={identityDirectory}
+            identityDrafts={identityDrafts}
+            onIdentityDraft={(actor, userId) =>
+              setIdentityDrafts((current) => ({ ...current, [identityKey(actor)]: userId }))
+            }
+            onMapIdentity={(actor) => void saveIdentity(actor)}
+            onRemoveIdentity={(actor) => void removeIdentity(actor)}
+            onRetryDelivery={(delivery) => void retryDelivery(delivery)}
+          />
         </>
       )}
     </main>

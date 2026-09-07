@@ -27,19 +27,22 @@ export const statusLabel: Record<TaskStatus, string> = {
 
 export const activityCopy = (activity: Activity) => {
   const title = `“${activity.entityTitle}”`;
+  const detail = (name: string) => String(activity.details[name] ?? "");
   switch (activity.action) {
     case "task_created":
       return `Created ${title}`;
     case "task_completed":
       return `Completed ${title}`;
     case "task_status_changed":
-      return `Moved ${title} to ${statusLabel[activity.details.to as TaskStatus] ?? activity.details.to}`;
+      return `Moved ${title} to ${statusLabel[detail("to") as TaskStatus] ?? detail("to")}`;
+    case "task_workflow_automated":
+      return `GitHub moved ${title} to ${statusLabel[detail("to") as TaskStatus] ?? detail("to")}`;
     case "task_priority_changed":
-      return `Changed ${title} priority to ${activity.details.to}`;
+      return `Changed ${title} priority to ${detail("to")}`;
     case "task_parent_changed":
       return `Changed ${title} parent ticket`;
     case "task_label_added":
-      return `Labeled ${title} “${activity.details.labelName}”`;
+      return `Labeled ${title} “${detail("labelName")}”`;
     case "task_comment_added":
       return `Commented on ${title}`;
     case "task_deleted":
@@ -56,6 +59,14 @@ export const activityCopy = (activity: Activity) => {
       return `Archived project ${title}`;
     case "project_restored":
       return `Restored project ${title}`;
+    case "project_workflow_updated":
+      return `Updated GitHub workflow rules for ${title}`;
+    case "github_identity_mapped":
+      return `Mapped GitHub actor ${title}`;
+    case "github_identity_unmapped":
+      return `Removed GitHub actor mapping for ${title}`;
+    case "github_webhook_redelivery_requested":
+      return `Requested GitHub redelivery for ${title}`;
     default:
       return `Updated ${title}`;
   }

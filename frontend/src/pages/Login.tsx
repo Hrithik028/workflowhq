@@ -1,6 +1,6 @@
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { authApi } from "../api/auth";
 import { getErrorMessage } from "../api/client";
@@ -11,10 +11,30 @@ import type { Session } from "../types";
 interface LoginProps {
   onDemo: () => void;
   onSuccess: (session: Session) => void;
+  allowDemo?: boolean;
+  registerPath?: string;
+  successPath?: string;
 }
 
-function Login({ onDemo, onSuccess }: LoginProps) {
+function Login({
+  onDemo,
+  onSuccess,
+  allowDemo = true,
+  registerPath,
+  successPath
+}: LoginProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const requestedPath = new URLSearchParams(location.search).get("next");
+  const safeRequestedPath =
+    requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+      ? requestedPath
+      : null;
+  const demoEnabled = allowDemo && !safeRequestedPath?.startsWith("/invitations/");
+  const destination = successPath || safeRequestedPath || "/app";
+  const createAccountPath =
+    registerPath ||
+    (safeRequestedPath ? `/register?next=${encodeURIComponent(safeRequestedPath)}` : "/register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,17 +45,18 @@ function Login({ onDemo, onSuccess }: LoginProps) {
     event.preventDefault();
     setError("");
     if (
+      demoEnabled &&
       email.trim().toLowerCase() === demoCredentials.email &&
       password === demoCredentials.password
     ) {
       onDemo();
-      navigate("/app");
+      navigate(destination);
       return;
     }
     setIsSubmitting(true);
     try {
       onSuccess(await authApi.login({ email, password }));
-      navigate("/app");
+      navigate(destination);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to sign in. Please try again."));
     } finally {
@@ -45,7 +66,7 @@ function Login({ onDemo, onSuccess }: LoginProps) {
 
   const enterDemo = () => {
     onDemo();
-    navigate("/app");
+    navigate(destination);
   };
 
   const fillDemoCredentials = () => {
@@ -102,34 +123,36 @@ function Login({ onDemo, onSuccess }: LoginProps) {
         </button>
       </form>
 
-      <section className="demo-login-card" aria-label="Demo login">
-        <header>
-          <strong>Demo account</strong>
-          <span>Populated workspace</span>
-        </header>
-        <dl>
-          <div>
-            <dt>Email</dt>
-            <dd>{demoCredentials.email}</dd>
+      {demoEnabled ? (
+        <section className="demo-login-card" aria-label="Demo login">
+          <header>
+            <strong>Demo account</strong>
+            <span>Populated workspace</span>
+          </header>
+          <dl>
+            <div>
+              <dt>Email</dt>
+              <dd>{demoCredentials.email}</dd>
+            </div>
+            <div>
+              <dt>Password</dt>
+              <dd>{demoCredentials.password}</dd>
+            </div>
+          </dl>
+          <div className="demo-login-actions">
+            <button className="text-link" type="button" onClick={fillDemoCredentials}>
+              Fill credentials
+            </button>
+            <button className="button secondary" type="button" onClick={enterDemo}>
+              Enter demo <ArrowRight size={15} />
+            </button>
           </div>
-          <div>
-            <dt>Password</dt>
-            <dd>{demoCredentials.password}</dd>
-          </div>
-        </dl>
-        <div className="demo-login-actions">
-          <button className="text-link" type="button" onClick={fillDemoCredentials}>
-            Fill credentials
-          </button>
-          <button className="button secondary" type="button" onClick={enterDemo}>
-            Enter demo <ArrowRight size={15} />
-          </button>
-        </div>
-        <p>Includes projects, task hierarchy, deadlines, activity, and delivery metrics.</p>
-      </section>
+          <p>Includes projects, task hierarchy, deadlines, activity, and delivery metrics.</p>
+        </section>
+      ) : null}
 
       <p className="auth-switch">
-        New to WorkflowHQ? <Link to="/register">Create an account</Link>
+        New to WorkflowHQ? <Link to={createAccountPath}>Create an account</Link>
       </p>
     </AuthLayout>
   );

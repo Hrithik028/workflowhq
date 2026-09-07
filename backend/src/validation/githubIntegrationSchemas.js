@@ -15,6 +15,8 @@ const githubIntegrationSchemas = {
     })
     .strict(),
   repositoryParams: z.object({ repositoryId: positiveId }).strict(),
+  identityParams: z.object({ mappingId: positiveId }).strict(),
+  deliveryParams: z.object({ deliveryId: positiveId }).strict(),
   installationParams: z.object({ installationId: positiveId }).strict(),
   projectParams: z.object({ projectId: positiveId }).strict(),
   callbackQuery: z
@@ -27,6 +29,16 @@ const githubIntegrationSchemas = {
     .strict(),
   repositorySelection: z
     .object({ selected: z.boolean(), projectId: positiveId.nullable() })
+    .strict(),
+  identityMapping: z
+    .object({
+      installationId: positiveId,
+      githubLogin: z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/, "Choose a human GitHub account."),
+      userId: positiveId
+    })
     .strict(),
   taskParams: z.object({ taskId: positiveId }).strict()
 };

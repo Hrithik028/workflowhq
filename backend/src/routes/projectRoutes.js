@@ -22,6 +22,15 @@ const {
   updateMemberRole
 } = require("../controllers/projectMemberController");
 const {
+  createProjectInvitation,
+  listProjectInvitations,
+  revokeProjectInvitation
+} = require("../controllers/projectInvitationController");
+const {
+  getProjectWorkflow,
+  updateProjectWorkflow
+} = require("../controllers/projectWorkflowController");
+const {
   createSprint,
   deleteSprint,
   listSprints,
@@ -33,9 +42,11 @@ const authMiddleware = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validate");
 const {
   labelSchemas,
+  invitationSchemas,
   projectMemberSchemas,
   projectSchemas,
-  sprintSchemas
+  sprintSchemas,
+  workflowSchemas
 } = require("../validation/schemas");
 
 const router = express.Router();
@@ -73,6 +84,38 @@ router.delete(
   asyncHandler(requireRule("allow_project_deletion")),
   validate({ params: projectSchemas.params }),
   asyncHandler(deleteProject)
+);
+
+router.get(
+  "/:id/workflow",
+  asyncHandler(requirePermission("projects.edit")),
+  validate({ params: workflowSchemas.params }),
+  asyncHandler(getProjectWorkflow)
+);
+router.put(
+  "/:id/workflow",
+  asyncHandler(requirePermission("projects.edit")),
+  validate({ params: workflowSchemas.params, body: workflowSchemas.update }),
+  asyncHandler(updateProjectWorkflow)
+);
+
+router.get(
+  "/:id/invitations",
+  asyncHandler(requirePermission("projects.members")),
+  validate({ params: invitationSchemas.params }),
+  asyncHandler(listProjectInvitations)
+);
+router.post(
+  "/:id/invitations",
+  asyncHandler(requirePermission("projects.members")),
+  validate({ params: invitationSchemas.params, body: invitationSchemas.create }),
+  asyncHandler(createProjectInvitation)
+);
+router.delete(
+  "/:id/invitations/:invitationId",
+  asyncHandler(requirePermission("projects.members")),
+  validate({ params: invitationSchemas.invitationParams }),
+  asyncHandler(revokeProjectInvitation)
 );
 
 router.get(

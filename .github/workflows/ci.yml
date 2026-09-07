@@ -4,6 +4,11 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -12,6 +17,7 @@ jobs:
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -36,6 +42,7 @@ jobs:
       CORS_ORIGIN: http://localhost:5173
     steps:
       - uses: actions/checkout@v4
+      - run: node ../scripts/release-audit.mjs
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -51,6 +58,7 @@ jobs:
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -67,3 +75,17 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
+
+  containers:
+    name: Container checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag workflowhq-backend:ci ./backend
+      - run: >-
+          docker build --tag workflowhq-frontend:ci
+          --build-arg VITE_API_BASE_URL=https://api.example.test/api
+          --build-arg VITE_DEMO_MODE=false
+          ./frontend

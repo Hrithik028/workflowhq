@@ -1,6 +1,7 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
 const { getProjectRole } = require("../lib/projectAccess");
+const { ensureProjectWorkflowRules } = require("../lib/projectWorkflow");
 
 const getProjects = async (req, res) => {
   const archivedCondition = req.query.archived ? "IS NOT NULL" : "IS NULL";
@@ -73,6 +74,7 @@ const createProject = async (req, res) => {
        VALUES ($1, $2, 'owner', $2)`,
       [project.id, req.user.id]
     );
+    await ensureProjectWorkflowRules(client, project.id, req.user.id);
     await logActivity(client, {
       userId: req.user.id,
       action: "project_created",

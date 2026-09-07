@@ -11,6 +11,13 @@ const {
   startConnection,
   syncInstallation
 } = require("../controllers/githubIntegrationController");
+const {
+  deleteGithubIdentity,
+  listGithubIdentities,
+  listWebhookFailures,
+  redeliverWebhookFailure,
+  setGithubIdentity
+} = require("../controllers/githubOperationsController");
 const { asyncHandler } = require("../lib/asyncHandler");
 const { requirePermission } = require("../middleware/accessControl");
 const authMiddleware = require("../middleware/authMiddleware");
@@ -32,6 +39,34 @@ router.post(
 );
 router.get("/status", asyncHandler(getIntegrationStatus));
 router.get("/summary", asyncHandler(getCommandSummary));
+router.get(
+  "/identities",
+  asyncHandler(requirePermission("github.manage")),
+  asyncHandler(listGithubIdentities)
+);
+router.put(
+  "/identities",
+  asyncHandler(requirePermission("github.manage")),
+  validate({ body: githubIntegrationSchemas.identityMapping }),
+  asyncHandler(setGithubIdentity)
+);
+router.delete(
+  "/identities/:mappingId",
+  asyncHandler(requirePermission("github.manage")),
+  validate({ params: githubIntegrationSchemas.identityParams }),
+  asyncHandler(deleteGithubIdentity)
+);
+router.get(
+  "/webhook-deliveries/failed",
+  asyncHandler(requirePermission("github.manage")),
+  asyncHandler(listWebhookFailures)
+);
+router.post(
+  "/webhook-deliveries/:deliveryId/redeliver",
+  asyncHandler(requirePermission("github.manage")),
+  validate({ params: githubIntegrationSchemas.deliveryParams }),
+  asyncHandler(redeliverWebhookFailure)
+);
 router.get(
   "/projects/:projectId/development",
   validate({ params: githubIntegrationSchemas.projectParams }),

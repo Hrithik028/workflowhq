@@ -9,7 +9,7 @@ import {
   Search,
   SlidersHorizontal
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 
 import { getErrorMessage } from "../api/client";
@@ -19,7 +19,7 @@ import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
-import type { Project, Sprint, SprintStatus, Task, TaskInput } from "../types";
+import type { Project, Sprint, SprintStatus, Task, TaskInput, TaskStatus } from "../types";
 import { formatDate, initialsFor } from "../utils/format";
 import { persistedProgressFor } from "../utils/taskProgress";
 
@@ -40,47 +40,115 @@ const stageMeta = [
   { key: "released" as const, label: "Released", icon: Rocket }
 ];
 
-function EngineeringCard({ isDemo, task }: { isDemo: boolean; task: Task }) {
+const statusForStage: Record<BoardStage, TaskStatus> = {
+  backlog: "todo",
+  progress: "in_progress",
+  released: "completed"
+};
+
+function EngineeringCard({
+  isDemo,
+  task,
+  canMove,
+  busy,
+  onMove,
+  onDragStart,
+  onDragEnd
+}: {
+  isDemo: boolean;
+  task: Task;
+  canMove: boolean;
+  busy: boolean;
+  onMove: (task: Task, stage: BoardStage) => void;
+  onDragStart: (event: DragEvent, task: Task) => void;
+  onDragEnd: () => void;
+}) {
   const progress = visibleProgressFor(task, isDemo);
   return (
-    <Link className="engineering-card" to={`/tasks/${task.id}`}>
-      <div className="engineering-card-top">
-        <span>{task.issueKey}</span>
-        <b>{task.taskType}</b>
-      </div>
-      <strong>{task.title}</strong>
-      <div className="engineering-card-signal">
-        <span className="mini-avatar">{initialsFor(task.assigneeName)}</span>
-        <span>{task.assigneeName || "Unassigned"}</span>
-      </div>
-      <footer>
-        <span>{task.childCount ? `${task.completedChildCount} / ${task.childCount}` : "—"}</span>
-        <i>
-          <b style={{ width: `${progress}%` }} />
-        </i>
-        <em className={task.priority}>
-          <PriorityIcon priority={task.priority} />
-          {task.priority}
-        </em>
-      </footer>
-    </Link>
+    <article
+      className="engineering-card"
+      aria-label={task.issueKey}
+      draggable={canMove && !busy}
+      onDragStart={(event) => onDragStart(event, task)}
+      onDragEnd={onDragEnd}
+    >
+      <Link className="engineering-card-link" draggable={false} to={`/tasks/${task.id}`}>
+        <div className="engineering-card-top">
+          <span>{task.issueKey}</span>
+          <b>{task.taskType}</b>
+        </div>
+        <strong>{task.title}</strong>
+        <div className="engineering-card-signal">
+          <span className="mini-avatar">{initialsFor(task.assigneeName)}</span>
+          <span>{task.assigneeName || "Unassigned"}</span>
+        </div>
+        <footer>
+          <span>{task.childCount ? `${task.completedChildCount} / ${task.childCount}` : "—"}</span>
+          <i>
+            <b style={{ width: `${progress}%` }} />
+          </i>
+          <em className={task.priority}>
+            <PriorityIcon priority={task.priority} />
+            {task.priority}
+          </em>
+        </footer>
+      </Link>
+      <label className="engineering-card-move">
+        <span>Move to</span>
+        <select
+          aria-label={`Move ${task.issueKey} to`}
+          value={stageFor(task)}
+          disabled={!canMove || busy}
+          onChange={(event) => onMove(task, event.target.value as BoardStage)}
+        >
+          {stageMeta.map(({ key, label }) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </article>
   );
 }
 
 function WorkspaceEngineering() {
-  const { isDemo } = useOutletContext<LayoutContext>();
-  const [searchParams] = useSearchParams();
+  const { isDemo, user } = useOutletContext<LayoutContext>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const projectId = searchParams.get("project") || "";
+  const sprintId = searchParams.get("sprint") || "";
+  const stageParam = searchParams.get("stage");
+  const selectedStage = stageMeta.find((stage) => stage.key === stageParam)?.key || null;
   const client = useMemo(() => (isDemo ? demoWorkspaceApi : workspaceApi), [isDemo]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [search, setSearch] = useState("");
-  const [projectId, setProjectId] = useState(searchParams.get("project") || "");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState("");
   const [sprints, setSprints] = useState<Sprint[]>([]);
-  const [sprintId, setSprintId] = useState("");
+  const [movingId, setMovingId] = useState<number | null>(null);
+  const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [dropStage, setDropStage] = useState<BoardStage | null>(null);
+  const [notice, setNotice] = useState("");
+  const [initialStatus, setInitialStatus] = useState<TaskStatus>("todo");
+  const moving = useRef(false);
+  const loadVersion = useRef(0);
+  const dragId = useRef<number | null>(null);
+  const invalidateLoad = useCallback(() => {
+    loadVersion.current++;
+  }, []);
+
+  const updateFilters = (changes: Record<string, string | null>) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      Object.entries(changes).forEach(([key, value]) =>
+        value ? next.set(key, value) : next.delete(key)
+      );
+      return next;
+    });
+  };
   const [isCreatingSprint, setIsCreatingSprint] = useState(false);
   const [newSprintName, setNewSprintName] = useState("");
   const [newSprintStart, setNewSprintStart] = useState("");
@@ -88,32 +156,45 @@ function WorkspaceEngineering() {
   const [isSprintBusy, setIsSprintBusy] = useState(false);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setIsLoading(true);
     try {
+      const query = {
+        limit: 100,
+        search: search || undefined,
+        projectId: projectId ? Number(projectId) : undefined,
+        sort: "updated_at" as const,
+        order: "desc" as const
+      };
       const [taskResult, projectResult] = await Promise.all([
-        client.listTasks({
-          limit: 100,
-          search: search || undefined,
-          projectId: projectId ? Number(projectId) : undefined,
-          sort: "updated_at",
-          order: "desc"
-        }),
+        client.listTasks(query),
         client.listProjects()
       ]);
-      setTasks(taskResult.data);
+      const allTasks = [...taskResult.data];
+      for (let page = 2; page <= taskResult.pagination.pages; page++) {
+        if (version !== loadVersion.current) return;
+        const result = await client.listTasks({ ...query, page });
+        allTasks.push(...result.data);
+      }
+      if (version !== loadVersion.current) return;
+      setTasks(Array.from(new Map(allTasks.map((task) => [task.id, task])).values()));
       setProjects(projectResult);
       setError("");
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Unable to load the engineering board."));
+      if (version === loadVersion.current)
+        setError(getErrorMessage(loadError, "Unable to load the engineering board."));
     } finally {
-      setIsLoading(false);
+      if (version === loadVersion.current) setIsLoading(false);
     }
   }, [client, projectId, search]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), search ? 180 : 0);
-    return () => window.clearTimeout(timer);
-  }, [load, search]);
+    return () => {
+      window.clearTimeout(timer);
+      invalidateLoad();
+    };
+  }, [load, search, invalidateLoad]);
 
   const loadSprints = useCallback(async () => {
     if (!projectId) {
@@ -144,7 +225,7 @@ function WorkspaceEngineering() {
         endDate: newSprintEnd || null
       });
       setSprints((current) => [...current, sprint]);
-      setSprintId(String(sprint.id));
+      updateFilters({ sprint: String(sprint.id) });
       setNewSprintName("");
       setNewSprintStart("");
       setNewSprintEnd("");
@@ -192,10 +273,93 @@ function WorkspaceEngineering() {
     [sprintId, tasks]
   );
 
+  const displayedTasks = useMemo(
+    () =>
+      selectedStage
+        ? visibleTasks.filter((task) => stageFor(task) === selectedStage)
+        : visibleTasks,
+    [visibleTasks, selectedStage]
+  );
+
+  const canMove = (task: Task) => {
+    if (task.archivedAt || task.projectArchivedAt) return false;
+    if (isDemo) return true;
+    if (!task.projectId) return task.userId === user.id;
+    const role = projects.find((project) => project.id === task.projectId)?.myRole;
+    return role === "owner" || role === "editor";
+  };
+
+  const moveTask = async (task: Task, stage: BoardStage) => {
+    if (moving.current || isLoading || !canMove(task) || stageFor(task) === stage) return;
+    moving.current = true;
+    setMovingId(task.id);
+    setError("");
+    setNotice(`Moving ${task.issueKey}…`);
+    // Keep the existing card in place until the server accepts the change.
+    // Permissions and workspace rules are still enforced by the task API.
+    try {
+      const updated = await client.updateTask(task.id, {
+        projectId: task.projectId,
+        title: task.title,
+        description: task.description,
+        status: statusForStage[stage],
+        priority: task.priority,
+        startDate: task.startDate,
+        dueDate: task.dueDate,
+        taskType: task.taskType,
+        parentId: task.parentId,
+        assigneeId: task.assigneeId,
+        sprintId: task.sprintId
+      });
+      setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setNotice(
+        `${task.issueKey} moved to ${stageMeta.find((item) => item.key === stage)!.label}.`
+      );
+      await load();
+    } catch (moveError) {
+      setNotice("");
+      setError(
+        getErrorMessage(moveError, "Unable to confirm the move. Refresh the board before retrying.")
+      );
+    } finally {
+      moving.current = false;
+      setMovingId(null);
+    }
+  };
+
+  const endDrag = () => {
+    dragId.current = null;
+    setDraggedId(null);
+    setDropStage(null);
+  };
+  const startDrag = (event: DragEvent, task: Task) => {
+    if (!canMove(task) || moving.current || isLoading) {
+      event.preventDefault();
+      return;
+    }
+    dragId.current = task.id;
+    setDraggedId(task.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", task.issueKey);
+  };
+  const dragOver = (event: DragEvent, stage: BoardStage) => {
+    if (dragId.current == null || moving.current) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropStage(stage);
+  };
+  const drop = (event: DragEvent, stage: BoardStage) => {
+    event.preventDefault();
+    const task = tasks.find((item) => item.id === dragId.current);
+    endDrag();
+    // Only drags originating from an editable card on this board are accepted.
+    if (task) void moveTask(task, stage);
+  };
+
   const groups = useMemo(() => {
     const byId = new Map(tasks.map((task) => [task.id, task]));
     const grouped = new Map<number, Task[]>();
-    visibleTasks.forEach((task) => {
+    displayedTasks.forEach((task) => {
       let root = task;
       const visited = new Set<number>();
       while (root.parentId && byId.has(root.parentId) && !visited.has(root.id)) {
@@ -208,7 +372,7 @@ function WorkspaceEngineering() {
       root: byId.get(rootId) || items[0],
       items
     }));
-  }, [tasks, visibleTasks]);
+  }, [tasks, displayedTasks]);
 
   return (
     <main className="workspace-page engineering-board-page" aria-busy={isLoading}>
@@ -226,7 +390,8 @@ function WorkspaceEngineering() {
             <>
               <select
                 aria-label="Select sprint"
-                onChange={(event) => setSprintId(event.target.value)}
+                disabled={movingId !== null}
+                onChange={(event) => updateFilters({ sprint: event.target.value })}
                 value={sprintId}
               >
                 <option value="">All sprints</option>
@@ -299,6 +464,7 @@ function WorkspaceEngineering() {
           <Search size={18} />
           <input
             aria-label="Search issues"
+            disabled={movingId !== null}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="SEARCH ISSUES..."
             value={search}
@@ -306,9 +472,9 @@ function WorkspaceEngineering() {
         </label>
         <select
           aria-label="Select project"
+          disabled={movingId !== null}
           onChange={(event) => {
-            setProjectId(event.target.value);
-            setSprintId("");
+            updateFilters({ project: event.target.value, sprint: null });
           }}
           value={projectId}
         >
@@ -342,16 +508,42 @@ function WorkspaceEngineering() {
         </button>
       </section>
 
-      {error ? <p className="form-alert error">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="form-alert error">
+          {error}
+        </p>
+      ) : null}
+      <div className="engineering-board-instructions">
+        <button
+          type="button"
+          aria-pressed={!selectedStage}
+          onClick={() => updateFilters({ stage: null })}
+        >
+          All lanes
+        </button>
+        <p>Select a lane to focus. Drag a card onto a lane header, or use its Move to menu.</p>
+      </div>
+      <p role="status" className="engineering-board-status">
+        {notice}
+      </p>
 
       <section className="engineering-swimlanes">
         <header className="engineering-stage-head">
           {stageMeta.map(({ key, label, icon: Icon }) => (
-            <div className={key} key={key}>
+            <button
+              type="button"
+              aria-pressed={selectedStage === key}
+              aria-label={`${label} lane`}
+              className={`${key}${dropStage === key ? " drop-active" : ""}`}
+              key={key}
+              onClick={() => updateFilters({ stage: selectedStage === key ? null : key })}
+              onDragOver={(event) => dragOver(event, key)}
+              onDrop={(event) => drop(event, key)}
+            >
               <Icon size={18} />
               <strong>{label}</strong>
               <span>{visibleTasks.filter((task) => stageFor(task) === key).length}</span>
-            </div>
+            </button>
           ))}
         </header>
         {groups.map(({ root, items }) => (
@@ -371,21 +563,46 @@ function WorkspaceEngineering() {
               </i>
               <MoreHorizontal size={17} />
             </header>
-            <div className="engineering-epic-grid">
-              {stageMeta.map(({ key }) => {
-                const item = items.find((task) => stageFor(task) === key);
-                return (
-                  <div className="engineering-stage-cell" key={key}>
-                    {item ? (
-                      <EngineeringCard isDemo={isDemo} task={item} />
-                    ) : (
-                      <button type="button" onClick={() => setIsModalOpen(true)}>
-                        <Plus size={14} /> Add issue
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+            <div className={`engineering-epic-grid${selectedStage ? " focused-lane" : ""}`}>
+              {stageMeta
+                .filter(({ key }) => !selectedStage || key === selectedStage)
+                .map(({ key, label }) => {
+                  const laneItems = items.filter((task) => stageFor(task) === key);
+                  return (
+                    <div
+                      className={`engineering-stage-cell${draggedId !== null && dropStage === key ? " drop-active" : ""}`}
+                      role="region"
+                      aria-label={`${root.issueKey} ${label}`}
+                      key={key}
+                      onDragOver={(event) => dragOver(event, key)}
+                      onDrop={(event) => drop(event, key)}
+                    >
+                      {laneItems.map((item) => (
+                        <EngineeringCard
+                          key={item.id}
+                          isDemo={isDemo}
+                          task={item}
+                          canMove={canMove(item)}
+                          busy={movingId !== null || isLoading}
+                          onMove={(task, stage) => void moveTask(task, stage)}
+                          onDragStart={startDrag}
+                          onDragEnd={endDrag}
+                        />
+                      ))}
+                      {!laneItems.length ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInitialStatus(statusForStage[key]);
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          <Plus size={14} /> Add issue
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
             </div>
           </section>
         ))}
@@ -398,7 +615,9 @@ function WorkspaceEngineering() {
       </section>
 
       <footer className="engineering-board-footer">
-        <span>{visibleTasks.length} issues</span>
+        <span>
+          {displayedTasks.length} of {visibleTasks.length} issues
+        </span>
         <span className="high">
           ■ High&nbsp;&nbsp;{visibleTasks.filter((task) => task.priority === "high").length}
         </span>
@@ -413,13 +632,19 @@ function WorkspaceEngineering() {
       <button
         className="engineering-floating-new"
         type="button"
-        onClick={() => setIsModalOpen(true)}
+        onClick={() => {
+          setInitialStatus(selectedStage ? statusForStage[selectedStage] : "todo");
+          setIsModalOpen(true);
+        }}
       >
         <Plus size={17} /> New issue
       </button>
       {isModalOpen ? (
         <TaskModal
           client={client}
+          initialStatus={initialStatus}
+          initialProjectId={projectId ? Number(projectId) : null}
+          initialSprintId={sprintId ? Number(sprintId) : null}
           isSaving={isSaving}
           onClose={() => setIsModalOpen(false)}
           onArchive={async () => undefined}

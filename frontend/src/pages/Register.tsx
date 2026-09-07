@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { authApi } from "../api/auth";
 import { getErrorMessage } from "../api/client";
@@ -10,10 +10,27 @@ import type { Session } from "../types";
 interface RegisterProps {
   onDemo: () => void;
   onSuccess: (session: Session) => void;
+  loginPath?: string;
+  successPath?: string;
 }
 
-function Register({ onDemo, onSuccess }: RegisterProps) {
+function Register({
+  onDemo,
+  onSuccess,
+  loginPath,
+  successPath
+}: RegisterProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const requestedPath = new URLSearchParams(location.search).get("next");
+  const safeRequestedPath =
+    requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+      ? requestedPath
+      : null;
+  const destination = successPath || safeRequestedPath || "/app";
+  const signInPath =
+    loginPath ||
+    (safeRequestedPath ? `/login?next=${encodeURIComponent(safeRequestedPath)}` : "/login");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,7 +41,7 @@ function Register({ onDemo, onSuccess }: RegisterProps) {
     setIsSubmitting(true);
     try {
       onSuccess(await authApi.register(form));
-      navigate("/app");
+      navigate(destination);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to create your account."));
     } finally {
@@ -92,7 +109,7 @@ function Register({ onDemo, onSuccess }: RegisterProps) {
         </button>
       ) : null}
       <p className="auth-switch">
-        Already have an account? <Link to="/login">Sign in</Link>
+        Already have an account? <Link to={signInPath}>Sign in</Link>
       </p>
     </AuthLayout>
   );

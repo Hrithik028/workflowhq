@@ -1,6 +1,6 @@
 import { ArrowUpRight, FolderKanban, Github, PencilLine, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useOutletContext } from "react-router-dom";
+import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
@@ -11,6 +11,7 @@ import type { Project, ProjectInput } from "../types";
 
 function Projects() {
   const { isDemo, user } = useOutletContext<LayoutContext>();
+  const navigate = useNavigate();
   const client = useMemo(() => (isDemo ? demoWorkspaceApi : workspaceApi), [isDemo]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [editing, setEditing] = useState<Project | null>(null);
@@ -219,6 +220,9 @@ function Projects() {
             setEditing(null);
           }}
           onArchive={archiveProject}
+          onOpenWorkflowSettings={(project) =>
+            navigate(`/projects/${project.id}/workflow-settings`)
+          }
           onSave={saveProject}
           project={editing}
         />
