@@ -91,7 +91,8 @@ CI also builds both production containers after the application checks succeed.
 
 ## 5. Pre-deploy checks
 
-- Back up the production database and verify a restore procedure exists.
+- Back up the production database and complete the disposable-database verification in
+  [the PostgreSQL backup and restore runbook](database-backup-restore-runbook.md).
 - Confirm the database role can run migrations but is not a cluster superuser.
 - Confirm TLS certificate verification remains enabled for the production database.
 - Confirm the frontend origin exactly matches `CORS_ORIGIN` and `APP_BASE_URL`.
