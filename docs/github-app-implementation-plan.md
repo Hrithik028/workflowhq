@@ -14,8 +14,8 @@ This plan turns the existing GitHub database foundation into a truthful, project
 | 6 | Durable acceptance criteria and archive lifecycle | Complete |
 | 7 | Secure project invitations | Complete |
 | 8 | Project workflow automation | Complete |
-| 9 | Contributor identity and webhook recovery | Complete locally |
-| 10 | Developer-beta release audit | Complete locally; approval and deployment verification pending |
+| 9 | Contributor identity and webhook recovery | Complete and deployed |
+| 10 | Developer-beta release audit | Verification in progress; operational gates remain |
 
 ## Authority model
 

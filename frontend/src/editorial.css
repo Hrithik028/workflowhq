@@ -4401,6 +4401,17 @@ html[data-motion="reduced"] *::after {
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
+@media (max-width: 760px) {
+  .engineering-stage-head {
+    min-width: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .engineering-stage-head > button {
+    gap: 6px;
+    padding: 0 4px;
+  }
+}
 .engineering-card-link {
   display: grid;
   gap: 9px;
