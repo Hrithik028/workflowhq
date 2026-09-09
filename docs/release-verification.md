@@ -36,6 +36,15 @@
   Three of five forward-only workflow rules were enabled: commit push and pull-request
   open move Ready tickets to In motion, while pull-request merge moves In motion tickets
   to Shipped.
+- An authenticated production mutation smoke check on September 9 created the
+  temporary `QA2609` project with the platform owner as its owner, a parent epic,
+  and a child task. Two acceptance criteria survived a full reload; one completed
+  criterion retained its state. Archiving and restoring the project retained both
+  tickets, their hierarchy, and the criteria. A link-only Editor invitation for a
+  reserved test address was created and then revoked, returning the pending count
+  to zero without sending email. The project workflow settings were changed from
+  three to four enabled rules and remained at four after reload. The temporary
+  project has no repository assignment, so no GitHub event was generated for it.
 - The desktop, tablet, and mobile local preview was approved on September 9 before
   this follow-up commit. No push was authorized as part of that approval.
 - A local PostgreSQL 18 backup/restore rehearsal completed on September 9 using
@@ -56,9 +65,9 @@
 | 4. Signed webhooks | Migration `016_webhook_processing.sql`; raw-body webhook endpoint and normalized receipts | HMAC test vector, invalid-signature rejection, deduplication, lifecycle, event normalization, payload limit, and no-raw-payload coverage in `githubWebhook.test.js` | Complete and deployed |
 | 5. Ticket linking and UI | Exact project-key links, project development history, task development history, and command metrics | Project-scoping and exact-key coverage in `githubWebhook.test.js` and `githubIntegration.test.js`; `TaskDetail.github.test.tsx` and `ProjectDevelopment.test.tsx` | Complete and deployed |
 | 6. Durable ticket lifecycle | Migrations `017_task_acceptance_criteria.sql` and `018_archive_lifecycle.sql`; criteria and reversible archive APIs | `acceptanceCriteria.test.js`, `archiveLifecycle.test.js`, `AcceptanceCriteria.test.tsx`, and `ArchivePage.test.tsx` | Complete and deployed |
-| 7. Secure invitations | Migration `019_project_invitations.sql`; expiring hashed tokens, exact-email acceptance, decline, and revocation routes | `projectInvitations.test.js`, `invitationMailer.test.js`, `InvitationPage.test.tsx`, and `ProjectModal.test.tsx` | Complete and deployed; production mutation smoke pending |
-| 8. Workflow automation | Migration `020_project_workflow_automation.sql`; owner-managed forward-only rules applied only to verified future webhooks | `projectWorkflow.test.js`, signed webhook transition/idempotency coverage in `githubWebhook.test.js`, and `ProjectWorkflowSettings.test.tsx` | Complete and deployed; live future-webhook smoke pending |
-| 9. Identity and recovery | Migration `021_github_identity_and_recovery.sql`; eligible-member mappings and bounded GitHub redelivery routes | `githubOperations.test.js` and identity/recovery coverage in `GitHubIntegration.test.tsx` | Complete and deployed; production mutation smoke pending |
+| 7. Secure invitations | Migration `019_project_invitations.sql`; expiring hashed tokens, exact-email acceptance, decline, and revocation routes | `projectInvitations.test.js`, `invitationMailer.test.js`, `InvitationPage.test.tsx`, `ProjectModal.test.tsx`, and production create/revoke smoke | Complete and deployed; exact-email acceptance and role-denial smoke pending |
+| 8. Workflow automation | Migration `020_project_workflow_automation.sql`; owner-managed forward-only rules applied only to verified future webhooks | `projectWorkflow.test.js`, signed webhook transition/idempotency coverage in `githubWebhook.test.js`, `ProjectWorkflowSettings.test.tsx`, and production settings persistence smoke | Complete and deployed; live future-webhook transition pending |
+| 9. Identity and recovery | Migration `021_github_identity_and_recovery.sql`; eligible-member mappings and bounded GitHub redelivery routes | `githubOperations.test.js`, identity/recovery coverage in `GitHubIntegration.test.tsx`, and production identity/read-path smoke | Complete and deployed; failed-delivery mutation smoke pending |
 | 10. Release audit | Source audit, provider-neutral release checklist, backup/restore runbook, responsive workflow fix, and release evidence | 127 backend tests, 39 frontend tests, lint, TypeScript, build, merge-commit CI/container checks, source audit, and 1440/768/390 viewport audit | In verification |
 
 ## Headers verified September 8
@@ -112,11 +121,15 @@ Response headers, rather than a CSP meta tag, provide framing protection.
 
 - Production backup and restore readiness. The isolated local rehearsal passed, but
   no production dump was created or restored.
-- Mutating production smoke cases: invitation creation/acceptance/revocation,
-  owner/editor/viewer denial, a real future-webhook workflow transition, identity
-  mapping, and failed-webhook recovery. Their automated integration tests pass,
-  and the deployed read paths are healthy, but running these cases would create
-  or change production records.
+- Invitation acceptance and owner/editor/viewer denial still need a second account
+  signed in with the invitation's exact email. Invitation creation and revocation
+  were verified with a reserved address, but no invitation was accepted.
+- A real future-webhook workflow transition remains pending. Rule persistence was
+  verified on `QA2609`, but that project is intentionally not linked to a repository.
+  The existing WorkflowHQ repository assignment was not disturbed.
+- Failed-webhook redelivery remains unverified because production currently has no
+  failed delivery to replay. Existing identity mapping and the healthy empty-failure
+  state were verified read-only.
 - A fresh external npm advisory lookup remains pending explicit approval because it
   transmits dependency metadata to npm. The merge-commit CI production audit passed.
 
