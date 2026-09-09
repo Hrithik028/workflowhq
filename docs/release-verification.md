@@ -30,6 +30,13 @@
   GitHub activity. This proves linking for those events, not every integration path.
 - The desktop, tablet, and mobile local preview was approved on September 9 before
   this follow-up commit. No push was authorized as part of that approval.
+- A local PostgreSQL 18 backup/restore rehearsal completed on September 9 using
+  isolated source and restore databases matching the production major version. The
+  custom-format dump was 127,471 bytes with SHA-256
+  `BBB0E10355BA3ED85C5D2EDEB787A59FC3F04E14F8C5F267F7ACCC30398F02AC`.
+  The restored database reported 21 applied migrations, zero pending or unknown
+  migrations, matching source/restored record counts, and zero checked relationship
+  orphans. This proves the documented procedure locally; it is not a production backup.
 
 ## Milestone implementation evidence
 
@@ -95,7 +102,8 @@ Response headers, rather than a CSP meta tag, provide framing protection.
 
 ## Still unverified
 
-- Backup and restore readiness.
+- Production backup and restore readiness. The isolated local rehearsal passed, but
+  no production dump was created or restored.
 - Mutating production smoke cases: invitation creation/acceptance/revocation,
   owner/editor/viewer denial, a real future-webhook workflow transition, identity
   mapping, and failed-webhook recovery. Their automated integration tests pass,
