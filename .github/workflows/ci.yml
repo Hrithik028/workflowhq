@@ -41,7 +41,7 @@ jobs:
       JWT_SECRET: ci_only_secret_that_is_longer_than_thirty_two_characters
       CORS_ORIGIN: http://localhost:5173
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: node ../scripts/release-audit.mjs
       - uses: actions/setup-node@v7
         with:
@@ -63,7 +63,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 20
     needs: [backend, frontend]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build --tag workflowhq-backend:ci ./backend
       - run: >-
           docker build --tag workflowhq-frontend:ci
