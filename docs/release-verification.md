@@ -28,6 +28,14 @@
   Asset presence alone does not prove the authenticated workflows work.
 - Production ticket pages previously displayed the new commit and PR as verified
   GitHub activity. This proves linking for those events, not every integration path.
+- An authenticated read-only production smoke check on September 9 confirmed the
+  platform-owner role, two workspace members, the WorkflowHQ hierarchy and persisted
+  acceptance criteria, retained archive data, and the project development timeline.
+  The GitHub installation was healthy with one selected repository assigned to the
+  WorkflowHQ project, existing contributor identity mapping, and no failed deliveries.
+  Three of five forward-only workflow rules were enabled: commit push and pull-request
+  open move Ready tickets to In motion, while pull-request merge moves In motion tickets
+  to Shipped.
 - The desktop, tablet, and mobile local preview was approved on September 9 before
   this follow-up commit. No push was authorized as part of that approval.
 - A local PostgreSQL 18 backup/restore rehearsal completed on September 9 using
