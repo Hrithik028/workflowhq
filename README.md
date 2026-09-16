@@ -2,6 +2,10 @@
 
 **Plan the work. See what’s moving. Ship what matters.** WorkflowHQ brings projects, tasks, deadlines, and delivery progress into one clear workspace.
 
+> **Status:** The core project-management workflow, project invitations, GitHub integration, and
+> workflow automation are implemented. The repository includes backend integration tests,
+> frontend component tests, a release audit, Docker configuration, and a CI pipeline.
+
 ## Live Demo
 
 [Open WorkflowHQ](https://workflowhq-app.onrender.com/login)
@@ -63,6 +67,8 @@ The application combines a React TypeScript interface with an Express REST API a
 
 </details>
 
+These committed captures document a reviewed product revision and may not reflect every later UI change.
+
 ## Tech Stack
 
 | Layer    | Technologies                          |
@@ -92,11 +98,15 @@ The application combines a React TypeScript interface with an Express REST API a
 
 ```mermaid
 flowchart LR
-  UI["React + TypeScript\nVite frontend"] -->|"HTTPS + REST"| API["Node.js + Express\nvalidation, auth, business logic"]
+  User["Browser user"] --> UI["React + TypeScript\nVite frontend"]
+  UI -->|"REST requests"| API["Express API\nauth, validation, workflows"]
   API -->|"parameterised SQL"| DB[(PostgreSQL)]
-  API -.->|"HttpOnly refresh cookie"| UI
-  CI["GitHub Actions"] -->|"lint, test, type-check, build"| UI
-  CI --> API
+  API -.->|"rotating HttpOnly refresh cookie"| User
+  GitHub["GitHub App + signed webhooks"] --> Integration["Webhook verification, sync\nand workflow rules"]
+  Integration --> API
+  API -.->|"optional invitation email"| Mail["Resend provider"]
+  CI["GitHub Actions"] -->|"audit, lint, tests, type-check, build"| API
+  CI --> UI
 ```
 
 ## Running Locally
