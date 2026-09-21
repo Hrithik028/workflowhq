@@ -865,6 +865,36 @@ p {
   background: #fff9ee;
 }
 
+.mfa-qr-code {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--ink);
+  background: #ffffff;
+}
+
+.mfa-qr-code img {
+  display: block;
+  width: min(240px, 100%);
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.mfa-qr-code figcaption,
+.mfa-qr-placeholder {
+  color: var(--ink);
+  font-weight: 800;
+  text-align: center;
+}
+
+.mfa-qr-placeholder {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+}
+
 .security-secret code,
 .security-uri,
 .recovery-code-grid code {

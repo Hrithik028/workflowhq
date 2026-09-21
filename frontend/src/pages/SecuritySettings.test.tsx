@@ -18,6 +18,12 @@ vi.mock("../api/auth", () => ({
   }
 }));
 
+vi.mock("qrcode", () => ({
+  default: {
+    toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,test-qr")
+  }
+}));
+
 describe("SecuritySettings", () => {
   it("loads active sessions and revokes another device", async () => {
     const user = userEvent.setup();
@@ -79,5 +85,8 @@ describe("SecuritySettings", () => {
     await user.type(await screen.findByLabelText(/confirm your password/i), "password123");
     await user.click(screen.getByRole("button", { name: /set up mfa/i }));
     expect(await screen.findByText("ABCDEF")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("img", { name: /qr code for adding workflowhq/i })
+    ).toHaveAttribute("src", "data:image/png;base64,test-qr");
   });
 });
