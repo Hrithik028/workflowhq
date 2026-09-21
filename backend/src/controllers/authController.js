@@ -36,29 +36,6 @@ const createAccessToken = (user, config, sessionId) =>
     { subject: String(user.id), expiresIn: config.accessTokenTtl }
   );
 
-const createMfaChallengeToken = async (db, user, config) => {
-  const nonce = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-  await db.query(
-    "DELETE FROM mfa_login_challenges WHERE user_id = $1 OR expires_at <= CURRENT_TIMESTAMP",
-    [user.id]
-  );
-  await db.query(
-    `INSERT INTO mfa_login_challenges (token_hash, user_id, expires_at)
-     VALUES ($1, $2, $3)`,
-    [createHash("sha256").update(nonce).digest("hex"), user.id, expiresAt]
-  );
-  return jwt.sign(
-    {
-      authVersion: Number(user.auth_version || 0),
-      nonce,
-      type: "mfa_challenge"
-    },
-    config.jwtSecret,
-    { subject: String(user.id), expiresIn: "5m" }
-  );
-};
-
 const refreshCookieOptions = (config) => ({
   httpOnly: true,
   secure: config.secureCookies,
@@ -182,24 +159,6 @@ const login = async (req, res, next) => {
     return next(
       new AppError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before signing in.")
     );
-  }
-
-  if (user.mfa_enabled) {
-    if (!req.app.locals.config.mfaEnabled) {
-      return next(
-        new AppError(
-          503,
-          "MFA_UNAVAILABLE",
-          "Multi-factor authentication is temporarily unavailable."
-        )
-      );
-    }
-    return res.status(200).json({
-      data: {
-        mfaRequired: true,
-        challengeToken: await createMfaChallengeToken(db, user, req.app.locals.config)
-      }
-    });
   }
 
   const safeUser = {

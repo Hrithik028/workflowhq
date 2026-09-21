@@ -91,8 +91,8 @@ export const authApi = {
     await api.post("/auth/password-reset/request", { email });
   },
 
-  async resetPassword(token: string, password: string) {
-    await api.post("/auth/password-reset/confirm", { token, password });
+  async resetPassword(token: string, password: string, code?: string) {
+    await api.post("/auth/password-reset/confirm", { token, password, ...(code ? { code } : {}) });
   },
 
   async getSessions() {

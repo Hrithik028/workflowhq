@@ -241,4 +241,11 @@ const verifyMfaLogin = async (req, res, next) => {
   }
 };
 
-module.exports = { disableMfa, enableMfa, getMfaStatus, startMfaSetup, verifyMfaLogin };
+module.exports = {
+  disableMfa,
+  enableMfa,
+  getMfaStatus,
+  startMfaSetup,
+  verifyMfaLogin,
+  verifySecondFactor
+};

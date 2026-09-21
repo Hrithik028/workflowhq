@@ -40,8 +40,30 @@ describe("account recovery screens", () => {
     );
     await user.type(screen.getByLabelText(/new password/i), "new-password-123");
     await user.click(screen.getByRole("button", { name: /update password/i }));
-    expect(authApi.resetPassword).toHaveBeenCalledWith("reset-token", "new-password-123");
+    expect(authApi.resetPassword).toHaveBeenCalledWith(
+      "reset-token",
+      "new-password-123",
+      undefined
+    );
     expect(await screen.findByText(/password updated/i)).toBeInTheDocument();
+  });
+
+  it("submits an authenticator code with a protected password reset", async () => {
+    const user = userEvent.setup();
+    vi.mocked(authApi.resetPassword).mockResolvedValue();
+    render(
+      <MemoryRouter initialEntries={["/reset-password?token=reset-token"]}>
+        <ResetPassword />
+      </MemoryRouter>
+    );
+    await user.type(screen.getByLabelText(/new password/i), "new-password-123");
+    await user.type(screen.getByLabelText(/authenticator or recovery code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /update password/i }));
+    expect(authApi.resetPassword).toHaveBeenCalledWith(
+      "reset-token",
+      "new-password-123",
+      "123456"
+    );
   });
 
   it("verifies the token from the email link", async () => {
