@@ -79,7 +79,7 @@ describe("multi-factor authentication", () => {
     });
 
     expect(missingCode.status).toBe(401);
-    expect(missingCode.body.error.code).toBe("MFA_CODE_REQUIRED");
+    expect(missingCode.body.error.code).toBe("MFA_CODE_INVALID");
     expect(reset.status).toBe(200);
   });
 

@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { authApi } from "../api/auth";
-import { getErrorMessage } from "../api/client";
+import { getErrorCode, getErrorMessage } from "../api/client";
 import AuthLayout from "../components/AuthLayout";
 import { demoCredentials } from "../demo/credentials";
 import type { Session } from "../types";
@@ -33,11 +33,13 @@ function Login({ onDemo, onSuccess, allowDemo = true, registerPath, successPath 
   const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+    setVerificationRequired(false);
     if (
       demoEnabled &&
       email.trim().toLowerCase() === demoCredentials.email &&
@@ -63,6 +65,7 @@ function Login({ onDemo, onSuccess, allowDemo = true, registerPath, successPath 
       onSuccess(result.session);
       navigate(destination);
     } catch (requestError) {
+      setVerificationRequired(getErrorCode(requestError) === "EMAIL_VERIFICATION_REQUIRED");
       setError(getErrorMessage(requestError, "Unable to sign in. Please try again."));
     } finally {
       setIsSubmitting(false);
@@ -78,6 +81,7 @@ function Login({ onDemo, onSuccess, allowDemo = true, registerPath, successPath 
     setEmail(demoCredentials.email);
     setPassword(demoCredentials.password);
     setError("");
+    setVerificationRequired(false);
   };
 
   return (
@@ -147,8 +151,12 @@ function Login({ onDemo, onSuccess, allowDemo = true, registerPath, successPath 
       {!mfaChallenge ? (
         <p className="auth-help-link">
           <Link to="/forgot-password">Forgot your password?</Link>
-          {" · "}
-          <Link to="/verify-email">Resend verification</Link>
+          {verificationRequired ? (
+            <>
+              {" · "}
+              <Link to="/verify-email">Resend verification</Link>
+            </>
+          ) : null}
         </p>
       ) : (
         <button

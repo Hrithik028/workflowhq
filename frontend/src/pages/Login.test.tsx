@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { AxiosError, AxiosHeaders } from "axios";
 
 import { demoCredentials } from "../demo/credentials";
 import Login from "./Login";
@@ -55,6 +56,43 @@ describe("Login demo account", () => {
       "href",
       `/register?next=${encodeURIComponent(invitationPath)}`
     );
+  });
+
+  it("only offers verification resend after the API requires email verification", async () => {
+    const user = userEvent.setup();
+    vi.mocked(authApi.login).mockRejectedValue(
+      new AxiosError(
+        "Request failed",
+        "ERR_BAD_REQUEST",
+        undefined,
+        undefined,
+        {
+          status: 403,
+          statusText: "Forbidden",
+          headers: new AxiosHeaders(),
+          config: { headers: new AxiosHeaders() },
+          data: {
+            error: {
+              code: "EMAIL_VERIFICATION_REQUIRED",
+              message: "Verify your email before signing in."
+            }
+          }
+        }
+      )
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <Login allowDemo={false} onDemo={vi.fn()} onSuccess={vi.fn()} />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole("link", { name: /resend verification/i })).not.toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: /email address/i }), "alex@example.com");
+    await user.type(screen.getByLabelText(/^password$/i), "password123");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("link", { name: /resend verification/i })).toBeInTheDocument();
   });
 
   it("completes an MFA challenge before opening the workspace", async () => {
