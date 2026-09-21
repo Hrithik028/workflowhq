@@ -11,6 +11,7 @@ const { createGithubServices } = require("./lib/githubClient");
 const { createInvitationMailer } = require("./lib/invitationMailer");
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 const { requestLogger } = require("./middleware/requestLogger");
+const { createRateLimiter, requireTrustedOrigin } = require("./middleware/requestSecurity");
 const activityRoutes = require("./routes/activityRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const authRoutes = require("./routes/authRoutes");
@@ -42,10 +43,29 @@ const createApp = ({ db = pool, config = loadConfig(), github, invitationMailer 
     app.set("trust proxy", 1);
   }
 
+  const apiLimiter = createRateLimiter({
+    config,
+    limit: config.apiRateLimit,
+    code: "API_RATE_LIMITED",
+    message: "Too many API requests. Please try again later."
+  });
+  const expensiveActionLimiter = createRateLimiter({
+    config,
+    limit: config.expensiveActionRateLimit,
+    code: "EXPENSIVE_ACTION_RATE_LIMITED",
+    message: "Too many resource-intensive requests. Please wait before trying again."
+  });
+  const webhookLimiter = createRateLimiter({
+    config,
+    limit: config.webhookRateLimit,
+    code: "WEBHOOK_RATE_LIMITED",
+    message: "Too many webhook deliveries. Please try again later."
+  });
+
   app.use(requestLogger);
   app.use(helmet());
   app.use(cors(createCorsOptions(config.corsOrigins)));
-  app.use("/api/github/webhooks", githubWebhookRoutes);
+  app.use("/api/github/webhooks", webhookLimiter, githubWebhookRoutes);
   app.use(express.json({ limit: "100kb" }));
   app.use(cookieParser());
 
@@ -86,9 +106,20 @@ const createApp = ({ db = pool, config = loadConfig(), github, invitationMailer 
     }
   });
 
+  app.use("/api", apiLimiter);
   app.use("/api/auth/register", authLimiter);
   app.use("/api/auth/login", authLimiter);
+  app.use("/api/auth/mfa/setup", authLimiter);
+  app.use("/api/auth/mfa/enable", authLimiter);
+  app.use("/api/auth/mfa/disable", authLimiter);
+  app.use("/api/auth/mfa/verify", authLimiter);
+  app.use("/api/auth/email-verification", authLimiter);
+  app.use("/api/auth/password-reset", authLimiter);
   app.use("/api/admin/platform-owner/transfer", ownershipTransferLimiter);
+  app.use("/api/github/installations", expensiveActionLimiter);
+  app.use("/api/github/webhook-deliveries", expensiveActionLimiter);
+  app.use("/api/auth/refresh", requireTrustedOrigin);
+  app.use("/api/auth/logout", requireTrustedOrigin);
   app.use("/api/auth", authRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/github", githubIntegrationRoutes);

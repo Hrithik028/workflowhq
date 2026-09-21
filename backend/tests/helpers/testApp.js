@@ -18,10 +18,19 @@ const testConfig = {
   cookieSameSite: "lax",
   secureCookies: false,
   trustProxy: false,
+  apiRateLimit: 600,
+  expensiveActionRateLimit: 20,
+  webhookRateLimit: 600,
+  mfaEnabled: false,
+  accountEncryptionKeyBase64: undefined,
   appBaseUrl: "http://localhost:5173",
   invitationEmailProvider: "disabled",
   invitationFromEmail: undefined,
   invitationTtlHours: 168,
+  accountEmailProvider: "disabled",
+  accountFromEmail: undefined,
+  emailVerificationTtlMinutes: 1440,
+  passwordResetTtlMinutes: 30,
   resendApiKey: undefined
 };
 

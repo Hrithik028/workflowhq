@@ -14,6 +14,10 @@ import Register from "./pages/Register";
 import Settings from "./pages/SettingsAdmin";
 import GitHubIntegration from "./pages/GitHubIntegration";
 import InvitationPage from "./pages/InvitationPage";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import SecuritySettings from "./pages/SecuritySettings";
+import VerifyEmail from "./pages/VerifyEmail";
 import ProjectDevelopment from "./pages/ProjectDevelopment";
 import ProjectWorkflowSettings from "./pages/ProjectWorkflowSettings";
 import TaskDetail from "./pages/TaskDetail";
@@ -95,6 +99,9 @@ function App() {
           )
         }
       />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route
         element={
           <ProtectedRoute isAuthenticated={authenticated} isChecking={isCheckingAuth}>
@@ -116,6 +123,17 @@ function App() {
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/archive" element={<ArchivePage />} />
         <Route path="/settings" element={<Settings />} />
+        <Route
+          path="/settings/security"
+          element={
+            <SecuritySettings
+              onSignedOut={() => {
+                setIsDemo(false);
+                setSession(null);
+              }}
+            />
+          }
+        />
         <Route path="/settings/integrations/github" element={<GitHubIntegration />} />
         <Route path="/invitations/:token" element={<InvitationPage />} />
       </Route>

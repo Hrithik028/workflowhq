@@ -6,18 +6,25 @@ const { errorHandler } = require("../src/middleware/errorMiddleware");
 const githubIntegrationRoutes = require("../src/routes/githubIntegrationRoutes");
 const { buildTestApp, testConfig } = require("./helpers/testApp");
 
-const accessToken = (user) =>
-  jwt.sign(
+const accessToken = async (db, user) => {
+  const session = await db.query(
+    `INSERT INTO refresh_sessions (user_id, token_hash, expires_at)
+     VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '7 days') RETURNING id`,
+    [user.id, `test-${user.id}-${Date.now()}-${Math.random()}`]
+  );
+  return jwt.sign(
     {
       sub: String(user.id),
       email: user.email,
       role: "user",
       authVersion: Number(user.auth_version || 0),
+      sessionId: Number(session.rows[0].id),
       type: "access"
     },
     testConfig.jwtSecret,
     { expiresIn: "15m" }
   );
+};
 
 const buildGithubApp = (db) => {
   const app = express();
@@ -117,7 +124,7 @@ describe("GitHub integration foundation", () => {
   });
 
   it("reports installations, selects repositories, and returns task development links", async () => {
-    const authorization = { Authorization: `Bearer ${accessToken(owner)}` };
+    const authorization = { Authorization: `Bearer ${await accessToken(db, owner)}` };
     const status = await request(app).get("/api/github/status").set(authorization);
     const selected = await request(app)
       .put(`/api/github/repositories/${repository.id}/selection`)
@@ -145,8 +152,8 @@ describe("GitHub integration foundation", () => {
   });
 
   it("does not allow cross-user repository, project, or task access", async () => {
-    const ownerAuthorization = { Authorization: `Bearer ${accessToken(owner)}` };
-    const outsiderAuthorization = { Authorization: `Bearer ${accessToken(outsider)}` };
+    const ownerAuthorization = { Authorization: `Bearer ${await accessToken(db, owner)}` };
+    const outsiderAuthorization = { Authorization: `Bearer ${await accessToken(db, outsider)}` };
 
     const foreignProject = await request(app)
       .put(`/api/github/repositories/${repository.id}/selection`)
@@ -177,7 +184,7 @@ describe("GitHub integration foundation", () => {
       "INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, 'owner')",
       [secondProject.id, owner.id]
     );
-    const authorization = { Authorization: `Bearer ${accessToken(owner)}` };
+    const authorization = { Authorization: `Bearer ${await accessToken(db, owner)}` };
 
     const first = await request(app)
       .put(`/api/github/repositories/${repository.id}/selection`)
@@ -233,7 +240,7 @@ describe("GitHub integration foundation", () => {
       githubConnectStateTtlMinutes: 10
     };
     app.locals.github = github;
-    const authorization = { Authorization: `Bearer ${accessToken(owner)}` };
+    const authorization = { Authorization: `Bearer ${await accessToken(db, owner)}` };
 
     const started = await request(app).post("/api/github/connect").set(authorization);
     expect(started.status, JSON.stringify(started.body)).toBe(201);
@@ -392,7 +399,7 @@ describe("GitHub integration foundation", () => {
     };
     app.locals.config = { ...testConfig, githubIntegrationEnabled: true };
     app.locals.github = github;
-    const authorization = { Authorization: `Bearer ${accessToken(owner)}` };
+    const authorization = { Authorization: `Bearer ${await accessToken(db, owner)}` };
     await request(app)
       .put(`/api/github/repositories/${repository.id}/selection`)
       .set(authorization)
@@ -460,7 +467,7 @@ describe("GitHub integration foundation", () => {
     };
     app.locals.config = { ...testConfig, githubIntegrationEnabled: true };
     app.locals.github = github;
-    const authorization = { Authorization: `Bearer ${accessToken(owner)}` };
+    const authorization = { Authorization: `Bearer ${await accessToken(db, owner)}` };
     await request(app)
       .put(`/api/github/repositories/${repository.id}/selection`)
       .set(authorization)
@@ -496,7 +503,7 @@ describe("GitHub integration foundation", () => {
   });
 
   it("returns truthful command metrics and project-scoped development history", async () => {
-    const authorization = { Authorization: `Bearer ${accessToken(owner)}` };
+    const authorization = { Authorization: `Bearer ${await accessToken(db, owner)}` };
     await request(app)
       .put(`/api/github/repositories/${repository.id}/selection`)
       .set(authorization)
@@ -528,7 +535,7 @@ describe("GitHub integration foundation", () => {
       .set(authorization);
     const outsiderView = await request(app)
       .get(`/api/github/projects/${ownerProject.id}/development`)
-      .set({ Authorization: `Bearer ${accessToken(outsider)}` });
+      .set({ Authorization: `Bearer ${await accessToken(db, outsider)}` });
 
     expect(summary.status, JSON.stringify(summary.body)).toBe(200);
     expect(summary.body.data).toMatchObject({

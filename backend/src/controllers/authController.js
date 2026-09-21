@@ -4,20 +4,45 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const { AppError } = require("../lib/errors");
+const { issueAccountToken } = require("../lib/accountTokens");
 
 const hashRefreshToken = (token) => createHash("sha256").update(token).digest("hex");
 
-const createAccessToken = (user, config) =>
+const createAccessToken = (user, config, sessionId) =>
   jwt.sign(
     {
       email: user.email,
       role: user.role,
       authVersion: Number(user.auth_version || 0),
+      sessionId: Number(sessionId),
       type: "access"
     },
     config.jwtSecret,
     { subject: String(user.id), expiresIn: config.accessTokenTtl }
   );
+
+const createMfaChallengeToken = async (db, user, config) => {
+  const nonce = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  await db.query(
+    "DELETE FROM mfa_login_challenges WHERE user_id = $1 OR expires_at <= CURRENT_TIMESTAMP",
+    [user.id]
+  );
+  await db.query(
+    `INSERT INTO mfa_login_challenges (token_hash, user_id, expires_at)
+     VALUES ($1, $2, $3)`,
+    [createHash("sha256").update(nonce).digest("hex"), user.id, expiresAt]
+  );
+  return jwt.sign(
+    {
+      authVersion: Number(user.auth_version || 0),
+      nonce,
+      type: "mfa_challenge"
+    },
+    config.jwtSecret,
+    { subject: String(user.id), expiresIn: "5m" }
+  );
+};
 
 const refreshCookieOptions = (config) => ({
   httpOnly: true,
@@ -33,26 +58,43 @@ const clearRefreshCookie = (res, config) => {
   res.clearCookie(config.refreshCookieName, options);
 };
 
-const createRefreshSession = async (db, userId, req) => {
+const createRefreshSession = async (db, userId, req, sessionId = null) => {
   const config = req.app.locals.config;
   const token = randomBytes(48).toString("base64url");
   const expiresAt = new Date(Date.now() + config.refreshTokenDays * 24 * 60 * 60 * 1000);
 
-  await db.query(
-    `INSERT INTO refresh_sessions (user_id, token_hash, user_agent, expires_at)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, hashRefreshToken(token), req.get("user-agent")?.slice(0, 500) || null, expiresAt]
-  );
+  const values = [
+    userId,
+    hashRefreshToken(token),
+    req.get("user-agent")?.slice(0, 500) || null,
+    req.ip?.slice(0, 45) || null,
+    expiresAt
+  ];
+  const result = sessionId
+    ? await db.query(
+        `INSERT INTO refresh_sessions
+           (id, user_id, token_hash, user_agent, ip_address, expires_at, last_used_at)
+         VALUES ($6, $1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         RETURNING id`,
+        [...values, sessionId]
+      )
+    : await db.query(
+        `INSERT INTO refresh_sessions
+           (user_id, token_hash, user_agent, ip_address, expires_at, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+         RETURNING id`,
+        values
+      );
 
-  return token;
+  return { token, sessionId: Number(result.rows[0].id) };
 };
 
-const sendSession = (res, req, status, user, refreshToken) => {
+const sendSession = (res, req, status, user, refreshSession) => {
   const config = req.app.locals.config;
-  res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions(config));
+  res.cookie(config.refreshCookieName, refreshSession.token, refreshCookieOptions(config));
   return res.status(status).json({
     data: {
-      accessToken: createAccessToken(user, config),
+      accessToken: createAccessToken(user, config, refreshSession.sessionId),
       user
     }
   });
@@ -65,16 +107,38 @@ const register = async (req, res, next) => {
   try {
     await client.query("BEGIN");
     const passwordHash = await bcrypt.hash(req.body.password, 12);
+    const requiresVerification = req.app.locals.config.accountEmailProvider === "resend";
     const result = await client.query(
-      `INSERT INTO users (name, email, password_hash)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, email, role, auth_version, created_at`,
-      [req.body.name, req.body.email, passwordHash]
+      `INSERT INTO users (name, email, password_hash, email_verified_at)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, email, role, auth_version, email_verified_at, created_at`,
+      [req.body.name, req.body.email, passwordHash, requiresVerification ? null : new Date()]
     );
     const user = result.rows[0];
-    const refreshToken = await createRefreshSession(client, user.id, req);
+    const verificationToken = requiresVerification
+      ? await issueAccountToken(client, {
+          userId: user.id,
+          purpose: "email_verification",
+          ttlMinutes: req.app.locals.config.emailVerificationTtlMinutes
+        })
+      : null;
+    const refreshSession = requiresVerification
+      ? null
+      : await createRefreshSession(client, user.id, req);
     await client.query("COMMIT");
-    return sendSession(res, req, 201, user, refreshToken);
+    if (requiresVerification) {
+      let delivery = "sent";
+      try {
+        await req.app.locals.invitationMailer.sendEmailVerification({
+          email: user.email,
+          verificationUrl: `${req.app.locals.config.appBaseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`
+        });
+      } catch {
+        delivery = "failed";
+      }
+      return res.status(201).json({ data: { verificationRequired: true, delivery } });
+    }
+    return sendSession(res, req, 201, user, refreshSession);
   } catch (error) {
     await client.query("ROLLBACK");
     if (error.code === "23505") {
@@ -99,6 +163,29 @@ const login = async (req, res, next) => {
   if (!user || !passwordMatches) {
     return next(new AppError(401, "INVALID_CREDENTIALS", "Invalid email or password."));
   }
+  if (!user.email_verified_at) {
+    return next(
+      new AppError(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email before signing in.")
+    );
+  }
+
+  if (user.mfa_enabled) {
+    if (!req.app.locals.config.mfaEnabled) {
+      return next(
+        new AppError(
+          503,
+          "MFA_UNAVAILABLE",
+          "Multi-factor authentication is temporarily unavailable."
+        )
+      );
+    }
+    return res.status(200).json({
+      data: {
+        mfaRequired: true,
+        challengeToken: await createMfaChallengeToken(db, user, req.app.locals.config)
+      }
+    });
+  }
 
   const safeUser = {
     id: user.id,
@@ -106,10 +193,11 @@ const login = async (req, res, next) => {
     email: user.email,
     role: user.role,
     auth_version: user.auth_version,
+    email_verified_at: user.email_verified_at,
     created_at: user.created_at
   };
-  const refreshToken = await createRefreshSession(db, user.id, req);
-  return sendSession(res, req, 200, safeUser, refreshToken);
+  const refreshSession = await createRefreshSession(db, user.id, req);
+  return sendSession(res, req, 200, safeUser, refreshSession);
 };
 
 const refresh = async (req, res, next) => {
@@ -126,7 +214,7 @@ const refresh = async (req, res, next) => {
     const sessionResult = await client.query(
       `DELETE FROM refresh_sessions
        WHERE token_hash = $1 AND expires_at > CURRENT_TIMESTAMP
-       RETURNING user_id`,
+       RETURNING id, user_id`,
       [hashRefreshToken(token)]
     );
 
@@ -137,7 +225,8 @@ const refresh = async (req, res, next) => {
     }
 
     const userResult = await client.query(
-      "SELECT id, name, email, role, auth_version, created_at FROM users WHERE id = $1",
+      `SELECT id, name, email, role, auth_version, email_verified_at, created_at
+       FROM users WHERE id = $1`,
       [sessionResult.rows[0].user_id]
     );
     if (userResult.rows.length === 0) {
@@ -147,7 +236,12 @@ const refresh = async (req, res, next) => {
     }
 
     const user = userResult.rows[0];
-    const nextRefreshToken = await createRefreshSession(client, user.id, req);
+    const nextRefreshSession = await createRefreshSession(
+      client,
+      user.id,
+      req,
+      sessionResult.rows[0].id
+    );
     await client.query("COMMIT");
 
     const safeUser = {
@@ -156,9 +250,10 @@ const refresh = async (req, res, next) => {
       email: user.email,
       role: user.role,
       auth_version: user.auth_version,
+      email_verified_at: user.email_verified_at,
       created_at: user.created_at
     };
-    return sendSession(res, req, 200, safeUser, nextRefreshToken);
+    return sendSession(res, req, 200, safeUser, nextRefreshSession);
   } catch (error) {
     await client.query("ROLLBACK");
     return next(error);
@@ -181,7 +276,8 @@ const logout = async (req, res) => {
 
 const getCurrentUser = async (req, res, next) => {
   const result = await req.app.locals.db.query(
-    "SELECT id, name, email, role, auth_version, created_at FROM users WHERE id = $1",
+    `SELECT id, name, email, role, auth_version, email_verified_at, created_at
+     FROM users WHERE id = $1`,
     [req.user.id]
   );
   if (result.rows.length === 0) {
@@ -190,4 +286,67 @@ const getCurrentUser = async (req, res, next) => {
   return res.status(200).json({ data: result.rows[0] });
 };
 
-module.exports = { getCurrentUser, login, logout, refresh, register };
+const listSessions = async (req, res) => {
+  const result = await req.app.locals.db.query(
+    `SELECT id, user_agent, ip_address, created_at, last_used_at, expires_at
+     FROM refresh_sessions
+     WHERE user_id = $1 AND expires_at > CURRENT_TIMESTAMP
+     ORDER BY last_used_at DESC, id DESC`,
+    [req.user.id]
+  );
+
+  return res.status(200).json({
+    data: result.rows.map((session) => ({
+      id: Number(session.id),
+      userAgent: session.user_agent,
+      ipAddress: session.ip_address,
+      createdAt: session.created_at,
+      lastUsedAt: session.last_used_at,
+      expiresAt: session.expires_at,
+      current: Number(session.id) === Number(req.user.sessionId)
+    }))
+  });
+};
+
+const revokeSession = async (req, res, next) => {
+  const result = await req.app.locals.db.query(
+    "DELETE FROM refresh_sessions WHERE id = $1 AND user_id = $2 RETURNING id",
+    [req.params.id, req.user.id]
+  );
+  if (result.rows.length === 0) {
+    return next(new AppError(404, "SESSION_NOT_FOUND", "Session not found."));
+  }
+  return res.status(204).send();
+};
+
+const revokeAllSessions = async (req, res) => {
+  const client = await req.app.locals.db.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM refresh_sessions WHERE user_id = $1", [req.user.id]);
+    await client.query("UPDATE users SET auth_version = auth_version + 1 WHERE id = $1", [
+      req.user.id
+    ]);
+    await client.query("COMMIT");
+    clearRefreshCookie(res, req.app.locals.config);
+    return res.status(204).send();
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = {
+  createRefreshSession,
+  getCurrentUser,
+  listSessions,
+  login,
+  logout,
+  refresh,
+  register,
+  revokeAllSessions,
+  revokeSession,
+  sendSession
+};

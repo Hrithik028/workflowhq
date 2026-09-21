@@ -13,7 +13,24 @@ export interface User {
   name: string;
   email: string;
   role: WorkspaceRole;
+  emailVerified?: boolean;
   createdAt: string;
+}
+
+export interface AccountSession {
+  id: number;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  enabledAt: string | null;
+  recoveryCodesRemaining: number;
 }
 
 export interface Project {

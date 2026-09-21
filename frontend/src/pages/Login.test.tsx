@@ -5,6 +5,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { demoCredentials } from "../demo/credentials";
 import Login from "./Login";
+import { authApi } from "../api/auth";
+
+vi.mock("../api/auth", () => ({
+  authApi: {
+    login: vi.fn(),
+    verifyMfa: vi.fn()
+  }
+}));
 
 describe("Login demo account", () => {
   it("shows public demo credentials and opens the populated workspace without the API", async () => {
@@ -47,5 +55,37 @@ describe("Login demo account", () => {
       "href",
       `/register?next=${encodeURIComponent(invitationPath)}`
     );
+  });
+
+  it("completes an MFA challenge before opening the workspace", async () => {
+    const user = userEvent.setup();
+    const onSuccess = vi.fn();
+    vi.mocked(authApi.login).mockResolvedValue({ type: "mfa", challengeToken: "challenge" });
+    vi.mocked(authApi.verifyMfa).mockResolvedValue({
+      accessToken: "access",
+      user: { id: 7, name: "Alex", email: "alex@example.com", role: "user", createdAt: "now" }
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <Routes>
+          <Route path="/app" element={<p>Secure workspace</p>} />
+          <Route
+            path="/login"
+            element={<Login allowDemo={false} onDemo={vi.fn()} onSuccess={onSuccess} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await user.type(screen.getByRole("textbox", { name: /email address/i }), "alex@example.com");
+    await user.type(screen.getByLabelText(/^password$/i), "password123");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    await user.type(await screen.findByLabelText(/authentication code/i), "123456");
+    await user.click(screen.getByRole("button", { name: /verify and sign in/i }));
+
+    expect(authApi.verifyMfa).toHaveBeenCalledWith("challenge", "123456");
+    expect(onSuccess).toHaveBeenCalledOnce();
+    expect(screen.getByText("Secure workspace")).toBeInTheDocument();
   });
 });

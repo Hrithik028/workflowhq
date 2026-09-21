@@ -81,6 +81,9 @@ These committed captures document a reviewed product revision and may not reflec
 ## Key Features
 
 - Short-lived access tokens with rotating refresh tokens in `HttpOnly` cookies
+- TOTP multi-factor authentication with single-use recovery codes and replay protection
+- Email verification, single-use password recovery, and user-controlled active sessions
+- Trusted-origin checks and tiered API rate limits for sensitive operations
 - User-owned projects and tasks with authorization enforced in every query
 - Expiring project invitations with exact-email acceptance, owner revocation, and copy-link fallback
 - Owner-configured GitHub rules that move exact-key tickets forward from verified webhook signals
@@ -166,6 +169,22 @@ Leave `INVITATION_EMAIL_PROVIDER=disabled` until the sending domain is verified.
 tokens are never stored in PostgreSQL; only SHA-256 hashes are retained. A recipient must sign in
 or register with the exact invited email before accepting, and project membership is created only
 after acceptance.
+
+### Account security
+
+Account email and authenticator MFA are optional backend capabilities. Enable them only after the
+server-side secrets and a verified email sender are ready:
+
+```env
+MFA_ENABLED=true
+ACCOUNT_ENCRYPTION_KEY_BASE64=<base64-encoded 32-byte random key>
+ACCOUNT_EMAIL_PROVIDER=resend
+ACCOUNT_FROM_EMAIL=WorkflowHQ Security <security@your-verified-domain.example>
+RESEND_API_KEY=<server-only key>
+```
+
+The encryption key must remain stable after MFA is enabled; changing it makes existing
+authenticator secrets unreadable. Never place these values in the frontend service.
 
 ### GitHub workflow automation
 

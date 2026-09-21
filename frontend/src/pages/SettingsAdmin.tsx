@@ -392,6 +392,9 @@ function SettingsAdmin() {
           <p>Control who can change work and which guardrails apply across WorkflowHQ.</p>
         </div>
         <div className="admin-header-actions">
+          <Link className="button secondary" to="/settings/security">
+            <KeyRound size={16} /> Account security
+          </Link>
           <Link className="button secondary" to="/settings/integrations/github">
             <Github size={16} /> GitHub integration
           </Link>
