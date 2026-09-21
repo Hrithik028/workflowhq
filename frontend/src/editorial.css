@@ -2761,6 +2761,128 @@ html[data-motion="reduced"] *::after {
   opacity: 1;
 }
 
+.ai-plan-modal {
+  width: min(900px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.ai-plan-safety-note,
+.ai-plan-preview > header,
+.ai-plan-preview > footer,
+.ai-plan-item,
+.ai-plan-empty {
+  display: flex;
+  align-items: center;
+}
+
+.ai-plan-safety-note {
+  gap: 12px;
+  border: 1px solid #147a43;
+  padding: 12px;
+  background: #effaf3;
+}
+
+.ai-plan-safety-note p,
+.ai-plan-preview p,
+.ai-plan-empty p {
+  margin: 0;
+  color: var(--carbon);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-transform: none;
+}
+
+.ai-plan-count input {
+  padding: 0;
+}
+
+.ai-plan-error {
+  margin: 0 23px 18px;
+}
+
+.ai-plan-preview {
+  border-top: 1px solid var(--carbon);
+  padding: 20px 23px 24px;
+}
+
+.ai-plan-preview > header,
+.ai-plan-preview > footer {
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ai-plan-preview h3 {
+  margin: 4px 0 14px;
+  color: var(--carbon);
+  font-size: 1.2rem;
+}
+
+.ai-plan-preview > header > strong {
+  white-space: nowrap;
+}
+
+.ai-plan-items {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.ai-plan-item {
+  gap: 12px;
+  border: 1px solid var(--rule);
+  padding: 12px;
+  background: #faf8f1;
+  cursor: pointer;
+}
+
+.ai-plan-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--signal);
+}
+
+.ai-plan-item span {
+  display: grid;
+  gap: 3px;
+}
+
+.ai-plan-item b,
+.ai-plan-item small {
+  color: var(--editorial-muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.62rem;
+}
+
+.ai-plan-item b {
+  color: var(--signal);
+  text-transform: uppercase;
+}
+
+.ai-plan-item strong {
+  color: var(--carbon);
+}
+
+.ai-plan-empty {
+  justify-content: center;
+  gap: 14px;
+  border-top: 1px solid var(--rule);
+  padding: 28px;
+}
+
+@media (max-width: 680px) {
+  .ai-plan-preview > header,
+  .ai-plan-preview > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ai-plan-item {
+    margin-left: 0 !important;
+  }
+}
+
 .member-section {
   border-top: 1px solid var(--carbon);
   padding: 16px 23px 22px;

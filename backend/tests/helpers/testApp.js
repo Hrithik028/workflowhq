@@ -21,6 +21,8 @@ const testConfig = {
   apiRateLimit: 600,
   expensiveActionRateLimit: 20,
   webhookRateLimit: 600,
+  aiPlannerEnabled: false,
+  aiPlannerTimeoutMs: 30000,
   mfaEnabled: false,
   accountEncryptionKeyBase64: undefined,
   appBaseUrl: "http://localhost:5173",
@@ -34,7 +36,7 @@ const testConfig = {
   resendApiKey: undefined
 };
 
-const buildTestApp = async ({ config = {}, github, invitationMailer } = {}) => {
+const buildTestApp = async ({ config = {}, github, invitationMailer, aiPlanner } = {}) => {
   const memoryDb = newDb({ autoCreateForeignKeyIndices: true });
   const adapter = memoryDb.adapters.createPg();
   const db = new adapter.Pool();
@@ -56,7 +58,8 @@ const buildTestApp = async ({ config = {}, github, invitationMailer } = {}) => {
       db,
       config: { ...testConfig, ...config },
       github,
-      invitationMailer
+      invitationMailer,
+      aiPlanner
     }),
     db
   };

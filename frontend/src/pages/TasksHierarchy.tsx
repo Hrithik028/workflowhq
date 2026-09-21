@@ -20,6 +20,7 @@ import { Link, useOutletContext } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
+import AiPlanModal from "../components/AiPlanModal";
 import LabelPill from "../components/LabelPill";
 import TaskModal from "../components/TaskModal";
 import { issueTypeLabel, progressFor } from "../demo/engineeringMeta";
@@ -56,12 +57,14 @@ function TasksHierarchy() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [view, setView] = useState<"list" | "tree">("list");
   const [sortMode, setSortMode] = useState<"recent" | "manual">("recent");
-  const [dropTarget, setDropTarget] = useState<{ taskId: number; position: "before" | "after" } | null>(
-    null
-  );
+  const [dropTarget, setDropTarget] = useState<{
+    taskId: number;
+    position: "before" | "after";
+  } | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [initialParentTask, setInitialParentTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -251,6 +254,15 @@ function TasksHierarchy() {
               <GripVertical size={15} /> Manual order
             </button>
           </div>
+          {!isDemo && projects.some((project) => project.myRole !== "viewer") ? (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => setIsAiModalOpen(true)}
+            >
+              AI plan
+            </button>
+          ) : null}
           <button className="button primary" type="button" onClick={() => openCreate()}>
             <Plus size={17} /> New issue
           </button>
@@ -323,131 +335,134 @@ function TasksHierarchy() {
           {sortMode === "manual" && !projectId ? (
             <div className="workspace-empty">
               <h2>Pick a project to reorder its backlog.</h2>
-              <p>Manual order is scoped per project - filter to one above before dragging issues.</p>
+              <p>
+                Manual order is scoped per project - filter to one above before dragging issues.
+              </p>
             </div>
           ) : (
-          <section className="hierarchy-table" aria-label="Work hierarchy">
-            <header>
-              <span>Type</span>
-              <span>Key</span>
-              <span>Title</span>
-              <span>Assignee</span>
-              <span>Progress</span>
-              <span>Status</span>
-              <span>Children</span>
-            </header>
-            {rows.map(({ task, depth }) => {
-              const Icon = typeIcon[task.taskType];
-              // The caret only has a real effect in Tree view - List always
-              // renders every row flat regardless of expand state, so showing
-              // an interactive-looking control there that does nothing is
-              // just misleading.
-              const canExpand =
-                effectiveView === "tree" &&
-                (task.childCount > 0 || tasks.some((item) => item.parentId === task.id));
-              const progress = visibleProgressFor(task, isDemo);
-              const dropClass =
-                dropTarget?.taskId === task.id ? ` drop-${dropTarget.position}` : "";
-              return (
-                <article
-                  className={`${selectedId === task.id ? "selected" : ""} hierarchy-depth-${Math.min(depth, 5)}${dropClass}`}
-                  draggable={sortMode === "manual"}
-                  key={task.id}
-                  onClick={() => setSelectedId(task.id)}
-                  onDragEnd={() => setDropTarget(null)}
-                  onDragOver={(event) => {
-                    if (sortMode !== "manual") return;
-                    event.preventDefault();
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
-                    setDropTarget({ taskId: task.id, position });
-                  }}
-                  onDragStart={(event) => {
-                    if (sortMode !== "manual") return;
-                    event.dataTransfer.setData("text/task-id", String(task.id));
-                    event.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDrop={(event) => {
-                    if (sortMode !== "manual") return;
-                    void dropTask(
-                      event,
-                      task,
-                      dropTarget?.taskId === task.id ? dropTarget.position : "before"
-                    );
-                  }}
-                >
-                  <span className={`hierarchy-type ${task.taskType}`}>
-                    {canExpand ? (
-                      <button
-                        aria-label={`${expanded.has(task.id) ? "Collapse" : "Expand"} ${task.issueKey}`}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setExpanded((current) => {
-                            const next = new Set(current);
-                            if (next.has(task.id)) next.delete(task.id);
-                            else next.add(task.id);
-                            return next;
-                          });
-                        }}
-                      >
-                        {expanded.has(task.id) ? (
-                          <ChevronDown size={16} />
-                        ) : (
-                          <ChevronRight size={16} />
-                        )}
-                      </button>
-                    ) : sortMode === "manual" ? (
-                      <i className="hierarchy-drag-handle">
-                        <GripVertical size={15} />
+            <section className="hierarchy-table" aria-label="Work hierarchy">
+              <header>
+                <span>Type</span>
+                <span>Key</span>
+                <span>Title</span>
+                <span>Assignee</span>
+                <span>Progress</span>
+                <span>Status</span>
+                <span>Children</span>
+              </header>
+              {rows.map(({ task, depth }) => {
+                const Icon = typeIcon[task.taskType];
+                // The caret only has a real effect in Tree view - List always
+                // renders every row flat regardless of expand state, so showing
+                // an interactive-looking control there that does nothing is
+                // just misleading.
+                const canExpand =
+                  effectiveView === "tree" &&
+                  (task.childCount > 0 || tasks.some((item) => item.parentId === task.id));
+                const progress = visibleProgressFor(task, isDemo);
+                const dropClass =
+                  dropTarget?.taskId === task.id ? ` drop-${dropTarget.position}` : "";
+                return (
+                  <article
+                    className={`${selectedId === task.id ? "selected" : ""} hierarchy-depth-${Math.min(depth, 5)}${dropClass}`}
+                    draggable={sortMode === "manual"}
+                    key={task.id}
+                    onClick={() => setSelectedId(task.id)}
+                    onDragEnd={() => setDropTarget(null)}
+                    onDragOver={(event) => {
+                      if (sortMode !== "manual") return;
+                      event.preventDefault();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const position =
+                        event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+                      setDropTarget({ taskId: task.id, position });
+                    }}
+                    onDragStart={(event) => {
+                      if (sortMode !== "manual") return;
+                      event.dataTransfer.setData("text/task-id", String(task.id));
+                      event.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDrop={(event) => {
+                      if (sortMode !== "manual") return;
+                      void dropTask(
+                        event,
+                        task,
+                        dropTarget?.taskId === task.id ? dropTarget.position : "before"
+                      );
+                    }}
+                  >
+                    <span className={`hierarchy-type ${task.taskType}`}>
+                      {canExpand ? (
+                        <button
+                          aria-label={`${expanded.has(task.id) ? "Collapse" : "Expand"} ${task.issueKey}`}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpanded((current) => {
+                              const next = new Set(current);
+                              if (next.has(task.id)) next.delete(task.id);
+                              else next.add(task.id);
+                              return next;
+                            });
+                          }}
+                        >
+                          {expanded.has(task.id) ? (
+                            <ChevronDown size={16} />
+                          ) : (
+                            <ChevronRight size={16} />
+                          )}
+                        </button>
+                      ) : sortMode === "manual" ? (
+                        <i className="hierarchy-drag-handle">
+                          <GripVertical size={15} />
+                        </i>
+                      ) : (
+                        <i />
+                      )}
+                      <b>
+                        <Icon size={15} />
+                      </b>
+                    </span>
+                    <span className="hierarchy-key">{task.issueKey}</span>
+                    <span className="hierarchy-title">
+                      <Link to={`/tasks/${task.id}`}>{task.title}</Link>
+                      <small>
+                        {task.description ||
+                          `${issueTypeLabel(task)} in ${task.projectName || "Inbox"}.`}
+                      </small>
+                      {task.labels.length > 0 ? (
+                        <span className="label-row">
+                          {task.labels.map((label) => (
+                            <LabelPill key={label.id} label={label} />
+                          ))}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="hierarchy-assignee">
+                      <i>{initialsFor(task.assigneeName)}</i>
+                      {task.assigneeName || "Unassigned"}
+                    </span>
+                    <span className="hierarchy-progress">
+                      <i>
+                        <b style={{ width: `${progress}%` }} />
                       </i>
-                    ) : (
+                      {progress}%
+                    </span>
+                    <span className={`hierarchy-status ${statusClass(task.status)}`}>
                       <i />
-                    )}
-                    <b>
-                      <Icon size={15} />
-                    </b>
-                  </span>
-                  <span className="hierarchy-key">{task.issueKey}</span>
-                  <span className="hierarchy-title">
-                    <Link to={`/tasks/${task.id}`}>{task.title}</Link>
-                    <small>
-                      {task.description ||
-                        `${issueTypeLabel(task)} in ${task.projectName || "Inbox"}.`}
-                    </small>
-                    {task.labels.length > 0 ? (
-                      <span className="label-row">
-                        {task.labels.map((label) => (
-                          <LabelPill key={label.id} label={label} />
-                        ))}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="hierarchy-assignee">
-                    <i>{initialsFor(task.assigneeName)}</i>
-                    {task.assigneeName || "Unassigned"}
-                  </span>
-                  <span className="hierarchy-progress">
-                    <i>
-                      <b style={{ width: `${progress}%` }} />
-                    </i>
-                    {progress}%
-                  </span>
-                  <span className={`hierarchy-status ${statusClass(task.status)}`}>
-                    <i />
-                    {statusLabel[task.status]}
-                  </span>
-                  <span className="hierarchy-children">{task.childCount || "—"}</span>
-                </article>
-              );
-            })}
-            {!isLoading && !rows.length ? (
-              <div className="workspace-empty">
-                <h2>No issues found.</h2>
-                <p>Change the filters or create a new issue.</p>
-              </div>
-            ) : null}
-          </section>
+                      {statusLabel[task.status]}
+                    </span>
+                    <span className="hierarchy-children">{task.childCount || "—"}</span>
+                  </article>
+                );
+              })}
+              {!isLoading && !rows.length ? (
+                <div className="workspace-empty">
+                  <h2>No issues found.</h2>
+                  <p>Change the filters or create a new issue.</p>
+                </div>
+              ) : null}
+            </section>
           )}
         </div>
 
@@ -548,6 +563,14 @@ function TasksHierarchy() {
           projects={projects}
           task={editingTask}
           tasks={tasks}
+        />
+      ) : null}
+      {isAiModalOpen ? (
+        <AiPlanModal
+          initialProjectId={projectId ? Number(projectId) : null}
+          onApplied={async () => load()}
+          onClose={() => setIsAiModalOpen(false)}
+          projects={projects.filter((project) => project.myRole !== "viewer")}
         />
       ) : null}
     </main>

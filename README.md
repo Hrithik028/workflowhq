@@ -84,6 +84,7 @@ These committed captures document a reviewed product revision and may not reflec
 - TOTP multi-factor authentication with single-use recovery codes and replay protection
 - Email verification, single-use password recovery, and user-controlled active sessions
 - Trusted-origin checks and tiered API rate limits for sensitive operations
+- Provider-neutral AI task planning with a read-only preview and explicit approval gate
 - User-owned projects and tasks with authorization enforced in every query
 - Expiring project invitations with exact-email acceptance, owner revocation, and copy-link fallback
 - Owner-configured GitHub rules that move exact-key tickets forward from verified webhook signals
@@ -185,6 +186,31 @@ RESEND_API_KEY=<server-only key>
 
 The encryption key must remain stable after MFA is enabled; changing it makes existing
 authenticator secrets unreadable. Never place these values in the frontend service.
+
+### AI task planning
+
+WorkHQ can turn a delivery goal into a proposed hierarchy of initiatives, epics, stories, tasks,
+bugs, or subtasks. It is provider-neutral: the first adapters support OpenAI, Anthropic, and Google
+Gemini, while the planner boundary can accept additional operators without changing the task-write
+workflow.
+
+Enable the capability on the **backend only**:
+
+```env
+AI_PLANNER_ENABLED=true
+AI_PLANNER_TIMEOUT_MS=30000
+```
+
+The user chooses a project, provider, and model, then supplies their own provider API key for that
+single preview request. WorkHQ does not save the key in PostgreSQL, application configuration,
+activity records, or the browser after the preview returns. The server calls only fixed official
+provider endpoints; users cannot supply an arbitrary provider URL.
+
+Generating a preview never creates tickets. Provider output must pass a strict schema and hierarchy
+validation before it reaches the browser. The user can deselect proposed work, and only an explicit
+**Create issues** action writes the approved plan. The apply operation runs in one database
+transaction, rechecks project edit access and workspace rules, creates acceptance criteria, and
+records auditable activity without provider credentials.
 
 ### GitHub workflow automation
 
