@@ -10,6 +10,7 @@ function ResetPassword() {
   const [params] = useSearchParams();
   const token = params.get("token") || "";
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,7 +24,7 @@ function ResetPassword() {
     setSubmitting(true);
     setError("");
     try {
-      await authApi.resetPassword(token, password);
+      await authApi.resetPassword(token, password, code || undefined);
       setComplete(true);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "This reset link is invalid or expired."));
@@ -57,6 +58,17 @@ function ResetPassword() {
               required
               type="password"
               value={password}
+            />
+          </label>
+          <label>
+            <span>Authenticator or recovery code (if MFA is enabled)</span>
+            <input
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="6-digit code"
+              type="text"
+              value={code}
             />
           </label>
           {error ? <p className="form-alert error">{error}</p> : null}

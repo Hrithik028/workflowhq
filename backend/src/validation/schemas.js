@@ -59,7 +59,11 @@ const authSchemas = {
   emailRequest: z.object({ email: emailSchema }).strict(),
   accountToken: z.object({ token: accountTokenSchema }).strict(),
   passwordReset: z
-    .object({ token: accountTokenSchema, password: z.string().min(8).max(72) })
+    .object({
+      token: accountTokenSchema,
+      password: z.string().min(8).max(72),
+      code: mfaCodeSchema.optional()
+    })
     .strict()
 };
 

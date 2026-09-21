@@ -1,6 +1,7 @@
 const request = require("supertest");
 
 const { generateTotp } = require("../src/lib/mfa");
+const { issueAccountToken } = require("../src/lib/accountTokens");
 const { auth, buildTestApp, registerUser } = require("./helpers/testApp");
 
 const encryptionKey = Buffer.alloc(32, 7).toString("base64");
@@ -46,78 +47,40 @@ describe("multi-factor authentication", () => {
     expect(stored.rows[0].mfa_secret_encrypted).not.toContain(secret);
   });
 
-  it("requires a second factor after a correct password", async () => {
+  it("allows normal sign-in after MFA is enabled", async () => {
     const registered = await registerUser(app, "mfa-login");
-    const { secret } = await enableFor(registered);
+    await enableFor(registered);
 
     const login = await request(app).post("/api/auth/login").send({
       email: registered.user.email,
       password: "secure-password"
     });
-    const verified = await request(app)
-      .post("/api/auth/mfa/verify")
-      .send({
-        challengeToken: login.body.data.challengeToken,
-        code: generateTotp(secret, Date.now() + 30_000)
-      });
 
-    expect(login.body.data).toMatchObject({ mfaRequired: true });
-    expect(login.body.data.accessToken).toBeUndefined();
-    expect(verified.status).toBe(200);
-    expect(verified.body.data.accessToken).toEqual(expect.any(String));
+    expect(login.status).toBe(200);
+    expect(login.body.data.accessToken).toEqual(expect.any(String));
   });
 
-  it("consumes a recovery code only once", async () => {
-    const registered = await registerUser(app, "mfa-recovery");
-    const { enabled } = await enableFor(registered);
-    const recoveryCode = enabled.body.data.recoveryCodes[0];
-    const login = await request(app).post("/api/auth/login").send({
-      email: registered.user.email,
-      password: "secure-password"
-    });
-
-    const first = await request(app).post("/api/auth/mfa/verify").send({
-      challengeToken: login.body.data.challengeToken,
-      code: recoveryCode
-    });
-    const secondLogin = await request(app).post("/api/auth/login").send({
-      email: registered.user.email,
-      password: "secure-password"
-    });
-    const replay = await request(app).post("/api/auth/mfa/verify").send({
-      challengeToken: secondLogin.body.data.challengeToken,
-      code: recoveryCode
-    });
-
-    expect(first.status).toBe(200);
-    expect(replay.status).toBe(401);
-    expect(replay.body.error.code).toBe("MFA_CODE_INVALID");
-  });
-
-  it("rejects replay of a TOTP value even with a new password challenge", async () => {
-    const registered = await registerUser(app, "mfa-replay");
+  it("requires a second factor when an MFA-enabled user resets their password", async () => {
+    const registered = await registerUser(app, "mfa-reset");
     const { secret } = await enableFor(registered);
-    const code = generateTotp(secret, Date.now() + 30_000);
-    const firstLogin = await request(app).post("/api/auth/login").send({
-      email: registered.user.email,
-      password: "secure-password"
+    const resetToken = await issueAccountToken(db, {
+      userId: registered.user.id,
+      purpose: "password_reset",
+      ttlMinutes: 30
     });
-    const first = await request(app).post("/api/auth/mfa/verify").send({
-      challengeToken: firstLogin.body.data.challengeToken,
-      code
+    const missingCode = await request(app).post("/api/auth/password-reset/confirm").send({
+      token: resetToken,
+      password: "new-secure-password"
     });
-    const secondLogin = await request(app).post("/api/auth/login").send({
-      email: registered.user.email,
-      password: "secure-password"
-    });
-    const replay = await request(app).post("/api/auth/mfa/verify").send({
-      challengeToken: secondLogin.body.data.challengeToken,
-      code
+    const reset = await request(app).post("/api/auth/password-reset/confirm").send({
+      token: resetToken,
+      password: "new-secure-password",
+      code: generateTotp(secret, Date.now() + 30_000)
     });
 
-    expect(first.status).toBe(200);
-    expect(replay.status).toBe(401);
-    expect(replay.body.error.code).toBe("MFA_CODE_REPLAYED");
+    expect(missingCode.status).toBe(401);
+    expect(missingCode.body.error.code).toBe("MFA_CODE_REQUIRED");
+    expect(reset.status).toBe(200);
   });
 
   it("requires the current password and a second factor before disabling MFA", async () => {

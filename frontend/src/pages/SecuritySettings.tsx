@@ -141,7 +141,10 @@ function SecuritySettings({ onSignedOut }: SecuritySettingsProps) {
               <h2>Authenticator app</h2>
             </div>
           </header>
-          <p>Use a time-based code from your authenticator app in addition to your password.</p>
+          <p>
+            Use a time-based code from your authenticator app to protect password resets and MFA
+            changes. Normal sign-ins only require your email and password.
+          </p>
           {mfaUnavailable ? (
             <p className="form-alert notice">
               Authenticator MFA is not configured on this deployment. Active-session controls are
