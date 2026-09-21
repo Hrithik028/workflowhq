@@ -16,20 +16,12 @@ interface LoginProps {
   successPath?: string;
 }
 
-function Login({
-  onDemo,
-  onSuccess,
-  allowDemo = true,
-  registerPath,
-  successPath
-}: LoginProps) {
+function Login({ onDemo, onSuccess, allowDemo = true, registerPath, successPath }: LoginProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const requestedPath = new URLSearchParams(location.search).get("next");
   const safeRequestedPath =
-    requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
-      ? requestedPath
-      : null;
+    requestedPath?.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : null;
   const demoEnabled = allowDemo && !safeRequestedPath?.startsWith("/invitations/");
   const destination = successPath || safeRequestedPath || "/app";
   const createAccountPath =
@@ -37,6 +29,8 @@ function Login({
     (safeRequestedPath ? `/register?next=${encodeURIComponent(safeRequestedPath)}` : "/register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,7 +49,18 @@ function Login({
     }
     setIsSubmitting(true);
     try {
-      onSuccess(await authApi.login({ email, password }));
+      if (mfaChallenge) {
+        onSuccess(await authApi.verifyMfa(mfaChallenge, mfaCode));
+        navigate(destination);
+        return;
+      }
+      const result = await authApi.login({ email, password });
+      if (result.type === "mfa") {
+        setMfaChallenge(result.challengeToken);
+        setPassword("");
+        return;
+      }
+      onSuccess(result.session);
       navigate(destination);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to sign in. Please try again."));
@@ -103,6 +108,7 @@ function Login({
               name="password"
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Enter your password"
+              disabled={Boolean(mfaChallenge)}
               required
               type={showPassword ? "text" : "password"}
               value={password}
@@ -116,12 +122,46 @@ function Login({
             </button>
           </span>
         </label>
+        {mfaChallenge ? (
+          <label>
+            <span>Authentication code</span>
+            <input
+              autoComplete="one-time-code"
+              autoFocus
+              inputMode="numeric"
+              name="mfa-code"
+              onChange={(event) => setMfaCode(event.target.value)}
+              placeholder="6-digit code or recovery code"
+              required
+              value={mfaCode}
+            />
+          </label>
+        ) : null}
         {error ? <p className="form-alert error">{error}</p> : null}
         <button className="button primary wide" disabled={isSubmitting} type="submit">
-          {isSubmitting ? "Signing in…" : "Sign in"}
+          {isSubmitting ? "Checking…" : mfaChallenge ? "Verify and sign in" : "Sign in"}
           {!isSubmitting ? <ArrowRight size={17} /> : null}
         </button>
       </form>
+
+      {!mfaChallenge ? (
+        <p className="auth-help-link">
+          <Link to="/forgot-password">Forgot your password?</Link>
+          {" · "}
+          <Link to="/verify-email">Resend verification</Link>
+        </p>
+      ) : (
+        <button
+          className="text-link auth-help-link"
+          type="button"
+          onClick={() => {
+            setMfaChallenge(null);
+            setMfaCode("");
+          }}
+        >
+          Use a different account
+        </button>
+      )}
 
       {demoEnabled ? (
         <section className="demo-login-card" aria-label="Demo login">

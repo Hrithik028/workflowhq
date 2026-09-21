@@ -13,9 +13,16 @@ const authMiddleware = async (req, _res, next) => {
     if (decoded.type !== "access") {
       throw new Error("Unexpected token type.");
     }
+    if (!Number.isSafeInteger(Number(decoded.sessionId))) {
+      throw new Error("The access token is not associated with a session.");
+    }
     const versionResult = await req.app.locals.db.query(
-      "SELECT auth_version FROM users WHERE id = $1",
-      [Number(decoded.sub)]
+      `SELECT u.auth_version
+       FROM users u
+       JOIN refresh_sessions rs ON rs.user_id = u.id
+       WHERE u.id = $1 AND rs.id = $2
+         AND rs.expires_at > CURRENT_TIMESTAMP`,
+      [Number(decoded.sub), Number(decoded.sessionId)]
     );
     if (
       versionResult.rows.length === 0 ||
@@ -27,7 +34,8 @@ const authMiddleware = async (req, _res, next) => {
     req.user = {
       id: Number(decoded.sub),
       email: decoded.email,
-      role: decoded.role
+      role: decoded.role,
+      sessionId: Number(decoded.sessionId)
     };
     return next();
   } catch {

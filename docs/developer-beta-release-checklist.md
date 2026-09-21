@@ -10,6 +10,9 @@ without putting hosting or database vendor instructions in the public project pa
   - `019_project_invitations.sql`
   - `020_project_workflow_automation.sql`
   - `021_github_identity_and_recovery.sql`
+  - `022_account_session_security.sql`
+  - `023_multi_factor_authentication.sql`
+  - `024_email_verification_and_password_recovery.sql`
 - Confirm the frontend screenshots match the local build.
 - Do not commit `.env` files, PEM files, database exports, logs, tokens, or invitation links.
 
@@ -20,6 +23,7 @@ Set secrets only on the backend service:
 - `DATABASE_URL`, `DATABASE_SSL`, and `DATABASE_SSL_REJECT_UNAUTHORIZED`
 - `JWT_SECRET`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_DAYS`, and `REFRESH_COOKIE_NAME`
 - `CORS_ORIGIN`, `COOKIE_SAME_SITE`, `TRUST_PROXY`, and `APP_BASE_URL`
+- `API_RATE_LIMIT`, `EXPENSIVE_ACTION_RATE_LIMIT`, and `WEBHOOK_RATE_LIMIT`
 - `GITHUB_INTEGRATION_ENABLED=true`
 - `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, and
   `GITHUB_APP_CLIENT_SECRET`
@@ -30,6 +34,11 @@ Set secrets only on the backend service:
 For invitation email delivery, also set `INVITATION_EMAIL_PROVIDER=resend`,
 `INVITATION_FROM_EMAIL`, and `RESEND_API_KEY`. Leave the provider disabled when no verified sender
 is configured; owners can still copy the secure invitation link.
+
+For account email verification and password recovery, set `ACCOUNT_EMAIL_PROVIDER=resend`,
+`ACCOUNT_FROM_EMAIL`, and `RESEND_API_KEY`. For authenticator MFA, set `MFA_ENABLED=true` and
+`ACCOUNT_ENCRYPTION_KEY_BASE64` to a stable base64-encoded 32-byte random key. Back up that key in
+the protected secret store; rotating it requires a planned MFA reset for every enrolled user.
 
 Set only public build configuration on the frontend:
 
@@ -105,22 +114,26 @@ CI also builds both production containers after the application checks succeed.
 
 1. Verify `GET /api/health` returns `200`.
 2. Sign in, refresh the session, sign out, and confirm the revoked session cannot refresh again.
-3. Create a project, invite an editor, accept with the exact email, and verify outsider denial.
-4. Create a parent ticket, child ticket, and persisted acceptance criteria.
-5. Archive and restore the ticket and project; confirm hierarchy and GitHub evidence remain intact.
-6. Connect the GitHub App, refresh repositories, select one repository, and assign it to the test
+   Also revoke another active session, then sign out everywhere and confirm every session closes.
+3. Register a test user, verify the email, request a password reset, and confirm each link is
+   single-use. Enable authenticator MFA, save the recovery codes, sign in with TOTP, reject replay
+   of the same code, and consume one recovery code.
+4. Create a project, invite an editor, accept with the exact email, and verify outsider denial.
+5. Create a parent ticket, child ticket, and persisted acceptance criteria.
+6. Archive and restore the ticket and project; confirm hierarchy and GitHub evidence remain intact.
+7. Connect the GitHub App, refresh repositories, select one repository, and assign it to the test
    project.
-7. Create a ticket and put its exact issue key in a branch, commit, and pull-request title.
-8. Confirm the push and pull request appear on the ticket and project development pages.
-9. Confirm enabled rules move the ticket forward once, while a history import does not move it.
-10. Map the observed GitHub actor to a project member and confirm old and new activity show the
+8. Create a ticket and put its exact issue key in a branch, commit, and pull-request title.
+9. Confirm the push and pull request appear on the ticket and project development pages.
+10. Confirm enabled rules move the ticket forward once, while a history import does not move it.
+11. Map the observed GitHub actor to a project member and confirm old and new activity show the
     member name with the GitHub login retained.
-11. Use a controlled failed webhook receipt to verify the redelivery cooldown and audit entry.
-12. Select Backlog and Released on the workflow board, use All lanes and browser Back, and
+12. Use a controlled failed webhook receipt to verify the redelivery cooldown and audit entry.
+13. Select Backlog and Released on the workflow board, use All lanes and browser Back, and
     confirm project/sprint filters and every matching ticket are retained (WHQ-21).
-13. Move a ticket with the Move to menu and by dragging to a lane; verify persistence after
+14. Move a ticket with the Move to menu and by dragging to a lane; verify persistence after
     refresh, field preservation, and viewer denial (WHQ-22).
-14. Inspect desktop and mobile layouts and confirm CSP/security headers are present.
+15. Inspect desktop and mobile layouts and confirm CSP/security headers are present.
 
 GitHub documents that failed deliveries are not retried automatically and can be redelivered only
 for the past three days. WorkflowHQ's recovery boundary follows that documented

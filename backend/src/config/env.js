@@ -12,6 +12,11 @@ const envSchema = z
     CORS_ORIGIN: z.string().default("http://localhost:5173"),
     COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).optional(),
     TRUST_PROXY: z.enum(["true", "false"]).default("false"),
+    API_RATE_LIMIT: z.coerce.number().int().min(60).max(5000).default(600),
+    EXPENSIVE_ACTION_RATE_LIMIT: z.coerce.number().int().min(5).max(100).default(20),
+    WEBHOOK_RATE_LIMIT: z.coerce.number().int().min(30).max(5000).default(600),
+    MFA_ENABLED: z.enum(["true", "false"]).default("false"),
+    ACCOUNT_ENCRYPTION_KEY_BASE64: z.string().optional(),
     GITHUB_INTEGRATION_ENABLED: z.enum(["true", "false"]).default("false"),
     GITHUB_APP_ID: z.string().regex(/^\d+$/).optional(),
     GITHUB_APP_SLUG: z
@@ -28,6 +33,10 @@ const envSchema = z
     INVITATION_EMAIL_PROVIDER: z.enum(["disabled", "resend"]).default("disabled"),
     INVITATION_FROM_EMAIL: z.string().trim().min(3).max(320).optional(),
     INVITATION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(168),
+    ACCOUNT_EMAIL_PROVIDER: z.enum(["disabled", "resend"]).default("disabled"),
+    ACCOUNT_FROM_EMAIL: z.string().trim().min(3).max(320).optional(),
+    EMAIL_VERIFICATION_TTL_MINUTES: z.coerce.number().int().min(10).max(10080).default(1440),
+    PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
     RESEND_API_KEY: z.string().min(1).optional()
   })
   .superRefine((values, context) => {
@@ -61,6 +70,30 @@ const envSchema = z
         }
       }
     }
+
+    if (values.MFA_ENABLED === "true") {
+      const key = Buffer.from(values.ACCOUNT_ENCRYPTION_KEY_BASE64 || "", "base64");
+      if (key.length !== 32) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ACCOUNT_ENCRYPTION_KEY_BASE64"],
+          message:
+            "ACCOUNT_ENCRYPTION_KEY_BASE64 must decode to exactly 32 bytes when MFA is enabled."
+        });
+      }
+    }
+
+    if (values.ACCOUNT_EMAIL_PROVIDER === "resend") {
+      for (const key of ["ACCOUNT_FROM_EMAIL", "RESEND_API_KEY"]) {
+        if (!values[key]) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when account email delivery uses Resend.`
+          });
+        }
+      }
+    }
   });
 
 const loadConfig = (overrides = {}) => {
@@ -82,6 +115,11 @@ const loadConfig = (overrides = {}) => {
     cookieSameSite: values.COOKIE_SAME_SITE || (values.NODE_ENV === "production" ? "none" : "lax"),
     secureCookies: values.NODE_ENV === "production",
     trustProxy: values.TRUST_PROXY === "true",
+    apiRateLimit: values.API_RATE_LIMIT,
+    expensiveActionRateLimit: values.EXPENSIVE_ACTION_RATE_LIMIT,
+    webhookRateLimit: values.WEBHOOK_RATE_LIMIT,
+    mfaEnabled: values.MFA_ENABLED === "true",
+    accountEncryptionKeyBase64: values.ACCOUNT_ENCRYPTION_KEY_BASE64,
     githubIntegrationEnabled: values.GITHUB_INTEGRATION_ENABLED === "true",
     githubAppId: values.GITHUB_APP_ID,
     githubAppSlug: values.GITHUB_APP_SLUG,
@@ -95,6 +133,10 @@ const loadConfig = (overrides = {}) => {
     invitationEmailProvider: values.INVITATION_EMAIL_PROVIDER,
     invitationFromEmail: values.INVITATION_FROM_EMAIL,
     invitationTtlHours: values.INVITATION_TTL_HOURS,
+    accountEmailProvider: values.ACCOUNT_EMAIL_PROVIDER,
+    accountFromEmail: values.ACCOUNT_FROM_EMAIL,
+    emailVerificationTtlMinutes: values.EMAIL_VERIFICATION_TTL_MINUTES,
+    passwordResetTtlMinutes: values.PASSWORD_RESET_TTL_MINUTES,
     resendApiKey: values.RESEND_API_KEY
   };
 };

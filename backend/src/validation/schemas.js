@@ -4,6 +4,22 @@ const statusSchema = z.enum(["todo", "in_progress", "completed"]);
 const prioritySchema = z.enum(["low", "medium", "high"]);
 const taskTypeSchema = z.enum(["initiative", "epic", "story", "task", "bug", "subtask"]);
 const idSchema = z.coerce.number().int().positive();
+const mfaCodeSchema = z
+  .string()
+  .trim()
+  .min(6)
+  .max(32)
+  .regex(
+    /^(?:\d{6}|WHQ-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4})$/iu,
+    "Use an authenticator or recovery code."
+  );
+const accountTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/u, "Account token is invalid.");
+const emailSchema = z
+  .string()
+  .trim()
+  .email()
+  .max(255)
+  .transform((value) => value.toLowerCase());
 const projectKeySchema = z
   .string()
   .trim()
@@ -23,25 +39,27 @@ const authSchemas = {
   register: z
     .object({
       name: z.string().trim().min(2).max(100),
-      email: z
-        .string()
-        .trim()
-        .email()
-        .max(255)
-        .transform((value) => value.toLowerCase()),
+      email: emailSchema,
       password: z.string().min(8).max(72)
     })
     .strict(),
   login: z
     .object({
-      email: z
-        .string()
-        .trim()
-        .email()
-        .max(255)
-        .transform((value) => value.toLowerCase()),
+      email: emailSchema,
       password: z.string().min(1).max(72)
     })
+    .strict(),
+  sessionParams: z.object({ id: idSchema }),
+  mfaSetup: z.object({ password: z.string().min(1).max(72) }).strict(),
+  mfaCode: z.object({ code: mfaCodeSchema }).strict(),
+  mfaDisable: z.object({ password: z.string().min(1).max(72), code: mfaCodeSchema }).strict(),
+  mfaLogin: z
+    .object({ challengeToken: z.string().min(20).max(2000), code: mfaCodeSchema })
+    .strict(),
+  emailRequest: z.object({ email: emailSchema }).strict(),
+  accountToken: z.object({ token: accountTokenSchema }).strict(),
+  passwordReset: z
+    .object({ token: accountTokenSchema, password: z.string().min(8).max(72) })
     .strict()
 };
 
