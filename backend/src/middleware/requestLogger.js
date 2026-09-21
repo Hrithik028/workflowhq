@@ -1,8 +1,13 @@
 const { randomUUID } = require("node:crypto");
 
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+const resolveRequestId = (candidate) =>
+  typeof candidate === "string" && REQUEST_ID_PATTERN.test(candidate) ? candidate : randomUUID();
+
 const requestLogger = (req, res, next) => {
   const startedAt = process.hrtime.bigint();
-  req.id = req.get("x-request-id") || randomUUID();
+  req.id = resolveRequestId(req.get("x-request-id"));
   res.setHeader("x-request-id", req.id);
 
   res.on("finish", () => {
@@ -27,4 +32,4 @@ const requestLogger = (req, res, next) => {
   next();
 };
 
-module.exports = { requestLogger };
+module.exports = { requestLogger, resolveRequestId };
