@@ -34,7 +34,8 @@ const loadUser = async (db, userId) => {
 
 const verifySecondFactor = async (db, user, code, config) => {
   const secret = decryptSecret(user.mfa_secret_encrypted, config);
-  const step = matchTotpStep(secret, code);
+  const submittedCode = code || "";
+  const step = matchTotpStep(secret, submittedCode);
   if (step !== null) {
     const consumed = await db.query(
       `UPDATE users
@@ -52,7 +53,7 @@ const verifySecondFactor = async (db, user, code, config) => {
      SET used_at = CURRENT_TIMESTAMP
      WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
      RETURNING id`,
-    [user.id, hashRecoveryCode(code)]
+    [user.id, hashRecoveryCode(submittedCode)]
   );
   if (recovery.rows.length > 0) return "recovery";
   throw new AppError(401, "MFA_CODE_INVALID", "The authentication code is invalid or expired.");

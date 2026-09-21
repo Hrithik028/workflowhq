@@ -133,13 +133,6 @@ const resetPassword = async (req, res, next) => {
           "Authenticator verification is temporarily unavailable."
         );
       }
-      if (!req.body.code) {
-        throw new AppError(
-          401,
-          "MFA_CODE_REQUIRED",
-          "Enter an authenticator or recovery code to reset this password."
-        );
-      }
       await verifySecondFactor(client, resetUser, req.body.code, req.app.locals.config);
     }
 

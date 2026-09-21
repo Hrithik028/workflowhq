@@ -65,3 +65,10 @@ export const getErrorMessage = (error: unknown, fallback: string) => {
   }
   return error instanceof Error ? error.message : fallback;
 };
+
+export const getErrorCode = (error: unknown) => {
+  if (axios.isAxiosError<ApiErrorPayload>(error)) {
+    return error.response?.data.error?.code || null;
+  }
+  return null;
+};
