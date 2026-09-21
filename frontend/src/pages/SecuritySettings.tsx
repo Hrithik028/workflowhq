@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 
 import { authApi } from "../api/auth";
 import { getErrorMessage } from "../api/client";
+import MfaQrCode from "../components/MfaQrCode";
 import type { AccountSession, MfaStatus } from "../types";
 
 interface SecuritySettingsProps {
@@ -103,10 +104,10 @@ function SecuritySettings({ onSignedOut }: SecuritySettingsProps) {
   const revoke = (session: AccountSession) => {
     void run(
       async () => {
-      await authApi.revokeSession(session.id);
-      if (session.current) {
-        authApi.forgetLocalSession();
-        onSignedOut();
+        await authApi.revokeSession(session.id);
+        if (session.current) {
+          authApi.forgetLocalSession();
+          onSignedOut();
           return;
         }
         await load();
@@ -179,8 +180,13 @@ function SecuritySettings({ onSignedOut }: SecuritySettingsProps) {
             </>
           ) : setup ? (
             <form className="security-form" onSubmit={enable}>
+              <MfaQrCode otpAuthUri={setup.otpAuthUri} />
+              <p className="security-note">
+                Open your authenticator app, choose add account, and scan the QR code. Then enter
+                the six-digit code it generates.
+              </p>
               <div className="security-secret">
-                <strong>Manual setup key</strong>
+                <strong>Can&apos;t scan it? Use this manual setup key</strong>
                 <code>{setup.secret}</code>
                 <button
                   className="text-link"
@@ -190,10 +196,6 @@ function SecuritySettings({ onSignedOut }: SecuritySettingsProps) {
                   <Copy size={14} /> Copy key
                 </button>
               </div>
-              <p className="security-note">
-                Add the key to any TOTP authenticator, then enter its six-digit code. The setup URI
-                is also available for advanced clients.
-              </p>
               <details>
                 <summary>Show authenticator URI</summary>
                 <code className="security-uri">{setup.otpAuthUri}</code>
