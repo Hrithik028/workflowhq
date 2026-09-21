@@ -172,8 +172,9 @@ after acceptance.
 
 ### Account security
 
-Account email and authenticator MFA are optional backend capabilities. Enable them only after the
-server-side secrets and a verified email sender are ready:
+Account email and authenticator MFA are optional backend capabilities. Authenticator MFA protects
+password resets and MFA changes; normal sign-in continues to use email and password. Enable these
+capabilities only after the server-side secrets and a verified email sender are ready:
 
 ```env
 MFA_ENABLED=true
@@ -272,5 +273,11 @@ Both applications are containerised. Production requires a managed PostgreSQL da
 
 - Replace the product screenshots whenever the production interface changes materially.
 - Add richer repository-health alerts and an operator-facing integration audit dashboard.
-- Add password reset and session-management controls.
-- Consider AI task breakdown only after the deployed core flow is stable.
+- Add approval-based, provider-neutral AI task planning with request-scoped user credentials.
+- Add a one-time Jira importer before considering bidirectional synchronization.
+- Add in-app and email notifications for assignments, mentions, reviews, checks, and deployments.
+- Add custom project statuses, transition rules, roadmaps, and dependency tracking.
+- Add isolated organizations and workspace switching before offering multi-tenant access.
+
+The ordered delivery plan and acceptance criteria for these milestones are in
+[docs/product-roadmap.md](docs/product-roadmap.md).
