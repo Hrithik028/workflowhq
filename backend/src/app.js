@@ -1,4 +1,3 @@
-const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const express = require("express");
 const helmet = require("helmet");
@@ -67,7 +66,6 @@ const createApp = ({ db = pool, config = loadConfig(), github, invitationMailer 
   app.use(cors(createCorsOptions(config.corsOrigins)));
   app.use("/api/github/webhooks", webhookLimiter, githubWebhookRoutes);
   app.use(express.json({ limit: "100kb" }));
-  app.use(cookieParser());
 
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,

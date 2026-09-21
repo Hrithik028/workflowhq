@@ -8,6 +8,21 @@ const { issueAccountToken } = require("../lib/accountTokens");
 
 const hashRefreshToken = (token) => createHash("sha256").update(token).digest("hex");
 
+const readCookie = (req, name) => {
+  const cookieHeader = req.get("cookie");
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0 || part.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(separator + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
 const createAccessToken = (user, config, sessionId) =>
   jwt.sign(
     {
@@ -202,7 +217,7 @@ const login = async (req, res, next) => {
 
 const refresh = async (req, res, next) => {
   const config = req.app.locals.config;
-  const token = req.cookies[config.refreshCookieName];
+  const token = readCookie(req, config.refreshCookieName);
   if (!token) {
     return next(new AppError(401, "REFRESH_REQUIRED", "A valid session is required."));
   }
@@ -264,7 +279,7 @@ const refresh = async (req, res, next) => {
 
 const logout = async (req, res) => {
   const config = req.app.locals.config;
-  const token = req.cookies[config.refreshCookieName];
+  const token = readCookie(req, config.refreshCookieName);
   if (token) {
     await req.app.locals.db.query("DELETE FROM refresh_sessions WHERE token_hash = $1", [
       hashRefreshToken(token)
