@@ -116,8 +116,9 @@ CI also builds both production containers after the application checks succeed.
 2. Sign in, refresh the session, sign out, and confirm the revoked session cannot refresh again.
    Also revoke another active session, then sign out everywhere and confirm every session closes.
 3. Register a test user, verify the email, request a password reset, and confirm each link is
-   single-use. Enable authenticator MFA, save the recovery codes, sign in with TOTP, reject replay
-   of the same code, and consume one recovery code.
+   single-use. Enable authenticator MFA and save the recovery codes. Confirm normal sign-in still
+   uses email and password, then require a TOTP or recovery code before an MFA-enabled password
+   reset succeeds. Reject replay of the same code.
 4. Create a project, invite an editor, accept with the exact email, and verify outsider denial.
 5. Create a parent ticket, child ticket, and persisted acceptance criteria.
 6. Archive and restore the ticket and project; confirm hierarchy and GitHub evidence remain intact.

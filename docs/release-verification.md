@@ -2,6 +2,17 @@
 
 ## Evidence and remaining gates
 
+- On September 21, PRs #47 and #48 moved authenticator verification from every sign-in to
+  MFA-enabled password resets and removed CodeQL's user-controlled security-check warning. The
+  exact master commit `2e67241493afe97bd0f2ee365898b8169af8c379` passed CI and CodeQL; alert #18
+  is fixed. There are no open pull requests or GitHub issues.
+- A fresh local release gate on September 21 inspected 229 source files, passed 147 backend tests,
+  48 frontend tests, both linters, TypeScript checking, and the production frontend build under
+  Node 24.19.0.
+- A read-only production check on September 21 returned `status: ok` and `database: connected`
+  from `/api/health`. The public login route returned `200` with CSP, frame denial, HSTS,
+  referrer, permissions, and MIME-sniffing protections. Its deployment timestamp followed the
+  merge of `2e67241`.
 - PR #14 was merged. The feature commit is `a0425ff`; merged-branch CI passed
   for `95191a98e7f9c065c323e9f9a3418dbf14a975e0`.
 - GitHub was checked again on September 8. The master-branch CI run for the exact
@@ -68,7 +79,7 @@
 | 7. Secure invitations | Migration `019_project_invitations.sql`; expiring hashed tokens, exact-email acceptance, decline, and revocation routes | `projectInvitations.test.js`, `invitationMailer.test.js`, `InvitationPage.test.tsx`, `ProjectModal.test.tsx`, and production create/revoke smoke | Complete and deployed; exact-email acceptance and role-denial smoke pending |
 | 8. Workflow automation | Migration `020_project_workflow_automation.sql`; owner-managed forward-only rules applied only to verified future webhooks | `projectWorkflow.test.js`, signed webhook transition/idempotency coverage in `githubWebhook.test.js`, `ProjectWorkflowSettings.test.tsx`, and production settings persistence smoke | Complete and deployed; live future-webhook transition pending |
 | 9. Identity and recovery | Migration `021_github_identity_and_recovery.sql`; eligible-member mappings and bounded GitHub redelivery routes | `githubOperations.test.js`, identity/recovery coverage in `GitHubIntegration.test.tsx`, and production identity/read-path smoke | Complete and deployed; failed-delivery mutation smoke pending |
-| 10. Release audit | Source audit, provider-neutral release checklist, backup/restore runbook, responsive workflow fix, and release evidence | 127 backend tests, 39 frontend tests, lint, TypeScript, build, merge-commit CI/container checks, source audit, and 1440/768/390 viewport audit | In verification |
+| 10. Release audit | Source audit, provider-neutral release checklist, backup/restore runbook, responsive workflow fix, account security, and release evidence | 147 backend tests, 48 frontend tests, lint, TypeScript, build, merge-commit CI/CodeQL checks, 229-file source audit, and prior 1440/768/390 viewport audit | Automated gate current; production operational gates remain |
 
 ## Headers verified September 8
 
@@ -119,6 +130,9 @@ Response headers, rather than a CSP meta tag, provide framing protection.
 
 ## Still unverified
 
+- The September 21 authentication-policy change still needs an authenticated production smoke:
+  normal login without an authenticator prompt, MFA-protected password reset, and conditional
+  display of the resend-verification link.
 - Production backup and restore readiness. The isolated local rehearsal passed, but
   no production dump was created or restored.
 - Invitation acceptance and owner/editor/viewer denial still need a second account
