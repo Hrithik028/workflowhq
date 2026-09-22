@@ -1,6 +1,7 @@
 export type TaskStatus = "todo" | "in_progress" | "completed";
 export type TaskPriority = "low" | "medium" | "high";
 export type TaskType = "initiative" | "epic" | "story" | "task" | "bug" | "subtask";
+export type AiProvider = "openai" | "anthropic" | "google";
 export type ProjectRole = "owner" | "editor" | "viewer";
 export type WorkspaceRole = "user" | "admin" | "platform_owner";
 export type GitHubSyncState =
@@ -47,6 +48,37 @@ export interface Project {
   archivedBy?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AiPlannedTask {
+  tempId: string;
+  parentTempId: string | null;
+  taskType: TaskType;
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  dueDate: string | null;
+  acceptanceCriteria: string[];
+}
+
+export interface AiTaskPlan {
+  summary: string;
+  tasks: AiPlannedTask[];
+}
+
+export interface AiPlanPreviewInput {
+  provider: AiProvider;
+  apiKey: string;
+  model: string;
+  goal: string;
+  context?: string;
+  maxItems: number;
+}
+
+export interface AiPlanPreview {
+  provider: AiProvider;
+  model: string;
+  plan: AiTaskPlan;
 }
 
 export interface ProjectMember {

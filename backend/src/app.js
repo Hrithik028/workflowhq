@@ -8,6 +8,7 @@ const { loadConfig } = require("./config/env");
 const { AppError } = require("./lib/errors");
 const { createGithubServices } = require("./lib/githubClient");
 const { createInvitationMailer } = require("./lib/invitationMailer");
+const { createAiPlanner } = require("./lib/aiPlanner");
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 const { requestLogger } = require("./middleware/requestLogger");
 const { createRateLimiter, requireTrustedOrigin } = require("./middleware/requestSecurity");
@@ -31,12 +32,19 @@ const createCorsOptions = (allowedOrigins) => ({
   }
 });
 
-const createApp = ({ db = pool, config = loadConfig(), github, invitationMailer } = {}) => {
+const createApp = ({
+  db = pool,
+  config = loadConfig(),
+  github,
+  invitationMailer,
+  aiPlanner
+} = {}) => {
   const app = express();
   app.locals.db = db;
   app.locals.config = config;
   app.locals.github = github === undefined ? createGithubServices(config) : github;
   app.locals.invitationMailer = invitationMailer || createInvitationMailer(config);
+  app.locals.aiPlanner = aiPlanner || createAiPlanner(config);
 
   if (config.trustProxy) {
     app.set("trust proxy", 1);
@@ -116,6 +124,7 @@ const createApp = ({ db = pool, config = loadConfig(), github, invitationMailer 
   app.use("/api/admin/platform-owner/transfer", ownershipTransferLimiter);
   app.use("/api/github/installations", expensiveActionLimiter);
   app.use("/api/github/webhook-deliveries", expensiveActionLimiter);
+  app.use("/api/projects/:id/ai-plan", expensiveActionLimiter);
   app.use("/api/auth/refresh", requireTrustedOrigin);
   app.use("/api/auth/logout", requireTrustedOrigin);
   app.use("/api/auth", authRoutes);

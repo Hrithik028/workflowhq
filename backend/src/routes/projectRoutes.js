@@ -1,4 +1,5 @@
 const express = require("express");
+const { applyAiPlan, previewAiPlan } = require("../controllers/aiPlannerController");
 
 const {
   archiveProject,
@@ -48,6 +49,7 @@ const {
   sprintSchemas,
   workflowSchemas
 } = require("../validation/schemas");
+const { aiPlannerSchemas } = require("../validation/aiPlannerSchemas");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -60,6 +62,18 @@ router.post(
   asyncHandler(createProject)
 );
 router.get("/:id", validate({ params: projectSchemas.params }), asyncHandler(getProjectById));
+router.post(
+  "/:id/ai-plan/preview",
+  asyncHandler(requirePermission("tasks.create")),
+  validate({ params: aiPlannerSchemas.params, body: aiPlannerSchemas.preview }),
+  asyncHandler(previewAiPlan)
+);
+router.post(
+  "/:id/ai-plan/apply",
+  asyncHandler(requirePermission("tasks.create")),
+  validate({ params: aiPlannerSchemas.params, body: aiPlannerSchemas.apply }),
+  asyncHandler(applyAiPlan)
+);
 router.put(
   "/:id",
   asyncHandler(requirePermission("projects.edit")),
