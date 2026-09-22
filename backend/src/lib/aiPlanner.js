@@ -20,6 +20,7 @@ const taskPlanJsonSchema = {
           "description",
           "priority",
           "dueDate",
+          "evidenceIds",
           "acceptanceCriteria"
         ],
         properties: {
@@ -33,6 +34,11 @@ const taskPlanJsonSchema = {
           description: { type: "string" },
           priority: { type: "string", enum: ["low", "medium", "high"] },
           dueDate: { anyOf: [{ type: "string" }, { type: "null" }] },
+          evidenceIds: {
+            type: "array",
+            maxItems: 8,
+            items: { type: "string" }
+          },
           acceptanceCriteria: { type: "array", items: { type: "string" } }
         }
       }
@@ -151,6 +157,10 @@ const createAiPlanner = (config) => ({
       input.project.description ? `Project context: ${input.project.description}` : "",
       `Goal: ${input.goal}`,
       input.context ? `Additional context: ${input.context}` : "",
+      input.projectContext?.prompt || "",
+      input.projectContext?.sources?.length
+        ? "For each proposed task, include only relevant evidence IDs from the supplied records. Use an empty evidenceIds array when no record supports it."
+        : "Use an empty evidenceIds array because no project records were supplied.",
       `Create no more than ${input.maxItems} work items. Use stable temporary IDs and parentTempId links. Include concise acceptance criteria. Use an ISO YYYY-MM-DD dueDate when the context provides a real deadline; otherwise use null.`
     ]
       .filter(Boolean)
@@ -164,6 +174,20 @@ const createAiPlanner = (config) => ({
         "AI_PLAN_INVALID",
         "The selected model returned a plan that WorkflowHQ could not safely validate."
       );
+    const allowedEvidence = new Set(
+      (input.projectContext?.sources || []).map((source) => source.id)
+    );
+    if (
+      parsed.data.tasks.some((task) =>
+        task.evidenceIds.some((evidenceId) => !allowedEvidence.has(evidenceId))
+      )
+    ) {
+      throw new AppError(
+        502,
+        "AI_PLAN_EVIDENCE_INVALID",
+        "The selected model cited project evidence that was not supplied by WorkflowHQ."
+      );
+    }
     return parsed.data;
   }
 });

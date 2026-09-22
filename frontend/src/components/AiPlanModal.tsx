@@ -3,7 +3,15 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { aiPlannerApi } from "../api/aiPlanner";
 import { getErrorMessage } from "../api/client";
-import type { AiProvider, AiTaskPlan, Project } from "../types";
+import { githubApi } from "../api/github";
+import type {
+  AiContextSource,
+  AiPlanPreview,
+  AiProvider,
+  AiTaskPlan,
+  Project,
+  ProjectDevelopment
+} from "../types";
 
 const providerDefaults: Record<AiProvider, string> = {
   openai: "gpt-5-mini",
@@ -27,6 +35,11 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
   const [context, setContext] = useState("");
   const [maxItems, setMaxItems] = useState(8);
   const [plan, setPlan] = useState<AiTaskPlan | null>(null);
+  const [previewContext, setPreviewContext] = useState<AiPlanPreview["context"] | null>(null);
+  const [development, setDevelopment] = useState<ProjectDevelopment | null>(null);
+  const [includeProjectTasks, setIncludeProjectTasks] = useState(true);
+  const [includeGithubActivity, setIncludeGithubActivity] = useState(true);
+  const [repositoryIds, setRepositoryIds] = useState<Set<number>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<"preview" | "apply" | null>(null);
   const [error, setError] = useState("");
@@ -36,6 +49,26 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let active = true;
+    githubApi
+      .getProjectDevelopment(Number(projectId))
+      .then((result) => {
+        if (!active) return;
+        setDevelopment(result);
+        setRepositoryIds(new Set());
+      })
+      .catch(() => {
+        if (!active) return;
+        setDevelopment(null);
+        setRepositoryIds(new Set());
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
 
   const taskById = useMemo(
     () => new Map((plan?.tasks || []).map((task) => [task.tempId, task])),
@@ -57,9 +90,15 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
         model: model.trim(),
         goal: goal.trim(),
         context: context.trim() || undefined,
-        maxItems
+        maxItems,
+        contextOptions: {
+          includeProjectTasks,
+          includeGithubActivity,
+          repositoryIds: includeGithubActivity ? [...repositoryIds] : []
+        }
       });
       setPlan(preview.plan);
+      setPreviewContext(preview.context);
       setSelected(new Set(preview.plan.tasks.map((task) => task.tempId)));
       setApiKey("");
     } catch (previewError) {
@@ -98,6 +137,30 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
     if (!plan) return null;
     return { ...plan, tasks: plan.tasks.filter((task) => selected.has(task.tempId)) };
   }, [plan, selected]);
+
+  const sourceById = useMemo(
+    () => new Map((previewContext?.sources || []).map((source) => [source.id, source])),
+    [previewContext]
+  );
+
+  const toggleRepository = (repositoryId: number) => {
+    setRepositoryIds((current) => {
+      const next = new Set(current);
+      if (next.has(repositoryId)) next.delete(repositoryId);
+      else next.add(repositoryId);
+      return next;
+    });
+    setPlan(null);
+    setPreviewContext(null);
+  };
+
+  const changeProject = (value: string) => {
+    setProjectId(value);
+    setDevelopment(null);
+    setRepositoryIds(new Set());
+    setPlan(null);
+    setPreviewContext(null);
+  };
 
   const apply = async () => {
     if (!approvedPlan?.tasks.length || !projectId) return;
@@ -150,7 +213,7 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
               <select
                 aria-label="AI plan project"
                 value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
+                onChange={(event) => changeProject(event.target.value)}
               >
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
@@ -219,6 +282,56 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
               placeholder="Architecture notes, release constraints, or existing work."
             />
           </label>
+          <fieldset className="ai-context-options">
+            <legend>Project context</legend>
+            <label>
+              <input
+                checked={includeProjectTasks}
+                type="checkbox"
+                onChange={(event) => {
+                  setIncludeProjectTasks(event.target.checked);
+                  setPlan(null);
+                  setPreviewContext(null);
+                }}
+              />
+              Existing WorkHQ tickets
+            </label>
+            <label>
+              <input
+                checked={includeGithubActivity}
+                type="checkbox"
+                onChange={(event) => {
+                  setIncludeGithubActivity(event.target.checked);
+                  setPlan(null);
+                  setPreviewContext(null);
+                }}
+              />
+              Synchronized GitHub activity
+            </label>
+            {includeGithubActivity && development?.repositories.length ? (
+              <div className="ai-repository-options">
+                <p>Select only the repositories the planner may use.</p>
+                {development.repositories.map((repository) => (
+                  <label key={repository.id}>
+                    <input
+                      checked={repositoryIds.has(repository.id)}
+                      type="checkbox"
+                      onChange={() => toggleRepository(repository.id)}
+                    />
+                    <span>
+                      <strong>{repository.fullName}</strong>
+                      <small>
+                        {repository.syncState}
+                        {repository.lastSyncedAt
+                          ? ` · synced ${new Date(repository.lastSyncedAt).toLocaleDateString()}`
+                          : " · not synchronized yet"}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+          </fieldset>
           <label className="ai-plan-count">
             <span>Maximum issues: {maxItems}</span>
             <input
@@ -247,6 +360,12 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
               <div>
                 <span className="overline">Approval gate</span>
                 <h3>{plan.summary}</h3>
+                {previewContext ? (
+                  <p className="ai-context-summary">
+                    Based on {previewContext.taskCount} tickets and {previewContext.eventCount}{" "}
+                    GitHub events across {previewContext.repositories.length} repositories.
+                  </p>
+                ) : null}
               </div>
               <strong>
                 {selected.size} / {plan.tasks.length} selected
@@ -271,6 +390,29 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
                       {task.description || "No description"} · {task.acceptanceCriteria.length}{" "}
                       criteria{task.dueDate ? ` · due ${task.dueDate}` : ""}
                     </small>
+                    {task.evidenceIds.length ? (
+                      <em className="ai-evidence-list">
+                        {task.evidenceIds.map((evidenceId) => (
+                          <Evidence
+                            key={evidenceId}
+                            source={sourceById.get(evidenceId)}
+                            id={evidenceId}
+                          />
+                        ))}
+                      </em>
+                    ) : null}
+                    {previewContext?.duplicates.some(
+                      (duplicate) => duplicate.tempId === task.tempId
+                    ) ? (
+                      <em className="ai-duplicate-warning">
+                        Already exists as{" "}
+                        {
+                          previewContext.duplicates.find(
+                            (duplicate) => duplicate.tempId === task.tempId
+                          )?.issueKey
+                        }
+                      </em>
+                    ) : null}
                   </span>
                 </label>
               ))}
@@ -298,6 +440,14 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
         )}
       </section>
     </div>
+  );
+}
+
+function Evidence({ source, id }: { source?: AiContextSource; id: string }) {
+  return (
+    <span title={source?.label || id}>
+      {source?.type === "github" ? "GitHub" : "Ticket"}: {source?.label || id}
+    </span>
   );
 }
 

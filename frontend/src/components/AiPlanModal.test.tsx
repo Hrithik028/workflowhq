@@ -6,8 +6,10 @@ import type { AiTaskPlan, Project } from "../types";
 import AiPlanModal from "./AiPlanModal";
 
 const apiMocks = vi.hoisted(() => ({ preview: vi.fn(), apply: vi.fn() }));
+const githubMocks = vi.hoisted(() => ({ getProjectDevelopment: vi.fn() }));
 
 vi.mock("../api/aiPlanner", () => ({ aiPlannerApi: apiMocks }));
+vi.mock("../api/github", () => ({ githubApi: githubMocks }));
 
 const project: Project = {
   id: 4,
@@ -33,6 +35,7 @@ const plan: AiTaskPlan = {
       description: "Establish the safe boundary.",
       priority: "medium",
       dueDate: null,
+      evidenceIds: ["task:7"],
       acceptanceCriteria: ["Provider output is validated."]
     },
     {
@@ -43,6 +46,7 @@ const plan: AiTaskPlan = {
       description: "Require explicit approval.",
       priority: "low",
       dueDate: null,
+      evidenceIds: ["github:42"],
       acceptanceCriteria: ["No work is created during preview."]
     }
   ]
@@ -51,7 +55,44 @@ const plan: AiTaskPlan = {
 describe("AiPlanModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    apiMocks.preview.mockResolvedValue({ provider: "openai", model: "gpt-test", plan });
+    githubMocks.getProjectDevelopment.mockResolvedValue({
+      project: { id: 4, key: "WHQ", name: "WorkflowHQ", description: "", myRole: "owner" },
+      repositories: [
+        {
+          id: 9,
+          fullName: "Hrithik028/workflowhq",
+          htmlUrl: "https://github.com/Hrithik028/workflowhq",
+          defaultBranch: "master",
+          isPrivate: false,
+          isArchived: false,
+          syncState: "healthy",
+          lastSyncedAt: "2026-09-20T00:00:00.000Z",
+          lastError: null
+        }
+      ],
+      events: [],
+      taskLinks: []
+    });
+    apiMocks.preview.mockResolvedValue({
+      provider: "openai",
+      model: "gpt-test",
+      plan,
+      context: {
+        taskCount: 1,
+        eventCount: 1,
+        repositories: [{ id: 9, fullName: "Hrithik028/workflowhq", lastSyncedAt: null }],
+        sources: [
+          { id: "task:7", type: "task", label: "WHQ-7 Existing task", occurredAt: null },
+          {
+            id: "github:42",
+            type: "github",
+            label: "Hrithik028/workflowhq · pull request · Add preview",
+            occurredAt: "2026-09-20T00:00:00.000Z"
+          }
+        ],
+        duplicates: []
+      }
+    });
     apiMocks.apply.mockResolvedValue([{ id: 19, issueKey: "WHQ-19", tempId: "epic-ai" }]);
   });
 
@@ -75,6 +116,7 @@ describe("AiPlanModal", () => {
       screen.getByRole("textbox", { name: /planning goal/i }),
       "Plan a safe AI workflow for this project."
     );
+    await browser.click(await screen.findByRole("checkbox", { name: /hrithik028\/workflowhq/i }));
     await browser.click(screen.getByRole("button", { name: /generate preview/i }));
 
     expect(await screen.findByText("Approval preview")).toBeInTheDocument();
@@ -82,8 +124,18 @@ describe("AiPlanModal", () => {
     expect(screen.getByLabelText(/provider api key/i)).toHaveValue("");
     expect(apiMocks.preview).toHaveBeenCalledWith(
       4,
-      expect.objectContaining({ apiKey: "request-only-secret", provider: "openai" })
+      expect.objectContaining({
+        apiKey: "request-only-secret",
+        provider: "openai",
+        contextOptions: {
+          includeProjectTasks: true,
+          includeGithubActivity: true,
+          repositoryIds: [9]
+        }
+      })
     );
+    expect(screen.getByText(/ticket: whq-7 existing task/i)).toBeInTheDocument();
+    expect(screen.getByText(/github: hrithik028\/workflowhq/i)).toBeInTheDocument();
 
     const preview = screen.getByRole("region", { name: /ai task plan preview/i });
     const checkboxes = within(preview).getAllByRole("checkbox");

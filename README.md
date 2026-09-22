@@ -207,11 +207,20 @@ single preview request. WorkHQ does not save the key in PostgreSQL, application 
 activity records, or the browser after the preview returns. The server calls only fixed official
 provider endpoints; users cannot supply an arbitrary provider URL.
 
+Users decide whether a preview may use existing WorkHQ tickets and explicitly choose which linked
+repositories may contribute synchronized GitHub activity. WorkHQ sends bounded metadata only: up
+to 50 current tickets and 75 recent development events. It does not read or transmit repository
+source files, raw webhook payloads, environment variables, provider credentials, or GitHub
+installation secrets. Repository titles and descriptions are treated as untrusted data and
+delimited from planner instructions.
+
 Generating a preview never creates tickets. Provider output must pass a strict schema and hierarchy
 validation before it reaches the browser. The user can deselect proposed work, and only an explicit
 **Create issues** action writes the approved plan. The apply operation runs in one database
 transaction, rechecks project edit access and workspace rules, creates acceptance criteria, and
 records auditable activity without provider credentials.
+Evidence labels show which ticket or GitHub event supports each proposal, while normalized exact
+title matches are flagged before approval to reduce accidental duplicate tickets.
 
 ### GitHub workflow automation
 
