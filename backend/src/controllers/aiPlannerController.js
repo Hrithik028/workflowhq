@@ -1,6 +1,7 @@
 const { logActivity } = require("../lib/activity");
 const { readWorkspaceRules } = require("../lib/accessControl");
 const { AppError } = require("../lib/errors");
+const { buildProjectAiContext } = require("../lib/aiProjectContext");
 const { getProjectRole } = require("../lib/projectAccess");
 
 const loadEditableProject = async (db, projectId, userId) => {
@@ -20,17 +21,70 @@ const loadEditableProject = async (db, projectId, userId) => {
   return project;
 };
 
+const validatePlanEvidence = async (db, projectId, tasks) => {
+  const evidenceIds = [...new Set(tasks.flatMap((task) => task.evidenceIds))];
+  const taskIds = evidenceIds
+    .filter((id) => id.startsWith("task:"))
+    .map((id) => Number(id.slice(5)));
+  const githubIds = evidenceIds
+    .filter((id) => id.startsWith("github:"))
+    .map((id) => Number(id.slice(7)));
+  const valid = new Set();
+  if (taskIds.length > 0) {
+    const result = await db.query(
+      `SELECT id FROM tasks
+       WHERE project_id = $1 AND archived_at IS NULL AND id = ANY($2::int[])`,
+      [projectId, taskIds]
+    );
+    result.rows.forEach((row) => valid.add(`task:${row.id}`));
+  }
+  if (githubIds.length > 0) {
+    const result = await db.query(
+      `SELECT gde.id
+       FROM github_development_events gde
+       JOIN project_github_repositories pgr ON pgr.repository_id = gde.repository_id
+       WHERE pgr.project_id = $1 AND gde.id = ANY($2::bigint[])`,
+      [projectId, githubIds]
+    );
+    result.rows.forEach((row) => valid.add(`github:${row.id}`));
+  }
+  if (evidenceIds.some((id) => !valid.has(id))) {
+    throw new AppError(
+      422,
+      "AI_PLAN_EVIDENCE_INVALID",
+      "The approved plan contains evidence outside this project. Generate a new preview."
+    );
+  }
+};
+
 const previewAiPlan = async (req, res) => {
   const project = await loadEditableProject(req.app.locals.db, req.params.id, req.user.id);
+  const projectContext = await buildProjectAiContext(req.app.locals.db, {
+    projectId: Number(project.id),
+    options: req.body.contextOptions
+  });
   const plan = await req.app.locals.aiPlanner.preview({
     ...req.body,
-    project: { id: Number(project.id), name: project.name, description: project.description }
+    project: { id: Number(project.id), name: project.name, description: project.description },
+    projectContext
+  });
+  const normalizedExisting = new Map(
+    projectContext.existingTasks.map((task) => [task.title.trim().toLowerCase(), task])
+  );
+  const duplicates = plan.tasks.flatMap((task) => {
+    const existing = normalizedExisting.get(task.title.trim().toLowerCase());
+    return existing ? [{ tempId: task.tempId, ...existing }] : [];
   });
   return res.status(200).json({
     data: {
       provider: req.body.provider,
       model: req.body.model,
-      plan
+      plan,
+      context: {
+        ...projectContext.summary,
+        sources: projectContext.sources,
+        duplicates
+      }
     }
   });
 };
@@ -49,6 +103,7 @@ const applyAiPlan = async (req, res) => {
     const project = await loadEditableProject(client, req.params.id, req.user.id);
     const rules = await readWorkspaceRules(client);
     const tasks = req.body.plan.tasks;
+    await validatePlanEvidence(client, project.id, tasks);
     if (
       rules.require_due_date_for_high_priority === true &&
       tasks.some((task) => task.priority === "high" && !task.dueDate)
@@ -120,7 +175,13 @@ const applyAiPlan = async (req, res) => {
         entityType: "task",
         entityId: row.id,
         entityTitle: row.title,
-        details: { issueKey, taskType: row.task_type, parentId, source: "ai_plan" }
+        details: {
+          issueKey,
+          taskType: row.task_type,
+          parentId,
+          source: "ai_plan",
+          evidenceIds: task.evidenceIds
+        }
       });
       createdByTempId.set(task.tempId, Number(row.id));
       created.push({ id: Number(row.id), issueKey, tempId: task.tempId, title: row.title });

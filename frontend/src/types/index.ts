@@ -58,6 +58,7 @@ export interface AiPlannedTask {
   description: string;
   priority: TaskPriority;
   dueDate: string | null;
+  evidenceIds: string[];
   acceptanceCriteria: string[];
 }
 
@@ -73,12 +74,31 @@ export interface AiPlanPreviewInput {
   goal: string;
   context?: string;
   maxItems: number;
+  contextOptions: {
+    includeProjectTasks: boolean;
+    includeGithubActivity: boolean;
+    repositoryIds: number[];
+  };
+}
+
+export interface AiContextSource {
+  id: string;
+  type: "task" | "github";
+  label: string;
+  occurredAt: string | null;
 }
 
 export interface AiPlanPreview {
   provider: AiProvider;
   model: string;
   plan: AiTaskPlan;
+  context: {
+    taskCount: number;
+    eventCount: number;
+    repositories: Array<{ id: number; fullName: string; lastSyncedAt: string | null }>;
+    sources: AiContextSource[];
+    duplicates: Array<{ tempId: string; issueKey: string; title: string }>;
+  };
 }
 
 export interface ProjectMember {

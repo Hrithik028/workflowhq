@@ -18,6 +18,10 @@ const plannedTaskSchema = z
       .regex(/^\d{4}-\d{2}-\d{2}$/u)
       .nullable()
       .default(null),
+    evidenceIds: z
+      .array(z.string().regex(/^(?:task|github):\d+$/u))
+      .max(8)
+      .default([]),
     acceptanceCriteria: z.array(z.string().trim().min(1).max(1000)).max(12).default([])
   })
   .strict();
@@ -69,7 +73,19 @@ const aiPlannerSchemas = {
       model: z.string().trim().min(1).max(120),
       goal: z.string().trim().min(10).max(5000),
       context: z.string().trim().max(10000).default(""),
-      maxItems: z.coerce.number().int().min(1).max(30).default(12)
+      maxItems: z.coerce.number().int().min(1).max(30).default(12),
+      contextOptions: z
+        .object({
+          includeProjectTasks: z.boolean().default(true),
+          includeGithubActivity: z.boolean().default(true),
+          repositoryIds: z.array(z.coerce.number().int().positive()).max(20).default([])
+        })
+        .strict()
+        .default({
+          includeProjectTasks: true,
+          includeGithubActivity: true,
+          repositoryIds: []
+        })
     })
     .strict(),
   apply: z.object({ plan: planSchema }).strict(),

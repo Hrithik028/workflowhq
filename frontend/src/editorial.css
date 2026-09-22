@@ -2798,6 +2798,66 @@ html[data-motion="reduced"] *::after {
   padding: 0;
 }
 
+.ai-context-options {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--carbon);
+  padding: 14px;
+}
+
+.ai-context-options legend {
+  padding: 0 6px;
+  color: var(--signal);
+  font-family: "Courier New", monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ai-context-options label,
+.ai-repository-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--carbon);
+  cursor: pointer;
+  text-transform: none;
+}
+
+.ai-context-options input,
+.ai-repository-options input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--signal);
+}
+
+.ai-repository-options {
+  display: grid;
+  gap: 7px;
+  border-left: 2px solid var(--rule);
+  margin-left: 7px;
+  padding: 4px 0 4px 15px;
+}
+
+.ai-repository-options > p {
+  margin: 0 0 3px;
+  color: var(--editorial-muted);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.7rem;
+}
+
+.ai-repository-options label > span {
+  display: grid;
+  gap: 2px;
+}
+
+.ai-repository-options small {
+  color: var(--editorial-muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.56rem;
+  text-transform: uppercase;
+}
+
 .ai-plan-error {
   margin: 0 23px 18px;
 }
@@ -2817,6 +2877,12 @@ html[data-motion="reduced"] *::after {
   margin: 4px 0 14px;
   color: var(--carbon);
   font-size: 1.2rem;
+}
+
+.ai-context-summary {
+  color: var(--editorial-muted) !important;
+  font-family: "Courier New", monospace !important;
+  font-size: 0.64rem !important;
 }
 
 .ai-plan-preview > header > strong {
@@ -2862,6 +2928,32 @@ html[data-motion="reduced"] *::after {
 
 .ai-plan-item strong {
   color: var(--carbon);
+}
+
+.ai-evidence-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-style: normal;
+}
+
+.ai-evidence-list span,
+.ai-duplicate-warning {
+  border: 1px solid #1d5f92;
+  padding: 3px 6px;
+  color: #174e78;
+  background: #eef7ff;
+  font-family: "Courier New", monospace;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.ai-duplicate-warning {
+  width: fit-content;
+  border-color: #a96a00;
+  color: #714700;
+  background: #fff7df;
 }
 
 .ai-plan-empty {

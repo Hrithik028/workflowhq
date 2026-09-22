@@ -11,6 +11,7 @@ const taskPlan = {
       description: "Deliver and verify the requested behavior.",
       priority: "medium",
       dueDate: null,
+      evidenceIds: [],
       acceptanceCriteria: ["The requested behavior is covered by tests."]
     }
   ]
@@ -22,7 +23,8 @@ const input = {
   goal: "Create a safe task plan for a bounded implementation.",
   context: "Preview before applying.",
   maxItems: 5,
-  project: { name: "WorkflowHQ", description: "Developer delivery platform" }
+  project: { name: "WorkflowHQ", description: "Developer delivery platform" },
+  projectContext: { prompt: "", sources: [] }
 };
 
 describe("AI planner provider adapters", () => {
@@ -52,5 +54,25 @@ describe("AI planner provider adapters", () => {
 
     await expect(planner.preview({ ...input, provider })).resolves.toEqual(taskPlan);
     expect(fetchMock).toHaveBeenCalledWith(url, expect.objectContaining({ method: "POST" }));
+  });
+
+  it("rejects evidence IDs that were not supplied by WorkflowHQ", async () => {
+    const invalidPlan = {
+      ...taskPlan,
+      tasks: [{ ...taskPlan.tasks[0], evidenceIds: ["github:999"] }]
+    };
+    globalThis.vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output: [{ content: [{ type: "output_text", text: JSON.stringify(invalidPlan) }] }]
+        }),
+        { status: 200 }
+      )
+    );
+    const planner = createAiPlanner({ aiPlannerEnabled: true, aiPlannerTimeoutMs: 1000 });
+
+    await expect(planner.preview({ ...input, provider: "openai" })).rejects.toMatchObject({
+      code: "AI_PLAN_EVIDENCE_INVALID"
+    });
   });
 });
