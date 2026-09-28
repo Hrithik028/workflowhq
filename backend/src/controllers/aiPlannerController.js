@@ -1,10 +1,14 @@
-const { logActivity } = require("../lib/activity");
-const { readWorkspaceRules } = require("../lib/accessControl");
 const {
   consumeAiPlanApproval,
   createAiPlanApproval,
   verifyAiPlanApproval
 } = require("../lib/aiPlanApproval");
+const {
+  executeActionPlan,
+  executeLegacyPlan,
+  findCompletedActionExecution,
+  reserveActionExecution
+} = require("../lib/aiPlanExecutor");
 const { AppError } = require("../lib/errors");
 const { buildProjectAiContext } = require("../lib/aiProjectContext");
 const { loadCredential } = require("../lib/aiCredentialVault");
@@ -27,8 +31,9 @@ const loadEditableProject = async (db, projectId, userId) => {
   return project;
 };
 
-const validatePlanEvidence = async (db, projectId, tasks) => {
-  const evidenceIds = [...new Set(tasks.flatMap((task) => task.evidenceIds))];
+const validatePlanEvidence = async (db, projectId, plan) => {
+  const entries = plan.tasks || plan.actions;
+  const evidenceIds = [...new Set(entries.flatMap((entry) => entry.evidenceIds || []))];
   const taskIds = evidenceIds
     .filter((id) => id.startsWith("task:"))
     .map((id) => Number(id.slice(5)));
@@ -90,9 +95,18 @@ const previewAiPlan = async (req, res) => {
   const normalizedExisting = new Map(
     projectContext.existingTasks.map((task) => [task.title.trim().toLowerCase(), task])
   );
-  const duplicates = plan.tasks.flatMap((task) => {
-    const existing = normalizedExisting.get(task.title.trim().toLowerCase());
-    return existing ? [{ tempId: task.tempId, ...existing }] : [];
+  const proposals = plan.tasks
+    ? plan.tasks.map((task) => ({ tempId: task.tempId, title: task.title }))
+    : plan.actions
+        .filter((action) => action.type === "task.create")
+        .map((action) => ({
+          actionId: action.id,
+          tempId: action.tempId,
+          title: action.fields.title
+        }));
+  const duplicates = proposals.flatMap((proposal) => {
+    const existing = normalizedExisting.get(proposal.title.trim().toLowerCase());
+    return existing ? [{ ...proposal, ...existing }] : [];
   });
   const approval = await createAiPlanApproval(req.app.locals.db, {
     userId: req.user.id,
@@ -127,108 +141,56 @@ const applyAiPlan = async (req, res) => {
   try {
     await client.query("BEGIN");
     const project = await loadEditableProject(client, req.params.id, req.user.id);
-    const rules = await readWorkspaceRules(client);
-    const tasks = req.body.plan.tasks;
-    await verifyAiPlanApproval(client, {
-      approvalId: req.body.approvalId,
-      userId: req.user.id,
-      projectId: Number(project.id),
-      plan: req.body.plan
-    });
-    await validatePlanEvidence(client, project.id, tasks);
-    if (
-      rules.require_due_date_for_high_priority === true &&
-      tasks.some((task) => task.priority === "high" && !task.dueDate)
-    ) {
-      throw new AppError(
-        422,
-        "HIGH_PRIORITY_DUE_DATE_REQUIRED",
-        "This workspace requires due dates for high-priority work. Change those proposals before applying the plan."
-      );
-    }
-    const open = await client.query(
-      "SELECT COUNT(*)::int AS count FROM tasks WHERE user_id = $1 AND status <> 'completed'",
-      [req.user.id]
-    );
-    const limit = Number(rules.max_open_tasks_per_user || 100);
-    if (Number(open.rows[0].count) + tasks.length > limit) {
-      throw new AppError(
-        409,
-        "OPEN_TASK_LIMIT_REACHED",
-        `This plan would exceed the workspace limit of ${limit} open tasks per user.`
-      );
-    }
-
-    const pending = [...tasks];
-    const createdByTempId = new Map();
-    const created = [];
-    while (pending.length > 0) {
-      const index = pending.findIndex(
-        (task) => !task.parentTempId || createdByTempId.has(task.parentTempId)
-      );
-      if (index === -1) {
-        throw new AppError(
-          422,
-          "AI_PLAN_HIERARCHY_INVALID",
-          "The approved plan contains an invalid hierarchy."
-        );
-      }
-      const [task] = pending.splice(index, 1);
-      const parentId = task.parentTempId ? createdByTempId.get(task.parentTempId) : null;
-      const inserted = await client.query(
-        `INSERT INTO tasks
-           (user_id, project_id, title, description, status, priority, due_date, task_type, parent_task_id)
-         VALUES ($1, $2, $3, $4, 'todo', $5, $6, $7, $8)
-         RETURNING id, title, task_type, priority, parent_task_id`,
-        [
-          req.user.id,
-          project.id,
-          task.title,
-          task.description,
-          task.priority,
-          task.dueDate,
-          task.taskType,
-          parentId
-        ]
-      );
-      const row = inserted.rows[0];
-      const issueKey = `${project.key}-${row.id}`;
-      await client.query("UPDATE tasks SET issue_key = $1 WHERE id = $2", [issueKey, row.id]);
-      for (const [position, body] of task.acceptanceCriteria.entries()) {
-        await client.query(
-          `INSERT INTO task_acceptance_criteria (task_id, body, position, created_by)
-           VALUES ($1, $2, $3, $4)`,
-          [row.id, body, position, req.user.id]
-        );
-      }
-      await logActivity(client, {
+    let reservation;
+    try {
+      await verifyAiPlanApproval(client, {
+        approvalId: req.body.approvalId,
         userId: req.user.id,
-        action: "task_created",
-        entityType: "task",
-        entityId: row.id,
-        entityTitle: row.title,
-        details: {
-          issueKey,
-          taskType: row.task_type,
-          parentId,
-          source: "ai_plan",
-          evidenceIds: task.evidenceIds
-        }
+        projectId: Number(project.id),
+        plan: req.body.plan
       });
-      createdByTempId.set(task.tempId, Number(row.id));
-      created.push({ id: Number(row.id), issueKey, tempId: task.tempId, title: row.title });
+    } catch (error) {
+      if (req.body.plan.actions && error.code === "AI_PLAN_APPROVAL_USED") {
+        const replay = await findCompletedActionExecution(client, {
+          approvalId: req.body.approvalId,
+          idempotencyKey: req.body.idempotencyKey,
+          userId: req.user.id,
+          projectId: Number(project.id)
+        });
+        if (replay) {
+          await client.query("COMMIT");
+          return res.status(200).json({ data: { ...replay.response, idempotent: true } });
+        }
+      }
+      throw error;
     }
-    await logActivity(client, {
-      userId: req.user.id,
-      action: "ai_plan_applied",
-      entityType: "project",
-      entityId: project.id,
-      entityTitle: project.name,
-      details: { approvalId: req.body.approvalId, createdCount: created.length }
-    });
+    if (req.body.plan.actions) {
+      reservation = await reserveActionExecution(client, {
+        approvalId: req.body.approvalId,
+        idempotencyKey: req.body.idempotencyKey,
+        userId: req.user.id,
+        projectId: Number(project.id)
+      });
+    }
+    await validatePlanEvidence(client, project.id, req.body.plan);
+    const result = req.body.plan.actions
+      ? await executeActionPlan(client, {
+          plan: req.body.plan,
+          approvalId: req.body.approvalId,
+          idempotencyKey: req.body.idempotencyKey,
+          userId: req.user.id,
+          project,
+          reservation
+        })
+      : await executeLegacyPlan(client, {
+          plan: req.body.plan,
+          approvalId: req.body.approvalId,
+          userId: req.user.id,
+          project
+        });
     await consumeAiPlanApproval(client, req.body.approvalId);
     await client.query("COMMIT");
-    return res.status(201).json({ data: { created } });
+    return res.status(req.body.plan.actions ? 200 : 201).json({ data: result });
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

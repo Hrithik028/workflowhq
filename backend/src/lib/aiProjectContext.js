@@ -20,7 +20,7 @@ const buildProjectAiContext = async (db, { projectId, options }) => {
   if (options.includeProjectTasks) {
     taskRows = (
       await db.query(
-        `SELECT id, issue_key, task_type, title, description, status, priority, due_date
+        `SELECT id, issue_key, task_type, title, description, status, priority, due_date, version
          FROM tasks
          WHERE project_id = $1 AND archived_at IS NULL
          ORDER BY updated_at DESC, id DESC
@@ -34,7 +34,7 @@ const buildProjectAiContext = async (db, { projectId, options }) => {
       const label = `${task.issue_key} ${clean(task.title, 200)}`;
       sources.push({ id, type: "task", label, occurredAt: null });
       lines.push(
-        `[${id}] ${clean(task.issue_key, 30)} | ${task.task_type} | ${task.status} | ${task.priority} | ${clean(task.title, 200)} | ${clean(task.description, 500)}${task.due_date ? ` | due ${String(task.due_date).slice(0, 10)}` : ""}`
+        `[${id}] ${clean(task.issue_key, 30)} | version ${task.version} | ${task.task_type} | ${task.status} | ${task.priority} | ${clean(task.title, 200)} | ${clean(task.description, 500)}${task.due_date ? ` | due ${String(task.due_date).slice(0, 10)}` : ""}`
       );
     }
     lines.push("</existing-work>");

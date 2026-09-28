@@ -245,6 +245,19 @@ proposals, diffs, and evidence labels are scrubbed after 15 days by a background
 while minimal non-secret run metadata remains for audit. Provider credentials are never written to
 conversation history.
 
+Approved action plans can also execute a bounded set of ticket mutations through the same domain
+rules as the manual API. The explicit action types are `task.create`, `task.update`, `task.archive`,
+`task.restore`, `criterion.add`, `criterion.update`, `criterion.complete`, `criterion.reorder`, and
+`criterion.remove`. Updates can change ticket fields, hierarchy, assignee, status, and sprint.
+Permanent ticket deletion is deliberately not part of the AI action contract.
+
+Existing-ticket actions carry the ticket `version` shown by the API. WorkflowHQ locks and rechecks
+every reviewed version and the caller's current permissions before making any change. Temporary
+references such as `new:epic-1` let one transaction create a hierarchy and then update its new
+tickets. The apply request must include an `idempotencyKey`; a successful retry returns the recorded
+result rather than duplicating work. Every action, audit record, approval consumption, and
+idempotency record commits together, or the entire plan is rolled back.
+
 ### GitHub workflow automation
 
 Project owners can open **Project register → Edit → Workflow rules** to control five repository
