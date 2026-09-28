@@ -10,6 +10,12 @@ const {
   reserveActionExecution
 } = require("../lib/aiPlanExecutor");
 const { AppError } = require("../lib/errors");
+const { buildPlannerPrompt } = require("../lib/aiPlanner");
+const {
+  completeAiPreviewUsage,
+  recordAiUsageEvent,
+  reserveAiPreview
+} = require("../lib/aiGovernance");
 const { buildProjectAiContext } = require("../lib/aiProjectContext");
 const { loadCredential } = require("../lib/aiCredentialVault");
 const { getProjectRole } = require("../lib/projectAccess");
@@ -68,65 +74,137 @@ const validatePlanEvidence = async (db, projectId, plan) => {
   }
 };
 
+const countProposedActions = (plan) =>
+  Array.isArray(plan.actions) ? plan.actions.length : plan.tasks.length;
+
 const previewAiPlan = async (req, res) => {
-  if (!req.app.locals.config.aiPlannerEnabled) {
+  const db = req.app.locals.db;
+  const config = req.app.locals.config;
+  if (!config.aiPlannerEnabled) {
     throw new AppError(
       503,
       "AI_PLANNER_DISABLED",
       "AI task planning is not enabled on this deployment."
     );
   }
-  const project = await loadEditableProject(req.app.locals.db, req.params.id, req.user.id);
-  const projectContext = await buildProjectAiContext(req.app.locals.db, {
+  const project = await loadEditableProject(db, req.params.id, req.user.id);
+  const projectContext = await buildProjectAiContext(db, {
     projectId: Number(project.id),
     options: req.body.contextOptions
   });
-  const apiKey = await loadCredential(
-    req.app.locals.db,
-    { provider: req.body.provider, userId: req.user.id },
-    req.app.locals.config
-  );
-  const plan = await req.app.locals.aiPlanner.preview({
+  const plannerInput = {
     ...req.body,
-    apiKey,
     project: { id: Number(project.id), name: project.name, description: project.description },
     projectContext
-  });
-  const normalizedExisting = new Map(
-    projectContext.existingTasks.map((task) => [task.title.trim().toLowerCase(), task])
-  );
-  const proposals = plan.tasks
-    ? plan.tasks.map((task) => ({ tempId: task.tempId, title: task.title }))
-    : plan.actions
-        .filter((action) => action.type === "task.create")
-        .map((action) => ({
-          actionId: action.id,
-          tempId: action.tempId,
-          title: action.fields.title
-        }));
-  const duplicates = proposals.flatMap((proposal) => {
-    const existing = normalizedExisting.get(proposal.title.trim().toLowerCase());
-    return existing ? [{ ...proposal, ...existing }] : [];
-  });
-  const approval = await createAiPlanApproval(req.app.locals.db, {
-    userId: req.user.id,
-    projectId: Number(project.id),
-    plan,
-    ttlMinutes: req.app.locals.config.aiPlanApprovalTtlMinutes
-  });
-  return res.status(200).json({
-    data: {
+  };
+  const promptCharacters = buildPlannerPrompt(plannerInput).length;
+  const startedAt = Date.now();
+  let reservation = { enabled: false, policy: null, usageDate: null };
+  try {
+    reservation = await reserveAiPreview(db, {
+      config,
+      userId: req.user.id,
       provider: req.body.provider,
       model: req.body.model,
-      approval,
-      plan,
-      context: {
-        ...projectContext.summary,
-        sources: projectContext.sources,
-        duplicates
-      }
+      promptCharacters,
+      maxItems: req.body.maxItems
+    });
+    const apiKey = await loadCredential(
+      db,
+      { provider: req.body.provider, userId: req.user.id },
+      config
+    );
+    const plan = await req.app.locals.aiPlanner.preview({
+      ...plannerInput,
+      apiKey,
+      timeoutMs: reservation.policy?.requestTimeoutMs,
+      maxOutputTokens: reservation.policy?.maxOutputTokens
+    });
+    const estimatedOutputTokens = Math.ceil(JSON.stringify(plan).length / 4);
+    const proposedActions = countProposedActions(plan);
+    if (reservation.enabled && estimatedOutputTokens > Number(reservation.policy.maxOutputTokens)) {
+      throw new AppError(
+        502,
+        "AI_OUTPUT_LIMIT_EXCEEDED",
+        "The selected provider returned more content than the configured output limit."
+      );
     }
-  });
+    const normalizedExisting = new Map(
+      projectContext.existingTasks.map((task) => [task.title.trim().toLowerCase(), task])
+    );
+    const proposals = plan.tasks
+      ? plan.tasks.map((task) => ({ tempId: task.tempId, title: task.title }))
+      : plan.actions
+          .filter((action) => action.type === "task.create")
+          .map((action) => ({
+            actionId: action.id,
+            tempId: action.tempId,
+            title: action.fields.title
+          }));
+    const duplicates = proposals.flatMap((proposal) => {
+      const existing = normalizedExisting.get(proposal.title.trim().toLowerCase());
+      return existing ? [{ ...proposal, ...existing }] : [];
+    });
+    const approval = await createAiPlanApproval(db, {
+      userId: req.user.id,
+      projectId: Number(project.id),
+      plan,
+      ttlMinutes: config.aiPlanApprovalTtlMinutes
+    });
+    if (reservation.enabled) {
+      await completeAiPreviewUsage(db, {
+        userId: req.user.id,
+        usageDate: reservation.usageDate,
+        estimatedOutputTokens,
+        proposedActions
+      });
+      await recordAiUsageEvent(db, {
+        userId: req.user.id,
+        projectId: Number(project.id),
+        provider: req.body.provider,
+        model: req.body.model,
+        outcome: "succeeded",
+        promptCharacters,
+        estimatedOutputTokens,
+        proposedActions,
+        latencyMs: Date.now() - startedAt
+      });
+    }
+    return res.status(200).json({
+      data: {
+        provider: req.body.provider,
+        model: req.body.model,
+        approval,
+        plan,
+        context: {
+          ...projectContext.summary,
+          sources: projectContext.sources,
+          duplicates
+        }
+      }
+    });
+  } catch (error) {
+    if (config.aiGovernanceEnabled) {
+      const deniedCodes = new Set([
+        "AI_PROVIDER_DISABLED",
+        "AI_MODEL_NOT_ALLOWED",
+        "AI_PROMPT_LIMIT_EXCEEDED",
+        "AI_ACTION_LIMIT_EXCEEDED",
+        "AI_DAILY_QUOTA_EXCEEDED"
+      ]);
+      await recordAiUsageEvent(db, {
+        userId: req.user.id,
+        projectId: Number(project.id),
+        provider: req.body.provider,
+        model: req.body.model,
+        outcome: deniedCodes.has(error.code) ? "denied" : "failed",
+        error,
+        promptCharacters,
+        latencyMs: Date.now() - startedAt
+      }).catch(() => undefined);
+    }
+    throw error;
+  }
 };
 
 const applyAiPlan = async (req, res) => {

@@ -204,6 +204,14 @@ AI_CREDENTIAL_VAULT_ENABLED=true
 AI_CREDENTIAL_MASTER_KEYS_JSON={"1":"<base64-encoded 32-byte key>"}
 AI_CREDENTIAL_ACTIVE_KEY_VERSION=1
 AI_CONVERSATION_RETENTION_DAYS=15
+# Turn this on only after the platform owner has configured provider allowlists.
+AI_GOVERNANCE_ENABLED=false
+AI_DAILY_RUNS_MAX=100
+AI_PROMPT_CHARACTERS_MAX=50000
+AI_OUTPUT_TOKENS_MAX=10000
+AI_PROPOSED_ACTIONS_MAX=50
+AI_TIMEOUT_MS_MAX=60000
+AI_USAGE_RETENTION_DAYS_MAX=90
 ```
 
 Each user saves their own OpenAI, Anthropic, or Google Gemini credential in **Settings → AI
@@ -257,6 +265,20 @@ references such as `new:epic-1` let one transaction create a hierarchy and then 
 tickets. The apply request must include an `idempotencyKey`; a successful retry returns the recorded
 result rather than duplicating work. Every action, audit record, approval consumption, and
 idempotency record commits together, or the entire plan is rolled back.
+
+The platform owner can configure approved providers, model allowlists, default models, and bounded
+runtime limits at **Settings → AI governance**. Environment variables define non-negotiable server
+ceilings; the UI cannot increase them. With `AI_GOVERNANCE_ENABLED=true`, planning fails closed when
+the selected provider or model is not approved, when a request exceeds its prompt/action limits, or
+when a user reaches the daily run quota. Keep enforcement disabled during initial deployment,
+configure and verify the allowlists, then enable it on the backend and redeploy.
+
+AI usage telemetry is deliberately sanitized. The database records provider/model identifiers,
+outcome, a controlled error code, counts, and latency for operational health. It does not store
+prompts, generated task content, API keys, authorization headers, or raw provider errors. Usage rows
+are pruned to the configured retention window. To roll back enforcement without removing audit
+history, set `AI_GOVERNANCE_ENABLED=false` and redeploy; the planner returns to the existing Phase 4
+behavior while the platform-owner settings remain available for repair.
 
 ### GitHub workflow automation
 

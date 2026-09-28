@@ -18,6 +18,8 @@ describe("invitation configuration", () => {
     expect(config.invitationEmailProvider).toBe("disabled");
     expect(config.invitationTtlHours).toBe(168);
     expect(config.aiPlanApprovalTtlMinutes).toBe(15);
+    expect(config.aiGovernanceEnabled).toBe(false);
+    expect(config.aiDailyRunsMax).toBe(100);
   });
 
   it("requires server-side Resend credentials when email delivery is enabled", () => {
