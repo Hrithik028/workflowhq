@@ -130,6 +130,7 @@ const createApp = ({
   app.use("/api/github/webhook-deliveries", expensiveActionLimiter);
   app.use("/api/ai/credentials/validate", expensiveActionLimiter);
   app.use("/api/projects/:id/ai-plan", expensiveActionLimiter);
+  app.use("/api/projects/:id/ai-conversations/:conversationId/runs", expensiveActionLimiter);
   app.use("/api/auth/refresh", requireTrustedOrigin);
   app.use("/api/auth/logout", requireTrustedOrigin);
   app.use("/api/auth", authRoutes);

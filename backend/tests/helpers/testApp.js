@@ -28,6 +28,7 @@ const testConfig = {
   aiCredentialMasterKeys: {},
   aiCredentialActiveKeyVersion: 1,
   aiCredentialValidationTimeoutMs: 10000,
+  aiConversationRetentionDays: 15,
   mfaEnabled: false,
   accountEncryptionKeyBase64: undefined,
   appBaseUrl: "http://localhost:5173",

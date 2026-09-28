@@ -20,6 +20,7 @@ import ResetPassword from "./pages/ResetPassword";
 import SecuritySettings from "./pages/SecuritySettings";
 import VerifyEmail from "./pages/VerifyEmail";
 import ProjectDevelopment from "./pages/ProjectDevelopment";
+import ProjectAiConversations from "./pages/ProjectAiConversations";
 import ProjectWorkflowSettings from "./pages/ProjectWorkflowSettings";
 import TaskDetail from "./pages/TaskDetail";
 import Tasks from "./pages/TasksHierarchy";
@@ -114,6 +115,7 @@ function App() {
         <Route path="/workflow" element={<Workspace />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id/development" element={<ProjectDevelopment />} />
+        <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />
         <Route path="/projects/:id/workflow-settings" element={<ProjectWorkflowSettings />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/tasks/:id" element={<TaskDetail />} />

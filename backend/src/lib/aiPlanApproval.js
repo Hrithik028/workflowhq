@@ -18,7 +18,10 @@ const taskPayload = (task) => ({
 
 const taskFingerprint = (task) => sha256(JSON.stringify(taskPayload(task)));
 
-const createAiPlanApproval = async (db, { userId, projectId, plan, ttlMinutes }) => {
+const createAiPlanApproval = async (
+  db,
+  { userId, projectId, plan, ttlMinutes, proposalRevisionId = null }
+) => {
   const id = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
   const taskHashes = Object.fromEntries(
@@ -26,16 +29,24 @@ const createAiPlanApproval = async (db, { userId, projectId, plan, ttlMinutes })
   );
   await db.query(
     `INSERT INTO ai_plan_approvals
-       (id, user_id, project_id, summary_hash, task_hashes, expires_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-    [id, userId, projectId, sha256(plan.summary), JSON.stringify(taskHashes), expiresAt]
+       (id, user_id, project_id, summary_hash, task_hashes, expires_at, proposal_revision_id)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+    [
+      id,
+      userId,
+      projectId,
+      sha256(plan.summary),
+      JSON.stringify(taskHashes),
+      expiresAt,
+      proposalRevisionId
+    ]
   );
   return { id, expiresAt: expiresAt.toISOString() };
 };
 
 const verifyAiPlanApproval = async (db, { approvalId, userId, projectId, plan }) => {
   const result = await db.query(
-    `SELECT id, summary_hash, task_hashes, expires_at, applied_at
+    `SELECT id, summary_hash, task_hashes, expires_at, applied_at, proposal_revision_id
      FROM ai_plan_approvals
      WHERE id = $1 AND user_id = $2 AND project_id = $3
      FOR UPDATE`,
@@ -55,6 +66,37 @@ const verifyAiPlanApproval = async (db, { approvalId, userId, projectId, plan })
       "AI_PLAN_APPROVAL_USED",
       "This AI preview has already been applied. Generate a new preview."
     );
+  }
+  if (approval.proposal_revision_id) {
+    const proposalResult = await db.query(
+      `SELECT apr.state, apr.conversation_id, apr.revision_number,
+              ac.status AS conversation_status
+       FROM ai_proposal_revisions apr
+       JOIN ai_conversations ac ON ac.id = apr.conversation_id
+       WHERE apr.id = $1`,
+      [approval.proposal_revision_id]
+    );
+    const proposal = proposalResult.rows[0];
+    const newer = proposal
+      ? await db.query(
+          `SELECT 1 FROM ai_proposal_revisions
+           WHERE conversation_id = $1 AND revision_number > $2
+           LIMIT 1`,
+          [proposal.conversation_id, proposal.revision_number]
+        )
+      : { rows: [true] };
+    if (
+      !proposal ||
+      proposal.state !== "pending" ||
+      proposal.conversation_status !== "active" ||
+      newer.rows.length > 0
+    ) {
+      throw new AppError(
+        409,
+        "AI_PROPOSAL_SUPERSEDED",
+        "Only the latest active proposal can be approved. Review the newest revision."
+      );
+    }
   }
   if (new Date(approval.expires_at).getTime() <= Date.now()) {
     throw new AppError(
@@ -86,6 +128,12 @@ const consumeAiPlanApproval = async (db, approvalId) => {
   await db.query("UPDATE ai_plan_approvals SET applied_at = CURRENT_TIMESTAMP WHERE id = $1", [
     approvalId
   ]);
+  await db.query(
+    `UPDATE ai_proposal_revisions
+     SET state = 'applied', applied_at = CURRENT_TIMESTAMP
+     WHERE approval_id = $1 AND state = 'pending'`,
+    [approvalId]
+  );
 };
 
 module.exports = {

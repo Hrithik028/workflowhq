@@ -27,6 +27,7 @@ const envSchema = z
       .min(3000)
       .max(30000)
       .default(10000),
+    AI_CONVERSATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(30).default(15),
     MFA_ENABLED: z.enum(["true", "false"]).default("false"),
     ACCOUNT_ENCRYPTION_KEY_BASE64: z.string().optional(),
     GITHUB_INTEGRATION_ENABLED: z.enum(["true", "false"]).default("false"),
@@ -200,6 +201,7 @@ const loadConfig = (overrides = {}) => {
     aiCredentialMasterKeys: credentialKeys,
     aiCredentialActiveKeyVersion: values.AI_CREDENTIAL_ACTIVE_KEY_VERSION,
     aiCredentialValidationTimeoutMs: values.AI_CREDENTIAL_VALIDATION_TIMEOUT_MS,
+    aiConversationRetentionDays: values.AI_CONVERSATION_RETENTION_DAYS,
     mfaEnabled: values.MFA_ENABLED === "true",
     accountEncryptionKeyBase64: values.ACCOUNT_ENCRYPTION_KEY_BASE64,
     githubIntegrationEnabled: values.GITHUB_INTEGRATION_ENABLED === "true",
