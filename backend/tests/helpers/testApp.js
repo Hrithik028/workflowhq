@@ -23,6 +23,7 @@ const testConfig = {
   webhookRateLimit: 600,
   aiPlannerEnabled: false,
   aiPlannerTimeoutMs: 30000,
+  aiPlanApprovalTtlMinutes: 15,
   mfaEnabled: false,
   accountEncryptionKeyBase64: undefined,
   appBaseUrl: "http://localhost:5173",

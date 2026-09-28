@@ -1,5 +1,10 @@
 const { logActivity } = require("../lib/activity");
 const { readWorkspaceRules } = require("../lib/accessControl");
+const {
+  consumeAiPlanApproval,
+  createAiPlanApproval,
+  verifyAiPlanApproval
+} = require("../lib/aiPlanApproval");
 const { AppError } = require("../lib/errors");
 const { buildProjectAiContext } = require("../lib/aiProjectContext");
 const { getProjectRole } = require("../lib/projectAccess");
@@ -75,10 +80,17 @@ const previewAiPlan = async (req, res) => {
     const existing = normalizedExisting.get(task.title.trim().toLowerCase());
     return existing ? [{ tempId: task.tempId, ...existing }] : [];
   });
+  const approval = await createAiPlanApproval(req.app.locals.db, {
+    userId: req.user.id,
+    projectId: Number(project.id),
+    plan,
+    ttlMinutes: req.app.locals.config.aiPlanApprovalTtlMinutes
+  });
   return res.status(200).json({
     data: {
       provider: req.body.provider,
       model: req.body.model,
+      approval,
       plan,
       context: {
         ...projectContext.summary,
@@ -103,6 +115,12 @@ const applyAiPlan = async (req, res) => {
     const project = await loadEditableProject(client, req.params.id, req.user.id);
     const rules = await readWorkspaceRules(client);
     const tasks = req.body.plan.tasks;
+    await verifyAiPlanApproval(client, {
+      approvalId: req.body.approvalId,
+      userId: req.user.id,
+      projectId: Number(project.id),
+      plan: req.body.plan
+    });
     await validatePlanEvidence(client, project.id, tasks);
     if (
       rules.require_due_date_for_high_priority === true &&
@@ -192,8 +210,9 @@ const applyAiPlan = async (req, res) => {
       entityType: "project",
       entityId: project.id,
       entityTitle: project.name,
-      details: { createdCount: created.length }
+      details: { approvalId: req.body.approvalId, createdCount: created.length }
     });
+    await consumeAiPlanApproval(client, req.body.approvalId);
     await client.query("COMMIT");
     return res.status(201).json({ data: { created } });
   } catch (error) {

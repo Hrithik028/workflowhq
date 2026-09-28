@@ -1,5 +1,5 @@
 import { Bot, Check, KeyRound, Sparkles, X } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { aiPlannerApi } from "../api/aiPlanner";
 import { getErrorMessage } from "../api/client";
@@ -36,6 +36,7 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
   const [maxItems, setMaxItems] = useState(8);
   const [plan, setPlan] = useState<AiTaskPlan | null>(null);
   const [previewContext, setPreviewContext] = useState<AiPlanPreview["context"] | null>(null);
+  const [approval, setApproval] = useState<AiPlanPreview["approval"] | null>(null);
   const [development, setDevelopment] = useState<ProjectDevelopment | null>(null);
   const [includeProjectTasks, setIncludeProjectTasks] = useState(true);
   const [includeGithubActivity, setIncludeGithubActivity] = useState(true);
@@ -43,6 +44,14 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<"preview" | "apply" | null>(null);
   const [error, setError] = useState("");
+  const previewVersion = useRef(0);
+
+  const clearPreview = () => {
+    previewVersion.current += 1;
+    setPlan(null);
+    setPreviewContext(null);
+    setApproval(null);
+  };
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -77,6 +86,8 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
 
   const generate = async (event: FormEvent) => {
     event.preventDefault();
+    clearPreview();
+    const version = previewVersion.current;
     if (!projectId || !apiKey.trim() || !goal.trim() || !model.trim()) {
       setError("Choose a project and provide a model, API key, and planning goal.");
       return;
@@ -97,8 +108,10 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
           repositoryIds: includeGithubActivity ? [...repositoryIds] : []
         }
       });
+      if (version !== previewVersion.current) return;
       setPlan(preview.plan);
       setPreviewContext(preview.context);
+      setApproval(preview.approval);
       setSelected(new Set(preview.plan.tasks.map((task) => task.tempId)));
       setApiKey("");
     } catch (previewError) {
@@ -150,24 +163,22 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
       else next.add(repositoryId);
       return next;
     });
-    setPlan(null);
-    setPreviewContext(null);
+    clearPreview();
   };
 
   const changeProject = (value: string) => {
     setProjectId(value);
     setDevelopment(null);
     setRepositoryIds(new Set());
-    setPlan(null);
-    setPreviewContext(null);
+    clearPreview();
   };
 
   const apply = async () => {
-    if (!approvedPlan?.tasks.length || !projectId) return;
+    if (!approvedPlan?.tasks.length || !projectId || !approval) return;
     setBusy("apply");
     setError("");
     try {
-      const created = await aiPlannerApi.apply(Number(projectId), approvedPlan);
+      const created = await aiPlannerApi.apply(Number(projectId), approval.id, approvedPlan);
       await onApplied(created.length);
       onClose();
     } catch (applyError) {
@@ -231,7 +242,7 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
                   const value = event.target.value as AiProvider;
                   setProvider(value);
                   setModel(providerDefaults[value]);
-                  setPlan(null);
+                  clearPreview();
                 }}
               >
                 <option value="openai">OpenAI</option>
@@ -244,7 +255,10 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
               <input
                 aria-label="AI model"
                 value={model}
-                onChange={(event) => setModel(event.target.value)}
+                onChange={(event) => {
+                  setModel(event.target.value);
+                  clearPreview();
+                }}
               />
             </label>
             <label>
@@ -254,7 +268,10 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
                 autoComplete="off"
                 type="password"
                 value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
+                onChange={(event) => {
+                  setApiKey(event.target.value);
+                  clearPreview();
+                }}
               />
             </label>
           </div>
@@ -265,7 +282,10 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
               maxLength={4000}
               rows={4}
               value={goal}
-              onChange={(event) => setGoal(event.target.value)}
+              onChange={(event) => {
+                setGoal(event.target.value);
+                clearPreview();
+              }}
               placeholder="Describe the outcome, users, constraints, and definition of done."
             />
           </label>
@@ -278,7 +298,10 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
               maxLength={8000}
               rows={3}
               value={context}
-              onChange={(event) => setContext(event.target.value)}
+              onChange={(event) => {
+                setContext(event.target.value);
+                clearPreview();
+              }}
               placeholder="Architecture notes, release constraints, or existing work."
             />
           </label>
@@ -290,8 +313,7 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
                 type="checkbox"
                 onChange={(event) => {
                   setIncludeProjectTasks(event.target.checked);
-                  setPlan(null);
-                  setPreviewContext(null);
+                  clearPreview();
                 }}
               />
               Existing WorkHQ tickets
@@ -302,8 +324,7 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
                 type="checkbox"
                 onChange={(event) => {
                   setIncludeGithubActivity(event.target.checked);
-                  setPlan(null);
-                  setPreviewContext(null);
+                  clearPreview();
                 }}
               />
               Synchronized GitHub activity
@@ -340,7 +361,10 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
               max="30"
               type="range"
               value={maxItems}
-              onChange={(event) => setMaxItems(Number(event.target.value))}
+              onChange={(event) => {
+                setMaxItems(Number(event.target.value));
+                clearPreview();
+              }}
             />
           </label>
           <button className="button secondary" disabled={busy !== null} type="submit">
@@ -419,6 +443,12 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
             </div>
             <footer>
               <p>Nothing is created until you apply this approved preview.</p>
+              {approval ? (
+                <small className="ai-approval-expiry">
+                  Approval expires {new Date(approval.expiresAt).toLocaleTimeString()} and can be
+                  used once.
+                </small>
+              ) : null}
               <button
                 className="button primary"
                 disabled={busy !== null || selected.size === 0}

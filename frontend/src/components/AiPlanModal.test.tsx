@@ -76,6 +76,10 @@ describe("AiPlanModal", () => {
     apiMocks.preview.mockResolvedValue({
       provider: "openai",
       model: "gpt-test",
+      approval: {
+        id: "1ad122a2-b985-4f62-970c-9f4c962e0b79",
+        expiresAt: "2026-09-23T01:30:00.000Z"
+      },
       plan,
       context: {
         taskCount: 1,
@@ -136,6 +140,7 @@ describe("AiPlanModal", () => {
     );
     expect(screen.getByText(/ticket: whq-7 existing task/i)).toBeInTheDocument();
     expect(screen.getByText(/github: hrithik028\/workflowhq/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval expires/i)).toBeInTheDocument();
 
     const preview = screen.getByRole("region", { name: /ai task plan preview/i });
     const checkboxes = within(preview).getAllByRole("checkbox");
@@ -143,10 +148,39 @@ describe("AiPlanModal", () => {
     await browser.click(screen.getByRole("button", { name: /create 1 issue/i }));
 
     await waitFor(() => expect(apiMocks.apply).toHaveBeenCalledTimes(1));
-    const appliedPlan = apiMocks.apply.mock.calls[0][1] as AiTaskPlan;
+    expect(apiMocks.apply.mock.calls[0][1]).toBe("1ad122a2-b985-4f62-970c-9f4c962e0b79");
+    const appliedPlan = apiMocks.apply.mock.calls[0][2] as AiTaskPlan;
     expect(appliedPlan.tasks.map((task) => task.tempId)).toEqual(["epic-ai"]);
     expect(JSON.stringify(apiMocks.apply.mock.calls[0])).not.toContain("request-only-secret");
     expect(onApplied).toHaveBeenCalledWith(1);
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("removes the approval when planning inputs change after preview", async () => {
+    const browser = userEvent.setup();
+    render(
+      <AiPlanModal
+        initialProjectId={4}
+        onApplied={vi.fn()}
+        onClose={vi.fn()}
+        projects={[project]}
+      />
+    );
+
+    await browser.type(screen.getByLabelText(/provider api key/i), "request-only-secret");
+    await browser.type(
+      screen.getByRole("textbox", { name: /planning goal/i }),
+      "Plan a safe AI workflow for this project."
+    );
+    await browser.click(screen.getByRole("button", { name: /generate preview/i }));
+    expect(
+      await screen.findByRole("region", { name: /ai task plan preview/i })
+    ).toBeInTheDocument();
+
+    await browser.type(screen.getByRole("textbox", { name: /planning goal/i }), " Updated goal.");
+
+    expect(screen.queryByRole("region", { name: /ai task plan preview/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create 2 issues/i })).not.toBeInTheDocument();
+    expect(apiMocks.apply).not.toHaveBeenCalled();
   });
 });

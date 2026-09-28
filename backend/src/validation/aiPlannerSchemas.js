@@ -88,7 +88,12 @@ const aiPlannerSchemas = {
         })
     })
     .strict(),
-  apply: z.object({ plan: planSchema }).strict(),
+  apply: z
+    .object({
+      approvalId: z.string().uuid(),
+      plan: planSchema
+    })
+    .strict(),
   plan: planSchema
 };
 

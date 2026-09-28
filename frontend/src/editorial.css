@@ -2873,6 +2873,13 @@ html[data-motion="reduced"] *::after {
   gap: 20px;
 }
 
+.ai-approval-expiry {
+  color: var(--editorial-muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
 .ai-plan-preview h3 {
   margin: 4px 0 14px;
   color: var(--carbon);
