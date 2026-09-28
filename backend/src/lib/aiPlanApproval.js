@@ -4,6 +4,20 @@ const { AppError } = require("./errors");
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
+const stableValue = (value) => {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, stableValue(value[key])])
+    );
+  }
+  return value;
+};
+
+const fingerprint = (value) => sha256(JSON.stringify(stableValue(value)));
+
 const taskPayload = (task) => ({
   tempId: task.tempId,
   parentTempId: task.parentTempId || null,
@@ -16,14 +30,21 @@ const taskPayload = (task) => ({
   acceptanceCriteria: task.acceptanceCriteria || []
 });
 
-const taskFingerprint = (task) => sha256(JSON.stringify(taskPayload(task)));
+const taskFingerprint = (task) => fingerprint(taskPayload(task));
+
+const approvedEntries = (plan) => {
+  if (plan.actions) {
+    return plan.actions.map((action) => [`action:${action.id}`, fingerprint(action)]);
+  }
+  // Keep the original key format so previews issued immediately before this
+  // deployment remain applicable until their short TTL expires.
+  return plan.tasks.map((task) => [task.tempId, taskFingerprint(task)]);
+};
 
 const createAiPlanApproval = async (db, { userId, projectId, plan, ttlMinutes }) => {
   const id = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
-  const taskHashes = Object.fromEntries(
-    plan.tasks.map((task) => [task.tempId, taskFingerprint(task)])
-  );
+  const taskHashes = Object.fromEntries(approvedEntries(plan));
   await db.query(
     `INSERT INTO ai_plan_approvals
        (id, user_id, project_id, summary_hash, task_hashes, expires_at)
@@ -49,6 +70,21 @@ const verifyAiPlanApproval = async (db, { approvalId, userId, projectId, plan })
       "This plan was not approved for this project. Generate a new preview."
     );
   }
+  const allowed =
+    typeof approval.task_hashes === "string"
+      ? JSON.parse(approval.task_hashes)
+      : approval.task_hashes;
+  const entries = approvedEntries(plan);
+  const altered =
+    sha256(plan.summary) !== approval.summary_hash ||
+    entries.some(([key, entryHash]) => !allowed[key] || allowed[key] !== entryHash);
+  if (altered) {
+    throw new AppError(
+      422,
+      "AI_PLAN_APPROVAL_MISMATCH",
+      "The selected plan differs from the reviewed preview. Generate a new preview."
+    );
+  }
   if (approval.applied_at) {
     throw new AppError(
       409,
@@ -61,23 +97,6 @@ const verifyAiPlanApproval = async (db, { approvalId, userId, projectId, plan })
       409,
       "AI_PLAN_APPROVAL_EXPIRED",
       "This AI preview has expired. Generate a new preview."
-    );
-  }
-
-  const allowed =
-    typeof approval.task_hashes === "string"
-      ? JSON.parse(approval.task_hashes)
-      : approval.task_hashes;
-  const altered =
-    sha256(plan.summary) !== approval.summary_hash ||
-    plan.tasks.some(
-      (task) => !allowed[task.tempId] || allowed[task.tempId] !== taskFingerprint(task)
-    );
-  if (altered) {
-    throw new AppError(
-      422,
-      "AI_PLAN_APPROVAL_MISMATCH",
-      "The selected plan differs from the reviewed preview. Generate a new preview."
     );
   }
 };

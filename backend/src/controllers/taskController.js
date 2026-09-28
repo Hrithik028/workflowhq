@@ -1,6 +1,12 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
-const { canAccessTask, getProjectRole } = require("../lib/projectAccess");
+const { canAccessTask } = require("../lib/projectAccess");
+const {
+  createTask: createTaskMutation,
+  setTaskArchived,
+  updateTask: updateTaskMutation,
+  verifyProjectAccess
+} = require("../lib/taskMutationService");
 
 const taskFields = `
   t.id,
@@ -27,6 +33,7 @@ const taskFields = `
   t.rank,
   t.archived_at,
   t.archived_by,
+  t.version,
   t.created_at,
   t.updated_at,
   COALESCE(child_stats.child_count, 0)::int AS child_count,
@@ -54,131 +61,6 @@ const taskJoins = `
 // or when they're a member (any role) of the project it belongs to.
 const visibleTaskCondition = (userIndex) =>
   `((t.project_id IS NULL AND t.user_id = $${userIndex}) OR t.project_id IN (SELECT project_id FROM project_members WHERE user_id = $${userIndex}))`;
-
-const typeRank = {
-  initiative: 5,
-  epic: 4,
-  story: 3,
-  task: 2,
-  bug: 2,
-  subtask: 1
-};
-
-// Looks up a project and the caller's role on it in one query. Returns
-// { key: "INB" } unconditionally for a null projectId (inbox tasks have no
-// membership concept). Otherwise throws 404 PROJECT_NOT_FOUND both when the
-// project doesn't exist and when the caller's role isn't in allowedRoles -
-// non-members should not be able to tell those two cases apart.
-const verifyProjectAccess = async (db, projectId, userId, allowedRoles) => {
-  if (!projectId) {
-    return { key: "INB", role: null };
-  }
-  const result = await db.query(
-    `SELECT p.key, p.archived_at, pm.role
-     FROM projects p
-     LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
-     WHERE p.id = $1`,
-    [projectId, userId]
-  );
-  if (
-    result.rows.length === 0 ||
-    !result.rows[0].role ||
-    !allowedRoles.includes(result.rows[0].role)
-  ) {
-    throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found.");
-  }
-  if (result.rows[0].archived_at) {
-    throw new AppError(409, "PROJECT_ARCHIVED", "Restore this project before changing its work.");
-  }
-  return { key: result.rows[0].key, role: result.rows[0].role };
-};
-
-const validateAssignee = async (db, projectId, assigneeId) => {
-  if (!assigneeId) return;
-  if (!projectId) {
-    throw new AppError(
-      422,
-      "ASSIGNEE_NOT_A_MEMBER",
-      "Only shared project tickets can be assigned to someone else."
-    );
-  }
-  const role = await getProjectRole(db, projectId, assigneeId);
-  if (!role) {
-    throw new AppError(
-      422,
-      "ASSIGNEE_NOT_A_MEMBER",
-      "The assignee must be a member of this project."
-    );
-  }
-};
-
-const validateSprint = async (db, projectId, sprintId) => {
-  if (!sprintId) return;
-  if (!projectId) {
-    throw new AppError(
-      422,
-      "SPRINT_NOT_IN_PROJECT",
-      "Only shared project tickets can join a sprint."
-    );
-  }
-  const result = await db.query("SELECT id FROM sprints WHERE id = $1 AND project_id = $2", [
-    sprintId,
-    projectId
-  ]);
-  if (result.rows.length === 0) {
-    throw new AppError(
-      422,
-      "SPRINT_NOT_IN_PROJECT",
-      "The sprint must belong to this task's project."
-    );
-  }
-};
-
-const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId, taskId }) => {
-  if (!parentId) return;
-  let cursorId = parentId;
-  let depth = 0;
-  let parent;
-
-  while (cursorId) {
-    const result = await db.query(
-      `SELECT id, project_id, parent_task_id, task_type, user_id, archived_at
-       FROM tasks WHERE id = $1`,
-      [cursorId]
-    );
-    if (result.rows.length === 0 || !(await canAccessTask(db, result.rows[0], userId))) {
-      throw new AppError(404, "PARENT_TASK_NOT_FOUND", "Parent task not found.");
-    }
-    const current = result.rows[0];
-    if (current.archived_at) {
-      throw new AppError(409, "PARENT_TASK_ARCHIVED", "Restore the parent task before using it.");
-    }
-    if (!parent) parent = current;
-    if (taskId && Number(current.id) === Number(taskId)) {
-      throw new AppError(409, "TASK_HIERARCHY_CYCLE", "A task cannot become its own ancestor.");
-    }
-    depth += 1;
-    if (depth >= 5) {
-      throw new AppError(409, "TASK_HIERARCHY_DEPTH", "Task hierarchy is limited to five levels.");
-    }
-    cursorId = current.parent_task_id;
-  }
-
-  if (Number(parent.project_id || 0) !== Number(projectId || 0)) {
-    throw new AppError(
-      409,
-      "TASK_PROJECT_MISMATCH",
-      "Parent and child tasks must belong to the same project."
-    );
-  }
-  if (typeRank[parent.task_type] <= typeRank[taskType]) {
-    throw new AppError(
-      409,
-      "INVALID_TASK_HIERARCHY",
-      `${parent.task_type} tickets can only contain lower-level work.`
-    );
-  }
-};
 
 // Labels are attached with one extra batch query per response rather than a
 // JOIN + JSON aggregate in taskFields - pg-mem (used by the test suite) has no
@@ -330,66 +212,13 @@ const getTasks = async (req, res) => {
 const createTask = async (req, res) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const {
-    title,
-    description,
-    status,
-    priority,
-    startDate,
-    dueDate,
-    projectId,
-    taskType,
-    parentId,
-    assigneeId,
-    sprintId
-  } = req.body;
-
   try {
     await client.query("BEGIN");
-    const project = await verifyProjectAccess(client, projectId, req.user.id, ["owner", "editor"]);
-    await verifyParentHierarchy({
-      db: client,
-      parentId,
-      projectId,
-      taskType,
-      userId: req.user.id
-    });
-    await validateAssignee(client, projectId, assigneeId);
-    await validateSprint(client, projectId, sprintId);
-    const result = await client.query(
-      `INSERT INTO tasks
-         (user_id, project_id, title, description, status, priority, start_date, due_date, task_type, parent_task_id, assignee_id, sprint_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       RETURNING id`,
-      [
-        req.user.id,
-        projectId,
-        title,
-        description,
-        status,
-        priority,
-        startDate,
-        dueDate,
-        taskType,
-        parentId,
-        assigneeId,
-        sprintId
-      ]
-    );
-    const taskId = result.rows[0].id;
-    await client.query("UPDATE tasks SET issue_key = $1 WHERE id = $2", [
-      `${project.key}-${taskId}`,
-      taskId
-    ]);
-    const task = await selectTaskById(client, taskId, req.user.id);
-    await logActivity(client, {
+    const created = await createTaskMutation(client, {
       userId: req.user.id,
-      action: "task_created",
-      entityType: "task",
-      entityId: task.id,
-      entityTitle: task.title,
-      details: { issueKey: task.issue_key, taskType: task.task_type, parentId }
+      fields: req.body
     });
+    const task = await selectTaskById(client, created.id, req.user.id);
     await client.query("COMMIT");
     return res.status(201).json({ data: task });
   } catch (error) {
@@ -430,136 +259,17 @@ const getTaskChildren = async (req, res, next) => {
   return res.status(200).json({ data: await attachLabels(db, result.rows) });
 };
 
-const updateTask = async (req, res, next) => {
+const updateTask = async (req, res) => {
   const db = req.app.locals.db;
   const client = await db.connect();
-  const {
-    title,
-    description,
-    status,
-    priority,
-    startDate,
-    dueDate,
-    projectId,
-    taskType,
-    parentId,
-    assigneeId,
-    sprintId
-  } = req.body;
-
   try {
     await client.query("BEGIN");
-    const existingResult = await client.query("SELECT * FROM tasks WHERE id = $1", [req.params.id]);
-    if (existingResult.rows.length === 0) {
-      await client.query("ROLLBACK");
-      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
-    }
-    const existing = existingResult.rows[0];
-    if (!(await canAccessTask(client, existing, req.user.id))) {
-      await client.query("ROLLBACK");
-      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
-    }
-    if (existing.archived_at) {
-      await client.query("ROLLBACK");
-      return next(new AppError(409, "TASK_ARCHIVED", "Restore this task before editing it."));
-    }
-    const projectChanged = Number(existing.project_id || 0) !== Number(projectId || 0);
-    // Moving a task into the inbox makes it visible only to its original
-    // creator (tasks.user_id is frozen and inbox tasks have no membership
-    // concept) - letting any editor do this would let them orphan a
-    // teammate's ticket, hiding it from themselves and everyone else.
-    if (projectChanged && !projectId && Number(existing.user_id) !== Number(req.user.id)) {
-      await client.query("ROLLBACK");
-      return next(
-        new AppError(
-          403,
-          "TASK_INBOX_MOVE_DENIED",
-          "Only this ticket's creator can move it out of the project into their inbox."
-        )
-      );
-    }
-    // Editing requires editor/owner on the task's target project context. If the
-    // task is moving between projects (or in/out of the inbox), the caller needs
-    // that same standing on the project it's leaving too.
-    await verifyProjectAccess(client, projectId, req.user.id, ["owner", "editor"]);
-    if (projectChanged) {
-      await verifyProjectAccess(client, existing.project_id, req.user.id, ["owner", "editor"]);
-    }
-    await verifyParentHierarchy({
-      db: client,
-      parentId,
-      projectId,
-      taskType,
+    await updateTaskMutation(client, {
       userId: req.user.id,
-      taskId: req.params.id
+      taskId: req.params.id,
+      fields: req.body
     });
-    await validateAssignee(client, projectId, assigneeId);
-    await validateSprint(client, projectId, sprintId);
-    if (projectChanged) {
-      const childResult = await client.query(
-        "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1",
-        [req.params.id]
-      );
-      if (childResult.rows[0].count > 0) {
-        throw new AppError(
-          409,
-          "TASK_HAS_CHILDREN",
-          "Move or remove child tasks before changing this task's project."
-        );
-      }
-    }
-    await client.query(
-      `UPDATE tasks
-       SET project_id = $1, title = $2, description = $3, status = $4, priority = $5,
-           start_date = $6, due_date = $7, task_type = $8, parent_task_id = $9,
-           assignee_id = $10, sprint_id = $11, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $12`,
-      [
-        projectId,
-        title,
-        description,
-        status,
-        priority,
-        startDate,
-        dueDate,
-        taskType,
-        parentId,
-        assigneeId,
-        sprintId,
-        req.params.id
-      ]
-    );
     const task = await selectTaskById(client, req.params.id, req.user.id);
-    const activities = [];
-    if (existing.status !== status) {
-      activities.push({
-        action: status === "completed" ? "task_completed" : "task_status_changed",
-        details: { from: existing.status, to: status }
-      });
-    }
-    if (existing.priority !== priority) {
-      activities.push({
-        action: "task_priority_changed",
-        details: { from: existing.priority, to: priority }
-      });
-    }
-    if (Number(existing.parent_task_id || 0) !== Number(parentId || 0)) {
-      activities.push({
-        action: "task_parent_changed",
-        details: { from: existing.parent_task_id, to: parentId }
-      });
-    }
-    if (activities.length === 0) activities.push({ action: "task_updated", details: {} });
-    for (const activity of activities) {
-      await logActivity(client, {
-        userId: req.user.id,
-        action: activity.action,
-        entityType: "task",
-        entityId: task.id,
-        entityTitle: task.title,
-        details: activity.details
-      });
-    }
     await client.query("COMMIT");
     return res.status(200).json({ data: task });
   } catch (error) {
@@ -615,67 +325,15 @@ const deleteTask = async (req, res, next) => {
   }
 };
 
-const setTaskArchivedState = async (req, res, next, archived) => {
+const setTaskArchivedState = async (req, res, _next, archived) => {
   const db = req.app.locals.db;
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    const existingResult = await client.query("SELECT * FROM tasks WHERE id = $1 FOR UPDATE", [
-      req.params.id
-    ]);
-    if (existingResult.rows.length === 0) {
-      await client.query("ROLLBACK");
-      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
-    }
-    const existing = existingResult.rows[0];
-    if (!(await canAccessTask(client, existing, req.user.id))) {
-      await client.query("ROLLBACK");
-      return next(new AppError(404, "TASK_NOT_FOUND", "Task not found."));
-    }
-    await verifyProjectAccess(client, existing.project_id, req.user.id, ["owner", "editor"]);
-
-    if (archived) {
-      const children = await client.query(
-        "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1 AND archived_at IS NULL",
-        [req.params.id]
-      );
-      if (children.rows[0].count > 0) {
-        await client.query("ROLLBACK");
-        return next(
-          new AppError(
-            409,
-            "TASK_HAS_ACTIVE_CHILDREN",
-            "Archive this task's active children first, or archive the whole project."
-          )
-        );
-      }
-    } else if (existing.parent_task_id) {
-      const parent = await client.query("SELECT archived_at FROM tasks WHERE id = $1", [
-        existing.parent_task_id
-      ]);
-      if (parent.rows[0]?.archived_at) {
-        await client.query("ROLLBACK");
-        return next(
-          new AppError(409, "PARENT_TASK_ARCHIVED", "Restore the parent task before this child.")
-        );
-      }
-    }
-
-    const result = await client.query(
-      `UPDATE tasks
-       SET archived_at = ${archived ? "COALESCE(archived_at, CURRENT_TIMESTAMP)" : "NULL"},
-           archived_by = $1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING id, title`,
-      [archived ? req.user.id : null, req.params.id]
-    );
-    await logActivity(client, {
+    await setTaskArchived(client, {
       userId: req.user.id,
-      action: archived ? "task_archived" : "task_restored",
-      entityType: "task",
-      entityId: result.rows[0].id,
-      entityTitle: result.rows[0].title
+      taskId: req.params.id,
+      archived
     });
     const task = await selectTaskById(client, req.params.id, req.user.id);
     await client.query("COMMIT");
@@ -780,14 +438,20 @@ const updateTaskRank = async (req, res, next) => {
         [scopeValue]
       );
       for (const [index, row] of allResult.rows.entries()) {
-        await client.query("UPDATE tasks SET rank = $1 WHERE id = $2", [index * RANK_GAP, row.id]);
+        await client.query(
+          "UPDATE tasks SET rank = $1, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+          [index * RANK_GAP, row.id]
+        );
       }
       previousRank = await loadNeighborRank(previousTaskId);
       nextRank = await loadNeighborRank(nextTaskId);
       newRank = rankBetween(previousRank, nextRank);
     }
 
-    await client.query("UPDATE tasks SET rank = $1 WHERE id = $2", [newRank, task.id]);
+    await client.query(
+      "UPDATE tasks SET rank = $1, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+      [newRank, task.id]
+    );
     const updated = await selectTaskById(client, task.id, req.user.id);
     await client.query("COMMIT");
     return res.status(200).json({ data: updated });

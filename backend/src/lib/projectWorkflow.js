@@ -52,7 +52,10 @@ const workflowTriggerFor = (eventName, payload, item) => {
   if (eventName === "push" && item.linkType === "commit") return "commit_pushed";
   if (eventName === "pull_request" && item.linkType === "pull_request") {
     if (item.state === "merged") return "pull_request_merged";
-    if (["opened", "reopened", "ready_for_review"].includes(payload.action) || item.state === "open") {
+    if (
+      ["opened", "reopened", "ready_for_review"].includes(payload.action) ||
+      item.state === "open"
+    ) {
       return "pull_request_opened";
     }
   }
@@ -63,13 +66,7 @@ const workflowTriggerFor = (eventName, payload, item) => {
   return null;
 };
 
-const applyProjectWorkflowAutomation = async ({
-  client,
-  repository,
-  eventId,
-  item,
-  tasks
-}) => {
+const applyProjectWorkflowAutomation = async ({ client, repository, eventId, item, tasks }) => {
   if (!item.workflowTrigger || !tasks.length) return [];
   const appliedTaskIds = [];
 
@@ -109,16 +106,16 @@ const applyProjectWorkflowAutomation = async ({
     const updated = (
       await client.query(
         `UPDATE tasks
-         SET status = $1, updated_at = CURRENT_TIMESTAMP
+         SET status = $1, version = version + 1, updated_at = CURRENT_TIMESTAMP
          WHERE id = $2 AND project_id = $3 AND status = $4 AND archived_at IS NULL
          RETURNING id, title`,
         [rule.to_status, task.id, task.project_id, rule.from_status]
       )
     ).rows[0];
-    await client.query(
-      "UPDATE task_workflow_automation_runs SET outcome = $1 WHERE id = $2",
-      [updated ? "applied" : "skipped", run.id]
-    );
+    await client.query("UPDATE task_workflow_automation_runs SET outcome = $1 WHERE id = $2", [
+      updated ? "applied" : "skipped",
+      run.id
+    ]);
     if (!updated) continue;
 
     appliedTaskIds.push(Number(updated.id));
