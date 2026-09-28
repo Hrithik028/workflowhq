@@ -100,7 +100,7 @@ describe("AiPlanModal", () => {
     apiMocks.apply.mockResolvedValue([{ id: 19, issueKey: "WHQ-19", tempId: "epic-ai" }]);
   });
 
-  it("keeps preview read-only, clears the key, and applies only approved work", async () => {
+  it("keeps preview read-only and applies only approved work", async () => {
     const browser = userEvent.setup();
     const onApplied = vi.fn();
     const onClose = vi.fn();
@@ -115,7 +115,6 @@ describe("AiPlanModal", () => {
 
     await browser.clear(screen.getByRole("textbox", { name: /ai model/i }));
     await browser.type(screen.getByRole("textbox", { name: /ai model/i }), "gpt-test");
-    await browser.type(screen.getByLabelText(/provider api key/i), "request-only-secret");
     await browser.type(
       screen.getByRole("textbox", { name: /planning goal/i }),
       "Plan a safe AI workflow for this project."
@@ -125,11 +124,10 @@ describe("AiPlanModal", () => {
 
     expect(await screen.findByText("Approval preview")).toBeInTheDocument();
     expect(apiMocks.apply).not.toHaveBeenCalled();
-    expect(screen.getByLabelText(/provider api key/i)).toHaveValue("");
+    expect(screen.queryByLabelText(/provider api key/i)).not.toBeInTheDocument();
     expect(apiMocks.preview).toHaveBeenCalledWith(
       4,
       expect.objectContaining({
-        apiKey: "request-only-secret",
         provider: "openai",
         contextOptions: {
           includeProjectTasks: true,
@@ -151,7 +149,6 @@ describe("AiPlanModal", () => {
     expect(apiMocks.apply.mock.calls[0][1]).toBe("1ad122a2-b985-4f62-970c-9f4c962e0b79");
     const appliedPlan = apiMocks.apply.mock.calls[0][2] as AiTaskPlan;
     expect(appliedPlan.tasks.map((task) => task.tempId)).toEqual(["epic-ai"]);
-    expect(JSON.stringify(apiMocks.apply.mock.calls[0])).not.toContain("request-only-secret");
     expect(onApplied).toHaveBeenCalledWith(1);
     expect(onClose).toHaveBeenCalled();
   });
@@ -167,7 +164,6 @@ describe("AiPlanModal", () => {
       />
     );
 
-    await browser.type(screen.getByLabelText(/provider api key/i), "request-only-secret");
     await browser.type(
       screen.getByRole("textbox", { name: /planning goal/i }),
       "Plan a safe AI workflow for this project."

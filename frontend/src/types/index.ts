@@ -69,7 +69,6 @@ export interface AiTaskPlan {
 
 export interface AiPlanPreviewInput {
   provider: AiProvider;
-  apiKey: string;
   model: string;
   goal: string;
   context?: string;
@@ -79,6 +78,15 @@ export interface AiPlanPreviewInput {
     includeGithubActivity: boolean;
     repositoryIds: number[];
   };
+}
+
+export interface AiCredentialStatus {
+  provider: AiProvider;
+  configured: boolean;
+  maskedSuffix: string | null;
+  keyVersion: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface AiContextSource {

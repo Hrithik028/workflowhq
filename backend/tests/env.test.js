@@ -46,3 +46,50 @@ describe("invitation configuration", () => {
     expect(config.invitationTtlHours).toBe(72);
   });
 });
+
+describe("AI credential vault configuration", () => {
+  const encodedKey = Buffer.alloc(32, 4).toString("base64");
+
+  it("loads a versioned 32-byte key ring", () => {
+    const config = loadConfig({
+      ...required,
+      AI_CREDENTIAL_VAULT_ENABLED: "true",
+      AI_CREDENTIAL_MASTER_KEYS_JSON: JSON.stringify({ 1: encodedKey }),
+      AI_CREDENTIAL_ACTIVE_KEY_VERSION: "1"
+    });
+
+    expect(config.aiCredentialVaultEnabled).toBe(true);
+    expect(config.aiCredentialMasterKeys[1]).toEqual(Buffer.alloc(32, 4));
+    expect(config.aiCredentialActiveKeyVersion).toBe(1);
+  });
+
+  it("fails closed when planning is enabled without the credential vault", () => {
+    expect(() =>
+      loadConfig({
+        ...required,
+        AI_PLANNER_ENABLED: "true",
+        AI_CREDENTIAL_VAULT_ENABLED: "false"
+      })
+    ).toThrow(/AI_CREDENTIAL_VAULT_ENABLED must be true/);
+  });
+
+  it("rejects malformed and incomplete key rings", () => {
+    expect(() =>
+      loadConfig({
+        ...required,
+        AI_CREDENTIAL_VAULT_ENABLED: "true",
+        AI_CREDENTIAL_MASTER_KEYS_JSON: JSON.stringify({ 1: "not-32-bytes" }),
+        AI_CREDENTIAL_ACTIVE_KEY_VERSION: "1"
+      })
+    ).toThrow(/exactly 32 base64-encoded bytes/);
+
+    expect(() =>
+      loadConfig({
+        ...required,
+        AI_CREDENTIAL_VAULT_ENABLED: "true",
+        AI_CREDENTIAL_MASTER_KEYS_JSON: JSON.stringify({ 1: encodedKey }),
+        AI_CREDENTIAL_ACTIVE_KEY_VERSION: "2"
+      })
+    ).toThrow(/active credential key version must exist/);
+  });
+});

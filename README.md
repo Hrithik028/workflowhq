@@ -200,12 +200,23 @@ Enable the capability on the **backend only**:
 ```env
 AI_PLANNER_ENABLED=true
 AI_PLANNER_TIMEOUT_MS=30000
+AI_CREDENTIAL_VAULT_ENABLED=true
+AI_CREDENTIAL_MASTER_KEYS_JSON={"1":"<base64-encoded 32-byte key>"}
+AI_CREDENTIAL_ACTIVE_KEY_VERSION=1
 ```
 
-The user chooses a project, provider, and model, then supplies their own provider API key for that
-single preview request. WorkHQ does not save the key in PostgreSQL, application configuration,
-activity records, or the browser after the preview returns. The server calls only fixed official
-provider endpoints; users cannot supply an arbitrary provider URL.
+Each user saves their own OpenAI, Anthropic, or Google Gemini credential in **Settings → AI
+providers**. WorkHQ encrypts it with AES-256-GCM before PostgreSQL receives it and returns only a
+masked suffix to the browser. Ciphertext is bound to the owning user, provider, encryption format,
+and key version. The server calls only fixed official provider endpoints; users cannot supply an
+arbitrary provider URL. The separate **Validate only** action calls the provider without saving the
+submitted credential.
+
+The master-key ring belongs only in the backend secret store. AI planning fails closed when the
+vault or active key is missing, and a credential that fails authentication cannot be used. Follow
+[the credential key rotation and recovery runbook](docs/ai-credential-key-rotation.md) before
+changing or retiring a key. The decrypted credential exists only inside the backend provider
+request and is never returned by the API.
 
 Users decide whether a preview may use existing WorkHQ tickets and explicitly choose which linked
 repositories may contribute synchronized GitHub activity. WorkHQ sends bounded metadata only: up
@@ -312,7 +323,7 @@ Both applications are containerised. Production requires a managed PostgreSQL da
 
 - Replace the product screenshots whenever the production interface changes materially.
 - Add richer repository-health alerts and an operator-facing integration audit dashboard.
-- Add approval-based, provider-neutral AI task planning with request-scoped user credentials.
+- Add approval-based, provider-neutral AI task planning with encrypted user-owned credentials.
 - Add a one-time Jira importer before considering bidirectional synchronization.
 - Add in-app and email notifications for assignments, mentions, reviews, checks, and deployments.
 - Add custom project statuses, transition rules, roadmaps, and dependency tracking.

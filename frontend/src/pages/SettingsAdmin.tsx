@@ -398,6 +398,9 @@ function SettingsAdmin() {
           <Link className="button secondary" to="/settings/integrations/github">
             <Github size={16} /> GitHub integration
           </Link>
+          <Link className="button secondary" to="/settings/integrations/ai">
+            <KeyRound size={16} /> AI providers
+          </Link>
           <div className="admin-security-mark">
             <ShieldCheck size={24} />
             <span>Server enforced</span>
