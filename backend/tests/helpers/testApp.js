@@ -24,6 +24,7 @@ const testConfig = {
   aiPlannerEnabled: false,
   aiPlannerTimeoutMs: 30000,
   aiPlanApprovalTtlMinutes: 15,
+  aiConversationRetentionDays: 15,
   mfaEnabled: false,
   accountEncryptionKeyBase64: undefined,
   appBaseUrl: "http://localhost:5173",

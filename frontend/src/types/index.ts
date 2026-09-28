@@ -105,6 +105,78 @@ export interface AiPlanPreview {
   };
 }
 
+export type AiProposalState = "pending" | "superseded" | "discarded" | "applied";
+
+export interface AiConversation {
+  id: string;
+  projectId: number;
+  createdBy: number;
+  title: string;
+  provider: AiProvider;
+  model: string;
+  status: "active" | "discarded";
+  runCount: number;
+  proposalCount: number;
+  detailExpiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiConversationMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string | null;
+  expired: boolean;
+  contentSha256: string | null;
+  detailExpiresAt: string;
+  createdAt: string;
+}
+
+export interface AiProposalDiff {
+  added: string[];
+  changed: Array<{ from: string; to: string }>;
+  removed: string[];
+}
+
+export interface AiProposalRevision {
+  id: string;
+  runId: string;
+  revisionNumber: number;
+  state: AiProposalState;
+  summary: string | null;
+  plan: AiTaskPlan | null;
+  diff: AiProposalDiff | null;
+  evidenceSummary: {
+    taskCount: number;
+    githubCount: number;
+    items: AiContextSource[];
+  } | null;
+  approvalId: string | null;
+  canApprove: boolean;
+  expired: boolean;
+  expiresAt: string;
+  detailExpiresAt: string;
+  createdAt: string;
+}
+
+export interface AiConversationRun {
+  id: string;
+  status: "running" | "completed" | "failed";
+  provider: AiProvider;
+  model: string;
+  errorCode: string | null;
+  evidenceCounts: { taskCount?: number; githubCount?: number };
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface AiConversationDetail {
+  conversation: AiConversation;
+  messages: AiConversationMessage[];
+  runs: AiConversationRun[];
+  proposals: AiProposalRevision[];
+}
+
 export interface ProjectMember {
   userId: number;
   name: string;
