@@ -17,10 +17,10 @@ export const aiPlannerApi = {
     return response.data.data;
   },
 
-  async apply(projectId: number, plan: AiTaskPlan): Promise<CreatedAiTask[]> {
+  async apply(projectId: number, approvalId: string, plan: AiTaskPlan): Promise<CreatedAiTask[]> {
     const response = await api.post<{ data: { created: CreatedAiTask[] } }>(
       `/projects/${projectId}/ai-plan/apply`,
-      { plan }
+      { approvalId, plan }
     );
     return response.data.data.created;
   }

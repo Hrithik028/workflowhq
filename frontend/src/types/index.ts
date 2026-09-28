@@ -91,6 +91,10 @@ export interface AiContextSource {
 export interface AiPlanPreview {
   provider: AiProvider;
   model: string;
+  approval: {
+    id: string;
+    expiresAt: string;
+  };
   plan: AiTaskPlan;
   context: {
     taskCount: number;

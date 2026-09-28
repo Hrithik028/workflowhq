@@ -51,6 +51,21 @@ describe("AI task planner", () => {
 
   afterEach(async () => db.end());
 
+  const previewPlan = async (preview = plan) => {
+    planner.preview.mockResolvedValueOnce(preview);
+    return request(app)
+      .post(`/api/projects/${project.id}/ai-plan/preview`)
+      .set(auth(owner.token))
+      .send({
+        provider: "openai",
+        apiKey: "request-scoped-secret-key",
+        model: "test-model",
+        goal: "Break the provider-neutral AI planner into safe delivery tasks.",
+        context: "Preview before writing.",
+        maxItems: 8
+      });
+  };
+
   it("returns a validated preview without persisting the API key or tasks", async () => {
     const response = await request(app)
       .post(`/api/projects/${project.id}/ai-plan/preview`)
@@ -66,6 +81,10 @@ describe("AI task planner", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.plan).toEqual(plan);
+    expect(response.body.data.approval).toMatchObject({
+      id: expect.any(String),
+      expiresAt: expect.any(String)
+    });
     expect(planner.preview).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: "request-scoped-secret-key", provider: "openai" })
     );
@@ -73,13 +92,18 @@ describe("AI task planner", () => {
     expect(JSON.stringify((await db.query("SELECT * FROM activities")).rows)).not.toContain(
       "request-scoped-secret-key"
     );
+    const approvals = (await db.query("SELECT * FROM ai_plan_approvals")).rows;
+    expect(approvals).toHaveLength(1);
+    expect(JSON.stringify(approvals)).not.toContain("request-scoped-secret-key");
+    expect(JSON.stringify(approvals)).not.toContain("AI planning foundation");
   });
 
   it("atomically applies an approved hierarchy and its acceptance criteria", async () => {
+    const preview = await previewPlan();
     const response = await request(app)
       .post(`/api/projects/${project.id}/ai-plan/apply`)
       .set(auth(owner.token))
-      .send({ plan });
+      .send({ approvalId: preview.body.data.approval.id, plan });
 
     const tasks = await db.query(
       "SELECT id, issue_key, task_type, parent_task_id FROM tasks ORDER BY id"
@@ -120,7 +144,7 @@ describe("AI task planner", () => {
     const response = await request(app)
       .post(`/api/projects/${project.id}/ai-plan/apply`)
       .set(auth(owner.token))
-      .send({ plan });
+      .send({ approvalId: "1ad122a2-b985-4f62-970c-9f4c962e0b79", plan });
 
     expect(response.status).toBe(503);
     expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(0);
@@ -134,13 +158,101 @@ describe("AI task planner", () => {
         evidenceIds: index === 0 ? ["github:999999"] : []
       }))
     };
+    const preview = await previewPlan(forgedPlan);
     const response = await request(app)
       .post(`/api/projects/${project.id}/ai-plan/apply`)
       .set(auth(owner.token))
-      .send({ plan: forgedPlan });
+      .send({ approvalId: preview.body.data.approval.id, plan: forgedPlan });
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe("AI_PLAN_EVIDENCE_INVALID");
+    expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(0);
+  });
+
+  it("rejects a plan changed after preview", async () => {
+    const preview = await previewPlan();
+    const altered = {
+      ...plan,
+      tasks: plan.tasks.map((task, index) =>
+        index === 0 ? { ...task, title: "Unreviewed replacement title" } : task
+      )
+    };
+    const response = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({ approvalId: preview.body.data.approval.id, plan: altered });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe("AI_PLAN_APPROVAL_MISMATCH");
+    expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(0);
+  });
+
+  it("binds an approval to the user and project that requested the preview", async () => {
+    const preview = await previewPlan();
+    const approvalId = preview.body.data.approval.id;
+    const editor = await registerUser(app, "ai-other-editor");
+    await request(app)
+      .post(`/api/projects/${project.id}/members`)
+      .set(auth(owner.token))
+      .send({ email: editor.user.email, role: "editor" });
+    const otherProject = await request(app)
+      .post("/api/projects")
+      .set(auth(owner.token))
+      .send({ key: "AIP2", name: "Another AI project" });
+
+    const otherUser = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(editor.token))
+      .send({ approvalId, plan });
+    const otherProjectAttempt = await request(app)
+      .post(`/api/projects/${otherProject.body.data.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({ approvalId, plan });
+    const validOwner = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({ approvalId, plan });
+
+    expect(otherUser.status).toBe(422);
+    expect(otherUser.body.error.code).toBe("AI_PLAN_APPROVAL_INVALID");
+    expect(otherProjectAttempt.status).toBe(422);
+    expect(otherProjectAttempt.body.error.code).toBe("AI_PLAN_APPROVAL_INVALID");
+    expect(validOwner.status).toBe(201);
+    expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(2);
+  });
+
+  it("allows an exact reviewed subset once and blocks replay", async () => {
+    const preview = await previewPlan();
+    const selectedPlan = { ...plan, tasks: [plan.tasks[0]] };
+    const first = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({ approvalId: preview.body.data.approval.id, plan: selectedPlan });
+    const replay = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({ approvalId: preview.body.data.approval.id, plan: selectedPlan });
+
+    expect(first.status).toBe(201);
+    expect(first.body.data.created).toHaveLength(1);
+    expect(replay.status).toBe(409);
+    expect(replay.body.error.code).toBe("AI_PLAN_APPROVAL_USED");
+    expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(1);
+  });
+
+  it("rejects expired preview approvals", async () => {
+    const preview = await previewPlan();
+    await db.query("UPDATE ai_plan_approvals SET expires_at = $1 WHERE id = $2", [
+      new Date(Date.now() - 60_000),
+      preview.body.data.approval.id
+    ]);
+    const response = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({ approvalId: preview.body.data.approval.id, plan });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("AI_PLAN_APPROVAL_EXPIRED");
     expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(0);
   });
 

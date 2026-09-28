@@ -17,6 +17,7 @@ describe("invitation configuration", () => {
     expect(config.appBaseUrl).toBe("https://app.workflowhq.example");
     expect(config.invitationEmailProvider).toBe("disabled");
     expect(config.invitationTtlHours).toBe(168);
+    expect(config.aiPlanApprovalTtlMinutes).toBe(15);
   });
 
   it("requires server-side Resend credentials when email delivery is enabled", () => {

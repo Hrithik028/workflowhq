@@ -222,6 +222,10 @@ records auditable activity without provider credentials.
 Evidence labels show which ticket or GitHub event supports each proposal, while normalized exact
 title matches are flagged before approval to reduce accidental duplicate tickets.
 
+Each preview also receives a short-lived, one-time server approval. WorkHQ stores only hashes of the
+reviewed summary and proposed tasks, never the provider key or full prompt. Applying a plan accepts
+an exact reviewed subset, rejects altered tasks, and prevents accidental or malicious replay.
+
 ### GitHub workflow automation
 
 Project owners can open **Project register → Edit → Workflow rules** to control five repository
