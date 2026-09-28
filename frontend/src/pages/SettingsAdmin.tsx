@@ -3,6 +3,7 @@ import {
   Check,
   Clock3,
   Crown,
+  Cpu,
   FolderKanban,
   Github,
   KeyRound,
@@ -392,6 +393,11 @@ function SettingsAdmin() {
           <p>Control who can change work and which guardrails apply across WorkflowHQ.</p>
         </div>
         <div className="admin-header-actions">
+          {user.role === "platform_owner" ? (
+            <Link className="button secondary" to="/settings/ai-governance">
+              <Cpu size={16} /> AI governance
+            </Link>
+          ) : null}
           <Link className="button secondary" to="/settings/security">
             <KeyRound size={16} /> Account security
           </Link>

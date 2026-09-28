@@ -591,6 +591,64 @@ export interface AdminOverview {
   permissionKeys: PermissionKey[];
 }
 
+export interface AiProviderPolicy {
+  provider: AiProvider;
+  enabled: boolean;
+  allowedModels: string[];
+  defaultModel: string | null;
+}
+
+export interface AiGovernanceSettings {
+  deploymentEnabled: boolean;
+  enforcementEnabled: boolean;
+  providerPolicies: AiProviderPolicy[];
+  dailyRunLimit: number;
+  maxPromptCharacters: number;
+  maxOutputTokens: number;
+  maxProposedActions: number;
+  requestTimeoutMs: number;
+  retentionDays: number;
+  updatedBy: number | null;
+  updatedAt: string;
+  serverCeilings: Pick<
+    AiGovernanceSettings,
+    | "dailyRunLimit"
+    | "maxPromptCharacters"
+    | "maxOutputTokens"
+    | "maxProposedActions"
+    | "requestTimeoutMs"
+    | "retentionDays"
+  >;
+}
+
+export interface AiProviderHealth {
+  provider: AiProvider;
+  status: "unknown" | "healthy" | "degraded";
+  succeeded: number;
+  failed: number;
+  averageLatencyMs: number;
+  lastFailureCode: string | null;
+  lastFailureAt: string | null;
+}
+
+export interface AiUsageSummary {
+  windowHours: number;
+  totalRuns: number;
+  succeededRuns: number;
+  failedRuns: number;
+  providerHealth: AiProviderHealth[];
+}
+
+export interface AiGovernanceSnapshot {
+  settings: AiGovernanceSettings;
+  usage: AiUsageSummary;
+}
+
+export type AiGovernanceUpdate = Omit<
+  AiGovernanceSettings,
+  "deploymentEnabled" | "enforcementEnabled" | "updatedBy" | "updatedAt" | "serverCeilings"
+>;
+
 export interface WorkspaceClient {
   listProjects(query?: { archived?: boolean }): Promise<Project[]>;
   createProject(input: ProjectInput): Promise<Project>;

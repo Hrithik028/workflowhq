@@ -83,7 +83,7 @@ const requestJson = async ({ url, headers, body, timeoutMs }) => {
 };
 
 const adapters = {
-  openai: async ({ apiKey, model, prompt, timeoutMs }) => {
+  openai: async ({ apiKey, model, prompt, timeoutMs, maxOutputTokens }) => {
     const data = await requestJson({
       url: "https://api.openai.com/v1/responses",
       headers: { authorization: `Bearer ${apiKey}` },
@@ -91,6 +91,7 @@ const adapters = {
       body: {
         model,
         store: false,
+        max_output_tokens: maxOutputTokens,
         instructions:
           "Return a practical software delivery plan. Never claim tickets were created.",
         input: prompt,
@@ -109,21 +110,21 @@ const adapters = {
       .find((item) => item.type === "output_text")?.text;
     return parseJson(text || "");
   },
-  anthropic: async ({ apiKey, model, prompt, timeoutMs }) => {
+  anthropic: async ({ apiKey, model, prompt, timeoutMs, maxOutputTokens }) => {
     const data = await requestJson({
       url: "https://api.anthropic.com/v1/messages",
       headers: { authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01" },
       timeoutMs,
       body: {
         model,
-        max_tokens: 5000,
+        max_tokens: maxOutputTokens,
         system: `Return only JSON matching this schema: ${JSON.stringify(taskPlanJsonSchema)}`,
         messages: [{ role: "user", content: prompt }]
       }
     });
     return parseJson(data.content?.find((item) => item.type === "text")?.text || "");
   },
-  google: async ({ apiKey, model, prompt, timeoutMs }) => {
+  google: async ({ apiKey, model, prompt, timeoutMs, maxOutputTokens }) => {
     const data = await requestJson({
       url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       headers: { "x-goog-api-key": apiKey },
@@ -132,13 +133,29 @@ const adapters = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseJsonSchema: taskPlanJsonSchema
+          responseJsonSchema: taskPlanJsonSchema,
+          maxOutputTokens
         }
       }
     });
     return parseJson(data.candidates?.[0]?.content?.parts?.[0]?.text || "");
   }
 };
+
+const buildPlannerPrompt = (input) =>
+  [
+    `Project: ${input.project.name}`,
+    input.project.description ? `Project context: ${input.project.description}` : "",
+    `Goal: ${input.goal}`,
+    input.context ? `Additional context: ${input.context}` : "",
+    input.projectContext?.prompt || "",
+    input.projectContext?.sources?.length
+      ? "For each proposed task, include only relevant evidence IDs from the supplied records. Use an empty evidenceIds array when no record supports it."
+      : "Use an empty evidenceIds array because no project records were supplied.",
+    `Create no more than ${input.maxItems} work items. Use stable temporary IDs and parentTempId links. Include concise acceptance criteria. Use an ISO YYYY-MM-DD dueDate when the context provides a real deadline; otherwise use null.`
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
 const createAiPlanner = (config) => ({
   providers: Object.keys(adapters),
@@ -152,20 +169,13 @@ const createAiPlanner = (config) => ({
     const adapter = adapters[input.provider];
     if (!adapter)
       throw new AppError(422, "AI_PROVIDER_UNSUPPORTED", "That AI provider is not supported.");
-    const prompt = [
-      `Project: ${input.project.name}`,
-      input.project.description ? `Project context: ${input.project.description}` : "",
-      `Goal: ${input.goal}`,
-      input.context ? `Additional context: ${input.context}` : "",
-      input.projectContext?.prompt || "",
-      input.projectContext?.sources?.length
-        ? "For each proposed task, include only relevant evidence IDs from the supplied records. Use an empty evidenceIds array when no record supports it."
-        : "Use an empty evidenceIds array because no project records were supplied.",
-      `Create no more than ${input.maxItems} work items. Use stable temporary IDs and parentTempId links. Include concise acceptance criteria. Use an ISO YYYY-MM-DD dueDate when the context provides a real deadline; otherwise use null.`
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-    const result = await adapter({ ...input, prompt, timeoutMs: config.aiPlannerTimeoutMs });
+    const prompt = buildPlannerPrompt(input);
+    const result = await adapter({
+      ...input,
+      prompt,
+      timeoutMs: input.timeoutMs || config.aiPlannerTimeoutMs,
+      maxOutputTokens: input.maxOutputTokens || 5000
+    });
     const limited = { ...result, tasks: result.tasks?.slice(0, input.maxItems) };
     const parsed = aiPlannerSchemas.plan.safeParse(limited);
     if (!parsed.success)
@@ -192,4 +202,4 @@ const createAiPlanner = (config) => ({
   }
 });
 
-module.exports = { createAiPlanner };
+module.exports = { buildPlannerPrompt, createAiPlanner };

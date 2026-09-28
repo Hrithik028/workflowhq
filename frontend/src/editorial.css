@@ -7076,6 +7076,247 @@ html[data-motion="reduced"] *::after {
   }
 }
 
+/* Platform-owner AI governance */
+.ai-governance-page {
+  color: #090909;
+}
+
+.ai-governance-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--carbon);
+}
+
+.ai-governance-metrics article {
+  position: relative;
+  display: grid;
+  min-height: 118px;
+  align-content: center;
+  gap: 5px;
+  border-right: 1px solid var(--rule);
+  padding: 18px;
+}
+
+.ai-governance-metrics article:last-child {
+  border-right: 0;
+}
+
+.ai-governance-metrics svg {
+  position: absolute;
+  top: 17px;
+  right: 17px;
+  color: var(--signal);
+}
+
+.ai-governance-metrics span,
+.ai-governance-metrics small,
+.ai-governance-section header p,
+.ai-provider-grid label,
+.ai-provider-grid footer,
+.ai-limit-grid label,
+.ai-governance-save {
+  font-family: "Courier New", monospace;
+}
+
+.ai-governance-metrics span,
+.ai-governance-metrics small {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+}
+
+.ai-governance-metrics strong {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-size: 3rem;
+  line-height: 0.9;
+}
+
+.ai-governance-section {
+  border-bottom: 1px solid var(--carbon);
+  padding: 22px 0;
+}
+
+.ai-governance-section > header {
+  margin-bottom: 14px;
+}
+
+.ai-governance-section h2 {
+  margin: 5px 0 3px;
+  font-size: 1.25rem;
+}
+
+.ai-governance-section header p {
+  margin: 0;
+  color: #413e38;
+  font-size: 0.58rem;
+}
+
+.ai-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--carbon);
+}
+
+.ai-provider-grid > article {
+  display: grid;
+  min-width: 0;
+  gap: 13px;
+  border-right: 1px solid var(--carbon);
+  padding: 15px;
+}
+
+.ai-provider-grid > article:last-child {
+  border-right: 0;
+}
+
+.ai-provider-grid article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-provider-grid h3 {
+  margin: 3px 0 0;
+  font-size: 1rem;
+}
+
+.ai-provider-grid label,
+.ai-limit-grid label {
+  display: grid;
+  gap: 6px;
+  color: #28251f;
+  font-size: 0.57rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ai-provider-grid textarea,
+.ai-provider-grid select,
+.ai-limit-grid input {
+  width: 100%;
+  border: 1px solid #8b867e;
+  border-radius: 0;
+  background: rgb(255 255 255 / 34%);
+  color: #090909;
+  font:
+    700 0.65rem "Courier New",
+    monospace;
+}
+
+.ai-provider-grid textarea {
+  min-height: 90px;
+  resize: vertical;
+  padding: 9px;
+}
+
+.ai-provider-grid select,
+.ai-limit-grid input {
+  height: 38px;
+  padding: 0 9px;
+}
+
+.ai-provider-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 7px !important;
+}
+
+.ai-provider-toggle input {
+  accent-color: var(--signal);
+}
+
+.ai-provider-grid footer {
+  border-top: 1px solid #cec9c0;
+  padding-top: 10px;
+  color: #575149;
+  font-size: 0.54rem;
+  text-transform: uppercase;
+}
+
+.ai-provider-grid footer[data-status="healthy"] {
+  color: #087c3d;
+}
+
+.ai-provider-grid footer[data-status="degraded"] {
+  color: #a82f00;
+}
+
+.ai-limit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--carbon);
+}
+
+.ai-limit-grid label {
+  border-right: 1px solid #cec9c0;
+  border-bottom: 1px solid #cec9c0;
+  padding: 13px;
+}
+
+.ai-limit-grid label:nth-child(3n) {
+  border-right: 0;
+}
+
+.ai-limit-grid label:nth-last-child(-n + 3) {
+  border-bottom: 0;
+}
+
+.ai-limit-grid small {
+  color: #615b52;
+  font-size: 0.51rem;
+}
+
+.ai-governance-save {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0 8px;
+  font-size: 0.57rem;
+  text-transform: uppercase;
+}
+
+@media (max-width: 980px) {
+  .ai-provider-grid,
+  .ai-limit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-provider-grid > article,
+  .ai-limit-grid label,
+  .ai-limit-grid label:nth-child(3n),
+  .ai-limit-grid label:nth-last-child(-n + 3) {
+    border-right: 0;
+    border-bottom: 1px solid #cec9c0;
+  }
+
+  .ai-provider-grid > article:last-child,
+  .ai-limit-grid label:last-child {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .ai-governance-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-governance-metrics article,
+  .ai-governance-metrics article:last-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .ai-governance-metrics article:last-child {
+    border-bottom: 0;
+  }
+
+  .ai-governance-save {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .member-section-actions {
   display: flex;
   align-items: center;

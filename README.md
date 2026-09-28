@@ -200,6 +200,14 @@ Enable the capability on the **backend only**:
 ```env
 AI_PLANNER_ENABLED=true
 AI_PLANNER_TIMEOUT_MS=30000
+# Turn this on only after the platform owner has configured provider allowlists.
+AI_GOVERNANCE_ENABLED=false
+AI_DAILY_RUNS_MAX=100
+AI_PROMPT_CHARACTERS_MAX=50000
+AI_OUTPUT_TOKENS_MAX=10000
+AI_PROPOSED_ACTIONS_MAX=50
+AI_TIMEOUT_MS_MAX=60000
+AI_USAGE_RETENTION_DAYS_MAX=90
 ```
 
 The user chooses a project, provider, and model, then supplies their own provider API key for that
@@ -225,6 +233,20 @@ title matches are flagged before approval to reduce accidental duplicate tickets
 Each preview also receives a short-lived, one-time server approval. WorkHQ stores only hashes of the
 reviewed summary and proposed tasks, never the provider key or full prompt. Applying a plan accepts
 an exact reviewed subset, rejects altered tasks, and prevents accidental or malicious replay.
+
+The platform owner can configure approved providers, model allowlists, default models, and bounded
+runtime limits at **Settings → AI governance**. Environment variables define non-negotiable server
+ceilings; the UI cannot increase them. With `AI_GOVERNANCE_ENABLED=true`, planning fails closed when
+the selected provider or model is not approved, when a request exceeds its prompt/action limits, or
+when a user reaches the daily run quota. Keep enforcement disabled during initial deployment,
+configure and verify the allowlists, then enable it on the backend and redeploy.
+
+AI usage telemetry is deliberately sanitized. The database records provider/model identifiers,
+outcome, a controlled error code, counts, and latency for operational health. It does not store
+prompts, generated task content, API keys, authorization headers, or raw provider errors. Usage rows
+are pruned to the configured retention window. To roll back enforcement without removing audit
+history, set `AI_GOVERNANCE_ENABLED=false` and redeploy; the planner returns to the existing Phase 4
+behavior while the platform-owner settings remain available for repair.
 
 ### GitHub workflow automation
 
