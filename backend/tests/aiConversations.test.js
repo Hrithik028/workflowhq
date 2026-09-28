@@ -48,10 +48,19 @@ describe("AI conversations", () => {
   beforeEach(async () => {
     planner = { preview: globalThis.vi.fn().mockResolvedValue(firstPlan) };
     ({ app, db } = await buildTestApp({
-      config: { aiPlannerEnabled: true },
+      config: {
+        aiPlannerEnabled: true,
+        aiCredentialVaultEnabled: true,
+        aiCredentialMasterKeys: { 1: Buffer.alloc(32, 7) },
+        aiCredentialActiveKeyVersion: 1
+      },
       aiPlanner: planner
     }));
     owner = await registerUser(app, "conversation-owner");
+    await request(app)
+      .post("/api/ai/credentials")
+      .set(auth(owner.token))
+      .send({ provider: "openai", credential: "saved-conversation-provider-secret" });
     project = (
       await request(app)
         .post("/api/projects")
@@ -73,7 +82,6 @@ describe("AI conversations", () => {
       .post(`/api/projects/${project.id}/ai-conversations/${conversationId}/runs`)
       .set(auth(owner.token))
       .send({
-        apiKey: "request-only-provider-secret",
         goal: "Create a persistent and secure planning workflow.",
         context: "Do not persist the credential.",
         maxItems: 8,
@@ -100,7 +108,7 @@ describe("AI conversations", () => {
       expect.objectContaining({
         provider: "openai",
         model: "test-model",
-        apiKey: "request-only-provider-secret"
+        apiKey: "saved-conversation-provider-secret"
       })
     );
     const persisted = await Promise.all([
@@ -111,8 +119,49 @@ describe("AI conversations", () => {
       db.query("SELECT * FROM ai_plan_approvals")
     ]);
     expect(JSON.stringify(persisted.map((result) => result.rows))).not.toContain(
-      "request-only-provider-secret"
+      "saved-conversation-provider-secret"
     );
+  });
+
+  it("enforces the shared governance policy and daily quota for conversation runs", async () => {
+    app.locals.config.aiGovernanceEnabled = true;
+    await db.query(
+      `UPDATE ai_governance_settings
+       SET provider_policies = $1::jsonb, daily_run_limit = 1
+       WHERE id = 1`,
+      [
+        JSON.stringify([
+          {
+            provider: "openai",
+            enabled: true,
+            allowedModels: ["test-model"],
+            defaultModel: "test-model"
+          }
+        ])
+      ]
+    );
+    const conversationId = (await createConversation()).body.data.id;
+
+    const first = await runConversation(conversationId);
+    const second = await runConversation(conversationId);
+    const usage = await db.query(
+      "SELECT run_count, prompt_characters, proposed_actions FROM ai_daily_usage WHERE user_id = $1",
+      [owner.user.id]
+    );
+    const events = await db.query(
+      "SELECT outcome, error_code FROM ai_usage_events WHERE user_id = $1 ORDER BY id",
+      [owner.user.id]
+    );
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(429);
+    expect(second.body.error.code).toBe("AI_DAILY_QUOTA_EXCEEDED");
+    expect(usage.rows[0]).toMatchObject({ run_count: 1, proposed_actions: 1 });
+    expect(Number(usage.rows[0].prompt_characters)).toBeGreaterThan(0);
+    expect(events.rows).toEqual([
+      { outcome: "succeeded", error_code: null },
+      { outcome: "denied", error_code: "AI_DAILY_QUOTA_EXCEEDED" }
+    ]);
   });
 
   it("supersedes earlier revisions and only allows the latest proposal to apply", async () => {

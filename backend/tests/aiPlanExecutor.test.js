@@ -5,7 +5,6 @@ const { auth, buildTestApp, registerUser } = require("./helpers/testApp");
 const previewRequest = (app, projectId, token) =>
   request(app).post(`/api/projects/${projectId}/ai-plan/preview`).set(auth(token)).send({
     provider: "openai",
-    apiKey: "request-scoped-secret-key",
     model: "test-model",
     goal: "Apply a reviewed multi-action delivery plan safely.",
     maxItems: 8
@@ -37,10 +36,19 @@ describe("atomic AI action executor", () => {
   beforeEach(async () => {
     planner = { preview: globalThis.vi.fn() };
     ({ app, db } = await buildTestApp({
-      config: { aiPlannerEnabled: true },
+      config: {
+        aiPlannerEnabled: true,
+        aiCredentialVaultEnabled: true,
+        aiCredentialMasterKeys: { 1: Buffer.alloc(32, 7) },
+        aiCredentialActiveKeyVersion: 1
+      },
       aiPlanner: planner
     }));
     owner = await registerUser(app, "executor-owner");
+    await request(app)
+      .post("/api/ai/credentials")
+      .set(auth(owner.token))
+      .send({ provider: "openai", credential: "saved-executor-provider-secret" });
     project = (
       await request(app)
         .post("/api/projects")

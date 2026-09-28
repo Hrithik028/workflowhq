@@ -10,6 +10,13 @@ const {
   sha256,
   summarizeEvidence
 } = require("../lib/aiConversations");
+const { loadCredential } = require("../lib/aiCredentialVault");
+const {
+  completeAiPreviewUsage,
+  recordAiUsageEvent,
+  reserveAiPreview
+} = require("../lib/aiGovernance");
+const { buildPlannerPrompt } = require("../lib/aiPlanner");
 const { buildProjectAiContext } = require("../lib/aiProjectContext");
 const { AppError } = require("../lib/errors");
 const { getProjectRole } = require("../lib/projectAccess");
@@ -118,19 +125,26 @@ const getConversation = async (req, res) => {
     ]),
     req.app.locals.db.query(
       `SELECT id, role, content, content_sha256, detail_expires_at, created_at
-       FROM ai_conversation_messages WHERE conversation_id = $1 ORDER BY created_at, id`,
+       FROM ai_conversation_messages
+       WHERE conversation_id = $1
+       ORDER BY created_at DESC, id DESC
+       LIMIT 200`,
       [req.params.conversationId]
     ),
     req.app.locals.db.query(
       `SELECT id, status, provider, model, error_code, evidence_counts, started_at, completed_at
-       FROM ai_conversation_runs WHERE conversation_id = $1 ORDER BY started_at DESC, id DESC`,
+       FROM ai_conversation_runs
+       WHERE conversation_id = $1
+       ORDER BY started_at DESC, id DESC
+       LIMIT 100`,
       [req.params.conversationId]
     ),
     req.app.locals.db.query(
-      `SELECT p.*, a.applied_at AS approval_applied_at
+      `SELECT p.*
        FROM ai_proposal_revisions p
-       LEFT JOIN ai_plan_approvals a ON a.id = p.approval_id
-       WHERE p.conversation_id = $1 ORDER BY p.revision_number DESC`,
+       WHERE p.conversation_id = $1
+       ORDER BY p.revision_number DESC
+       LIMIT 100`,
       [req.params.conversationId]
     )
   ]);
@@ -140,7 +154,7 @@ const getConversation = async (req, res) => {
   return res.status(200).json({
     data: {
       conversation: serializeConversation(conversationRow),
-      messages: messagesResult.rows.map((row) => ({
+      messages: messagesResult.rows.reverse().map((row) => ({
         id: Number(row.id),
         role: row.role,
         content: row.content,
@@ -199,6 +213,14 @@ const addMessage = async (db, { conversationId, userId, role, content, expiresAt
 
 const runConversation = async (req, res) => {
   const db = req.app.locals.db;
+  const config = req.app.locals.config;
+  if (!config.aiPlannerEnabled) {
+    throw new AppError(
+      503,
+      "AI_PLANNER_DISABLED",
+      "AI task planning is not enabled on this deployment."
+    );
+  }
   const conversation = await loadConversation(db, {
     projectId: req.params.id,
     conversationId: req.params.conversationId,
@@ -214,7 +236,7 @@ const runConversation = async (req, res) => {
     throw new AppError(400, "VALIDATION_ERROR", "Please provide a meaningful planning goal.");
   }
   const runId = crypto.randomUUID();
-  const detailExpiresAt = expiresAfterDays(req.app.locals.config.aiConversationRetentionDays);
+  const detailExpiresAt = expiresAfterDays(config.aiConversationRetentionDays);
   const priorMessages = await db.query(
     `SELECT role, content FROM ai_conversation_messages
      WHERE conversation_id = $1 AND content IS NOT NULL
@@ -249,15 +271,19 @@ const runConversation = async (req, res) => {
 
   let projectContext;
   let plan;
+  let promptCharacters = 0;
+  let estimatedOutputTokens = 0;
+  let proposedActions = 0;
+  let usageReservation = { enabled: false, policy: null, usageDate: null };
+  const startedAt = Date.now();
   try {
     projectContext = await buildProjectAiContext(db, {
       projectId: Number(conversation.project_id),
       options: req.body.contextOptions
     });
-    plan = await req.app.locals.aiPlanner.preview({
+    const plannerInput = {
       provider: conversation.provider,
       model: conversation.model,
-      apiKey: req.body.apiKey,
       goal,
       context: [
         context,
@@ -275,7 +301,47 @@ const runConversation = async (req, res) => {
         description: conversation.project.description
       },
       projectContext
+    };
+    promptCharacters = buildPlannerPrompt(plannerInput).length;
+    usageReservation = await reserveAiPreview(db, {
+      config,
+      userId: req.user.id,
+      provider: conversation.provider,
+      model: conversation.model,
+      promptCharacters,
+      maxItems: req.body.maxItems
     });
+    const apiKey = await loadCredential(
+      db,
+      { provider: conversation.provider, userId: req.user.id },
+      config
+    );
+    plan = await req.app.locals.aiPlanner.preview({
+      ...plannerInput,
+      apiKey,
+      timeoutMs: usageReservation.policy?.requestTimeoutMs,
+      maxOutputTokens: usageReservation.policy?.maxOutputTokens
+    });
+    estimatedOutputTokens = Math.ceil(JSON.stringify(plan).length / 4);
+    proposedActions = Array.isArray(plan.actions) ? plan.actions.length : plan.tasks.length;
+    if (
+      usageReservation.enabled &&
+      estimatedOutputTokens > Number(usageReservation.policy.maxOutputTokens)
+    ) {
+      throw new AppError(
+        502,
+        "AI_OUTPUT_LIMIT_EXCEEDED",
+        "The selected provider returned more content than the configured output limit."
+      );
+    }
+    if (usageReservation.enabled) {
+      await completeAiPreviewUsage(db, {
+        userId: req.user.id,
+        usageDate: usageReservation.usageDate,
+        estimatedOutputTokens,
+        proposedActions
+      });
+    }
   } catch (error) {
     const safeMessage = "The provider could not produce a valid proposal. No work was changed.";
     await db.query(
@@ -297,6 +363,27 @@ const runConversation = async (req, res) => {
        WHERE id = $1`,
       [conversation.id, detailExpiresAt]
     );
+    if (config.aiGovernanceEnabled) {
+      const deniedCodes = new Set([
+        "AI_PROVIDER_DISABLED",
+        "AI_MODEL_NOT_ALLOWED",
+        "AI_PROMPT_LIMIT_EXCEEDED",
+        "AI_ACTION_LIMIT_EXCEEDED",
+        "AI_DAILY_QUOTA_EXCEEDED"
+      ]);
+      await recordAiUsageEvent(db, {
+        userId: req.user.id,
+        projectId: Number(conversation.project_id),
+        provider: conversation.provider,
+        model: conversation.model,
+        outcome: deniedCodes.has(error.code) ? "denied" : "failed",
+        error,
+        promptCharacters,
+        estimatedOutputTokens,
+        proposedActions,
+        latencyMs: Date.now() - startedAt
+      }).catch(() => undefined);
+    }
     throw error;
   }
 
@@ -390,6 +477,19 @@ const runConversation = async (req, res) => {
       [conversation.id, detailExpiresAt]
     );
     await client.query("COMMIT");
+    if (config.aiGovernanceEnabled) {
+      await recordAiUsageEvent(db, {
+        userId: req.user.id,
+        projectId: Number(conversation.project_id),
+        provider: conversation.provider,
+        model: conversation.model,
+        outcome: "succeeded",
+        promptCharacters,
+        estimatedOutputTokens,
+        proposedActions,
+        latencyMs: Date.now() - startedAt
+      }).catch(() => undefined);
+    }
     return res.status(201).json({
       data: {
         runId,

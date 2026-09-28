@@ -58,10 +58,20 @@ describe("AI governance", () => {
   beforeEach(async () => {
     planner = { preview: globalThis.vi.fn().mockResolvedValue(plan) };
     ({ app, db } = await buildTestApp({
-      config: { aiPlannerEnabled: true, aiGovernanceEnabled: true },
+      config: {
+        aiPlannerEnabled: true,
+        aiGovernanceEnabled: true,
+        aiCredentialVaultEnabled: true,
+        aiCredentialMasterKeys: { 1: Buffer.alloc(32, 7) },
+        aiCredentialActiveKeyVersion: 1
+      },
       aiPlanner: planner
     }));
     owner = await registerUser(app, "governance-owner");
+    await request(app)
+      .post("/api/ai/credentials")
+      .set(auth(owner.token))
+      .send({ provider: "openai", credential: "saved-governance-provider-secret" });
     await db.query("UPDATE users SET role = 'platform_owner' WHERE id = $1", [owner.user.id]);
     project = (
       await request(app)
@@ -82,7 +92,6 @@ describe("AI governance", () => {
       .set(auth(owner.token))
       .send({
         provider: "openai",
-        apiKey: "request-only-provider-secret",
         model: "gpt-test",
         goal: "Create a governed implementation plan for this project.",
         maxItems: 5,
@@ -111,7 +120,7 @@ describe("AI governance", () => {
     });
     expect(saved.body.data.settings.serverCeilings.dailyRunLimit).toBe(100);
     expect(audit.rows).toHaveLength(1);
-    expect(JSON.stringify(audit.rows)).not.toContain("request-only-provider-secret");
+    expect(JSON.stringify(audit.rows)).not.toContain("saved-governance-provider-secret");
   });
 
   it("rejects settings above server-defined ceilings", async () => {
@@ -161,7 +170,7 @@ describe("AI governance", () => {
     expect(
       overview.body.data.usage.providerHealth.find((item) => item.provider === "openai")
     ).toMatchObject({ status: "healthy", succeeded: 1, failed: 0 });
-    expect(serialized).not.toContain("request-only-provider-secret");
+    expect(serialized).not.toContain("saved-governance-provider-secret");
     expect(serialized).not.toContain("Create a governed implementation plan");
   });
 

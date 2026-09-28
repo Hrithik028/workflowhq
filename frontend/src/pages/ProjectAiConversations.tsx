@@ -72,7 +72,6 @@ function ProjectAiConversations() {
   const [title, setTitle] = useState("");
   const [provider, setProvider] = useState<AiProvider>("openai");
   const [model, setModel] = useState(providerDefaults.openai);
-  const [apiKey, setApiKey] = useState("");
   const [goal, setGoal] = useState("");
   const [context, setContext] = useState("");
   const [busy, setBusy] = useState<"create" | "run" | "approve" | "discard" | null>(null);
@@ -156,7 +155,6 @@ function ProjectAiConversations() {
     setNotice("");
     try {
       await aiConversationsApi.run(projectId, selectedId, {
-        apiKey,
         goal,
         context,
         maxItems: 12,
@@ -166,13 +164,11 @@ function ProjectAiConversations() {
           repositoryIds: []
         }
       });
-      setApiKey("");
       setGoal("");
       setContext("");
       await Promise.all([loadList(), loadDetail()]);
       setNotice("A new proposal revision is ready for review.");
     } catch (runError) {
-      setApiKey("");
       setError(getErrorMessage(runError, "Unable to generate a proposal."));
       await loadDetail().catch(() => undefined);
     } finally {
@@ -358,18 +354,7 @@ function ProjectAiConversations() {
                     />
                   </label>
                   <div className="ai-prompt-footer">
-                    <label>
-                      <span>Provider API key</span>
-                      <input
-                        required
-                        minLength={10}
-                        maxLength={500}
-                        autoComplete="off"
-                        type="password"
-                        value={apiKey}
-                        onChange={(event) => setApiKey(event.target.value)}
-                      />
-                    </label>
+                    <p>Your saved provider credential is used securely by the server.</p>
                     <button className="button primary" disabled={busy !== null} type="submit">
                       <Bot size={16} /> {busy === "run" ? "Generating…" : "Generate revision"}
                     </button>
