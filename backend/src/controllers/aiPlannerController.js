@@ -7,6 +7,7 @@ const {
 } = require("../lib/aiPlanApproval");
 const { AppError } = require("../lib/errors");
 const { buildProjectAiContext } = require("../lib/aiProjectContext");
+const { loadCredential } = require("../lib/aiCredentialVault");
 const { getProjectRole } = require("../lib/projectAccess");
 
 const loadEditableProject = async (db, projectId, userId) => {
@@ -63,13 +64,26 @@ const validatePlanEvidence = async (db, projectId, tasks) => {
 };
 
 const previewAiPlan = async (req, res) => {
+  if (!req.app.locals.config.aiPlannerEnabled) {
+    throw new AppError(
+      503,
+      "AI_PLANNER_DISABLED",
+      "AI task planning is not enabled on this deployment."
+    );
+  }
   const project = await loadEditableProject(req.app.locals.db, req.params.id, req.user.id);
   const projectContext = await buildProjectAiContext(req.app.locals.db, {
     projectId: Number(project.id),
     options: req.body.contextOptions
   });
+  const apiKey = await loadCredential(
+    req.app.locals.db,
+    { provider: req.body.provider, userId: req.user.id },
+    req.app.locals.config
+  );
   const plan = await req.app.locals.aiPlanner.preview({
     ...req.body,
+    apiKey,
     project: { id: Number(project.id), name: project.name, description: project.description },
     projectContext
   });

@@ -856,6 +856,66 @@ p {
   border-left: 5px solid #168a49;
 }
 
+.ai-credential-safety {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--ink);
+  background: #fff9ee;
+}
+
+.ai-credential-safety p {
+  margin: 0;
+}
+
+.ai-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 24px;
+}
+
+.ai-provider-card {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.ai-provider-card > p,
+.ai-provider-card .security-state {
+  margin: 0;
+}
+
+.ai-provider-card > label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.ai-provider-card input {
+  width: 100%;
+  border: 1px solid var(--ink);
+  padding: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+
+.ai-provider-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.credential-validated {
+  color: #0c6b38;
+  font-weight: 800;
+}
+
 .security-secret,
 .recovery-code-panel {
   display: grid;
@@ -950,6 +1010,10 @@ p {
 
 @media (max-width: 900px) {
   .security-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-provider-grid {
     grid-template-columns: 1fr;
   }
 }

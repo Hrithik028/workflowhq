@@ -24,6 +24,10 @@ const testConfig = {
   aiPlannerEnabled: false,
   aiPlannerTimeoutMs: 30000,
   aiPlanApprovalTtlMinutes: 15,
+  aiCredentialVaultEnabled: false,
+  aiCredentialMasterKeys: {},
+  aiCredentialActiveKeyVersion: 1,
+  aiCredentialValidationTimeoutMs: 10000,
   mfaEnabled: false,
   accountEncryptionKeyBase64: undefined,
   appBaseUrl: "http://localhost:5173",
@@ -37,7 +41,13 @@ const testConfig = {
   resendApiKey: undefined
 };
 
-const buildTestApp = async ({ config = {}, github, invitationMailer, aiPlanner } = {}) => {
+const buildTestApp = async ({
+  config = {},
+  github,
+  invitationMailer,
+  aiPlanner,
+  aiCredentialValidator
+} = {}) => {
   const memoryDb = newDb({ autoCreateForeignKeyIndices: true });
   const adapter = memoryDb.adapters.createPg();
   const db = new adapter.Pool();
@@ -60,7 +70,8 @@ const buildTestApp = async ({ config = {}, github, invitationMailer, aiPlanner }
       config: { ...testConfig, ...config },
       github,
       invitationMailer,
-      aiPlanner
+      aiPlanner,
+      aiCredentialValidator
     }),
     db
   };
