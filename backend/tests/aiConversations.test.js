@@ -96,9 +96,19 @@ describe("AI conversations", () => {
     const created = await createConversation();
     const conversationId = created.body.data.id;
     const run = await runConversation(conversationId);
+    const listed = await request(app)
+      .get(`/api/projects/${project.id}/ai-conversations`)
+      .set(auth(owner.token));
 
     expect(created.status).toBe(201);
     expect(run.status).toBe(201);
+    expect(listed.status).toBe(200);
+    expect(listed.body.data[0]).toMatchObject({
+      id: conversationId,
+      title: "Release plan",
+      runCount: 1,
+      proposalCount: 1
+    });
     expect(run.body.data.proposal).toMatchObject({
       revisionNumber: 1,
       canApprove: true,

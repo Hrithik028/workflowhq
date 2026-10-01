@@ -98,13 +98,20 @@ const listConversations = async (req, res) => {
   await scrubExpiredConversationDetails(req.app.locals.db, req.params.id);
   const result = await req.app.locals.db.query(
     `SELECT c.*,
-            COUNT(DISTINCT r.id)::int AS run_count,
-            COUNT(DISTINCT p.id)::int AS proposal_count
+            COALESCE(r.run_count, 0)::int AS run_count,
+            COALESCE(p.proposal_count, 0)::int AS proposal_count
      FROM ai_conversations c
-     LEFT JOIN ai_conversation_runs r ON r.conversation_id = c.id
-     LEFT JOIN ai_proposal_revisions p ON p.conversation_id = c.id
+     LEFT JOIN (
+       SELECT conversation_id, COUNT(*)::int AS run_count
+       FROM ai_conversation_runs
+       GROUP BY conversation_id
+     ) r ON r.conversation_id = c.id
+     LEFT JOIN (
+       SELECT conversation_id, COUNT(*)::int AS proposal_count
+       FROM ai_proposal_revisions
+       GROUP BY conversation_id
+     ) p ON p.conversation_id = c.id
      WHERE c.project_id = $1
-     GROUP BY c.id
      ORDER BY c.updated_at DESC, c.id DESC
      LIMIT 100`,
     [req.params.id]

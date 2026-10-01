@@ -55,6 +55,12 @@ describe("projects, tasks, and activity API", () => {
 
     expect(created.status).toBe(201);
     expect(listed.body.data).toHaveLength(1);
+    expect(listed.body.data[0]).toMatchObject({
+      key: "WHQ",
+      name: "Launch workspace",
+      description: "Coordinate the production release.",
+      my_role: "owner"
+    });
     expect(updated.body.data.name).toBe("Production launch");
     expect(deleted.status).toBe(204);
   });
