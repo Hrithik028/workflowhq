@@ -112,7 +112,7 @@ const adapters = {
   anthropic: async ({ apiKey, model, prompt, timeoutMs }) => {
     const data = await requestJson({
       url: "https://api.anthropic.com/v1/messages",
-      headers: { authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01" },
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       timeoutMs,
       body: {
         model,

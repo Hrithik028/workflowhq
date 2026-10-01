@@ -38,10 +38,21 @@ describe("AI task planner", () => {
   beforeEach(async () => {
     planner = { preview: globalThis.vi.fn().mockResolvedValue(plan) };
     ({ app, db } = await buildTestApp({
-      config: { aiPlannerEnabled: true },
+      config: {
+        aiPlannerEnabled: true,
+        aiCredentialVaultEnabled: true,
+        aiCredentialMasterKeys: { 1: Buffer.alloc(32, 7) },
+        aiCredentialActiveKeyVersion: 1
+      },
       aiPlanner: planner
     }));
     owner = await registerUser(app, "ai-owner");
+    for (const provider of ["openai", "anthropic", "google"]) {
+      await request(app)
+        .post("/api/ai/credentials")
+        .set(auth(owner.token))
+        .send({ provider, credential: "saved-provider-secret-key" });
+    }
     const response = await request(app)
       .post("/api/projects")
       .set(auth(owner.token))
@@ -58,7 +69,6 @@ describe("AI task planner", () => {
       .set(auth(owner.token))
       .send({
         provider: "openai",
-        apiKey: "request-scoped-secret-key",
         model: "test-model",
         goal: "Break the provider-neutral AI planner into safe delivery tasks.",
         context: "Preview before writing.",
@@ -66,13 +76,12 @@ describe("AI task planner", () => {
       });
   };
 
-  it("returns a validated preview without persisting the API key or tasks", async () => {
+  it("returns a validated preview using the user's server-side credential", async () => {
     const response = await request(app)
       .post(`/api/projects/${project.id}/ai-plan/preview`)
       .set(auth(owner.token))
       .send({
         provider: "openai",
-        apiKey: "request-scoped-secret-key",
         model: "test-model",
         goal: "Break the provider-neutral AI planner into safe delivery tasks.",
         context: "Preview before writing.",
@@ -86,15 +95,15 @@ describe("AI task planner", () => {
       expiresAt: expect.any(String)
     });
     expect(planner.preview).toHaveBeenCalledWith(
-      expect.objectContaining({ apiKey: "request-scoped-secret-key", provider: "openai" })
+      expect.objectContaining({ apiKey: "saved-provider-secret-key", provider: "openai" })
     );
     expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(0);
     expect(JSON.stringify((await db.query("SELECT * FROM activities")).rows)).not.toContain(
-      "request-scoped-secret-key"
+      "saved-provider-secret-key"
     );
     const approvals = (await db.query("SELECT * FROM ai_plan_approvals")).rows;
     expect(approvals).toHaveLength(1);
-    expect(JSON.stringify(approvals)).not.toContain("request-scoped-secret-key");
+    expect(JSON.stringify(approvals)).not.toContain("saved-provider-secret-key");
     expect(JSON.stringify(approvals)).not.toContain("AI planning foundation");
   });
 
@@ -129,7 +138,6 @@ describe("AI task planner", () => {
       .set(auth(viewer.token))
       .send({
         provider: "google",
-        apiKey: "request-scoped-secret-key",
         model: "test-model",
         goal: "Create a plan that a viewer must not be allowed to request.",
         maxItems: 5
@@ -317,7 +325,6 @@ describe("AI task planner", () => {
       .set(auth(owner.token))
       .send({
         provider: "openai",
-        apiKey: "request-scoped-secret-key",
         model: "test-model",
         goal: "Plan project-aware work using synchronized evidence.",
         maxItems: 8,
@@ -353,7 +360,6 @@ describe("AI task planner", () => {
       .set(auth(owner.token))
       .send({
         provider: "openai",
-        apiKey: "request-scoped-secret-key",
         model: "test-model",
         goal: "Attempt to include a repository outside this project.",
         maxItems: 5,

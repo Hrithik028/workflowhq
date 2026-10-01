@@ -16,6 +16,8 @@ customer data.
   cookies.
 - Global permissions and project membership are enforced by the API, not trusted from the browser.
 - GitHub App credentials and installation tokens remain server-side.
+- User-owned AI provider credentials are encrypted with AES-256-GCM under a versioned backend-only
+  key ring. APIs return masked metadata only, and provider validation uses fixed allowlisted URLs.
 - Webhooks are verified against the exact raw body with HMAC-SHA-256 and deduplicated by GitHub's
   delivery identifier.
 - Raw webhook request bodies are not retained. Failed events store only a sanitized receipt.
