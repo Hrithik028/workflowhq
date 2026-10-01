@@ -15,9 +15,16 @@ const validationRequests = {
   })
 };
 
+const buildValidationRequest = (provider, apiKey) => {
+  if (provider === "openai") return validationRequests.openai(apiKey);
+  if (provider === "anthropic") return validationRequests.anthropic(apiKey);
+  if (provider === "google") return validationRequests.google(apiKey);
+  return null;
+};
+
 const createAiCredentialValidator = (config) => ({
   async validate(provider, apiKey) {
-    const request = validationRequests[provider]?.(apiKey);
+    const request = buildValidationRequest(provider, apiKey);
     if (!request) {
       throw new AppError(422, "AI_PROVIDER_UNSUPPORTED", "That AI provider is not supported.");
     }
@@ -50,4 +57,4 @@ const createAiCredentialValidator = (config) => ({
   }
 });
 
-module.exports = { createAiCredentialValidator, validationRequests };
+module.exports = { buildValidationRequest, createAiCredentialValidator, validationRequests };

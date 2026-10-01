@@ -78,11 +78,14 @@ describe("AI integrations", () => {
     const browser = userEvent.setup();
     renderPage();
     const input = await screen.findByLabelText(/anthropic credential/i);
-    await browser.type(input, "sk-ant-private-credential-9876");
+    await browser.type(input, "fixture-anthropic-credential-9876");
     await browser.click(screen.getAllByRole("button", { name: /validate only/i })[1]);
 
     await waitFor(() =>
-      expect(apiMocks.validate).toHaveBeenCalledWith("anthropic", "sk-ant-private-credential-9876")
+      expect(apiMocks.validate).toHaveBeenCalledWith(
+        "anthropic",
+        "fixture-anthropic-credential-9876"
+      )
     );
     expect(apiMocks.save).not.toHaveBeenCalled();
     expect(screen.getByText(/not saved yet/i)).toBeInTheDocument();

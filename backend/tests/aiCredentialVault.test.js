@@ -19,7 +19,7 @@ const vaultConfig = {
 describe("AI credential encryption", () => {
   it("round-trips with authenticated user and provider binding", () => {
     const encrypted = encryptCredential(
-      { credential: "sk-private-round-trip", provider: "openai", userId: 7 },
+      { credential: "fixture-round-trip-secret", provider: "openai", userId: 7 },
       vaultConfig
     );
     const stored = {
@@ -32,13 +32,13 @@ describe("AI credential encryption", () => {
       auth_tag: encrypted.authTag
     };
 
-    expect(decryptCredential(stored, vaultConfig)).toBe("sk-private-round-trip");
-    expect(encrypted.ciphertext).not.toContain("sk-private-round-trip");
+    expect(decryptCredential(stored, vaultConfig)).toBe("fixture-round-trip-secret");
+    expect(encrypted.ciphertext).not.toContain("fixture-round-trip-secret");
   });
 
   it("rejects tampering without returning cryptographic details", () => {
     const encrypted = encryptCredential(
-      { credential: "sk-private-tamper-test", provider: "openai", userId: 7 },
+      { credential: "fixture-tamper-test-secret", provider: "openai", userId: 7 },
       vaultConfig
     );
     const tampered = {
@@ -59,7 +59,7 @@ describe("AI credential encryption", () => {
 
   it("keeps old keys readable during rotation and fails closed after premature retirement", () => {
     const oldRecord = encryptCredential(
-      { credential: "sk-private-old-key", provider: "anthropic", userId: 9 },
+      { credential: "fixture-old-key-secret", provider: "anthropic", userId: 9 },
       vaultConfig
     );
     const stored = {
@@ -77,10 +77,10 @@ describe("AI credential encryption", () => {
       aiCredentialActiveKeyVersion: 2
     };
 
-    expect(decryptCredential(stored, rotating)).toBe("sk-private-old-key");
+    expect(decryptCredential(stored, rotating)).toBe("fixture-old-key-secret");
     expect(
       encryptCredential(
-        { credential: "sk-private-new-key", provider: "anthropic", userId: 9 },
+        { credential: "fixture-new-key-secret", provider: "anthropic", userId: 9 },
         rotating
       ).keyVersion
     ).toBe(2);
@@ -113,7 +113,7 @@ describe("AI credential API", () => {
     const response = await request(app)
       .post("/api/ai/credentials")
       .set(auth(user.token))
-      .send({ provider: "openai", credential: "sk-private-not-written" });
+      .send({ provider: "openai", credential: "fixture-not-written-secret" });
 
     expect(response.status).toBe(503);
     expect(response.body.error.code).toBe("AI_CREDENTIAL_VAULT_NOT_CONFIGURED");
@@ -135,7 +135,7 @@ describe("AI credential API", () => {
     const saved = await request(app)
       .post("/api/ai/credentials")
       .set(auth(user.token))
-      .send({ provider: "openai", credential: "sk-private-original-1234" });
+      .send({ provider: "openai", credential: "fixture-original-secret-1234" });
 
     expect(saved.status).toBe(201);
     expect(saved.body.data).toMatchObject({
@@ -144,26 +144,26 @@ describe("AI credential API", () => {
       maskedSuffix: "••••1234",
       keyVersion: 1
     });
-    expect(JSON.stringify(saved.body)).not.toContain("sk-private-original");
+    expect(JSON.stringify(saved.body)).not.toContain("fixture-original-secret");
     expect(
       await loadCredential(db, { provider: "openai", userId: user.user.id }, vaultConfig)
-    ).toBe("sk-private-original-1234");
+    ).toBe("fixture-original-secret-1234");
 
     const duplicate = await request(app)
       .post("/api/ai/credentials")
       .set(auth(user.token))
-      .send({ provider: "openai", credential: "sk-private-duplicate" });
+      .send({ provider: "openai", credential: "fixture-duplicate-secret" });
     expect(duplicate.status).toBe(409);
 
     const replaced = await request(app)
       .put("/api/ai/credentials/openai")
       .set(auth(user.token))
-      .send({ credential: "sk-private-replacement-5678" });
+      .send({ credential: "fixture-replacement-secret-5678" });
     expect(replaced.status).toBe(200);
     expect(replaced.body.data.maskedSuffix).toBe("••••5678");
     expect(
       await loadCredential(db, { provider: "openai", userId: user.user.id }, vaultConfig)
-    ).toBe("sk-private-replacement-5678");
+    ).toBe("fixture-replacement-secret-5678");
 
     const audit = await db.query(
       "SELECT action, provider, key_version FROM ai_credential_audit_log ORDER BY id"
@@ -179,7 +179,7 @@ describe("AI credential API", () => {
     await request(app)
       .post("/api/ai/credentials")
       .set(auth(user.token))
-      .send({ provider: "anthropic", credential: "sk-ant-private-1234" });
+      .send({ provider: "anthropic", credential: "fixture-anthropic-secret-1234" });
     const other = await registerUser(app, "credential-other");
 
     const otherList = await request(app).get("/api/ai/credentials").set(auth(other.token));
