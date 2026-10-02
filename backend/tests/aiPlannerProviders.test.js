@@ -54,6 +54,99 @@ describe("AI planner provider adapters", () => {
 
     await expect(planner.preview({ ...input, provider })).resolves.toEqual(taskPlan);
     expect(fetchMock).toHaveBeenCalledWith(url, expect.objectContaining({ method: "POST" }));
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const schema =
+      provider === "openai"
+        ? sent.text.format.schema
+        : provider === "google"
+          ? sent.generationConfig.responseJsonSchema
+          : JSON.parse(sent.system.replace("Return only JSON matching this schema: ", ""));
+    expect(schema.properties.tasks).toMatchObject({ minItems: 1, maxItems: input.maxItems });
+    expect(schema.properties.tasks.items.properties.tempId).toMatchObject({
+      maxLength: 40,
+      pattern: "^[A-Za-z0-9_-]+$"
+    });
+    expect(schema.properties.tasks.items.properties.evidenceIds.items.pattern).toBe(
+      "^(?:task|github):\\d+$"
+    );
+    expect(JSON.stringify(sent)).toContain("never an existing project ticket key");
+  });
+
+  it.each([
+    ["parentTempId", "WHQ-7", "custom"],
+    ["dueDate", "", "invalid_format"],
+    ["tempId", "secret value with spaces", "invalid_format"],
+    ["title", "s".repeat(201), "too_big"],
+    ["evidenceIds", ["WHQ-7"], "invalid_format"],
+    ["acceptanceCriteria", [""], "too_small"]
+  ])("reports only safe validation metadata for invalid %s", async (field, value, code) => {
+    const invalid = { ...taskPlan, tasks: [{ ...taskPlan.tasks[0], [field]: value }] };
+    const fetchMock = globalThis.vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output: [{ content: [{ type: "output_text", text: JSON.stringify(invalid) }] }]
+        })
+      )
+    );
+    const planner = createAiPlanner({ aiPlannerEnabled: true, aiPlannerTimeoutMs: 1000 });
+    await expect(planner.preview({ ...input, provider: "openai" })).rejects.toMatchObject({
+      code: "AI_PLAN_INVALID",
+      details: {
+        stage: "schema_validation",
+        issues: expect.arrayContaining([
+          { path: expect.stringContaining(`tasks.0.${field}`), code }
+        ])
+      }
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects excess tasks without truncating or making a paid automatic retry", async () => {
+    const fetchMock = globalThis.vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output: [
+            {
+              content: [
+                {
+                  type: "output_text",
+                  text: JSON.stringify({
+                    ...taskPlan,
+                    tasks: [taskPlan.tasks[0], { ...taskPlan.tasks[0], tempId: "task-2" }]
+                  })
+                }
+              ]
+            }
+          ]
+        })
+      )
+    );
+    await expect(
+      createAiPlanner({ aiPlannerEnabled: true, aiPlannerTimeoutMs: 1000 }).preview({
+        ...input,
+        provider: "openai",
+        maxItems: 1
+      })
+    ).rejects.toMatchObject({
+      code: "AI_PLAN_INVALID",
+      details: { stage: "item_limit" }
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose malformed provider output in JSON parse diagnostics", async () => {
+    const secret = "private-provider-response";
+    globalThis.vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output: [{ content: [{ type: "output_text", text: secret }] }]
+        })
+      )
+    );
+    const planner = createAiPlanner({ aiPlannerEnabled: true, aiPlannerTimeoutMs: 1000 });
+    const error = await planner.preview({ ...input, provider: "openai" }).catch((err) => err);
+    expect(error.details).toEqual({ stage: "json_parse" });
+    expect(JSON.stringify(error)).not.toContain(secret);
   });
 
   it("rejects evidence IDs that were not supplied by WorkflowHQ", async () => {

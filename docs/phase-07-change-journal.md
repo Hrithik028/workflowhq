@@ -97,3 +97,24 @@ release; this push does not include or deploy that separate validation fix.
 The verified baseline remains 210 backend tests, 59 serial frontend tests, lint,
 type checking and frontend build. Manual browser/provider and real PostgreSQL
 release gates are still outstanding; branch publication does not mark them done.
+
+## 2026-10-02 — Reconcile merged PR #59 with Phase 7
+
+PR #59 was merged into master at commit `3fb76f6`. The user approved resolving
+the resulting feature-branch conflict, testing and pushing the same Phase 7 branch,
+without merging Phase 7 into master. The conflict was confined to `aiPlanner.js`.
+
+Preserved both proposal modes: action generation retains its action schema and
+target/version validation; creation-only generation retains PR #59's per-request
+item limits, parent/date guidance and safe validation diagnostics. Exported the
+creation-only validator separately so union errors do not hide useful field paths.
+Kept item-limit diagnostics and all three provider adapters. Provider response
+values and credentials remain excluded from diagnostic output.
+
+Browser QA, real provider generation and real PostgreSQL rollback/concurrent retry
+checks remain release gates. This reconciliation does not claim those checks passed.
+
+Verification passed: 222 backend tests across 35 files, 59 serial frontend tests
+across 23 files, backend/frontend lint, TypeScript checking and frontend production
+build. The final staged release audit inspected 277 source files successfully. No assertions
+were weakened and no paid provider requests or production mutations were made.

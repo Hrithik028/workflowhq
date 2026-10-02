@@ -304,6 +304,7 @@ const aiPlannerSchemas = {
       }
     }),
   actionPlan: actionPlanSchema,
+  taskPlan: legacyPlanSchema,
   plan: planSchema
 };
 

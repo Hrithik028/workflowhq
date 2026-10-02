@@ -42,7 +42,8 @@ Provider request fixtures passing are not proof of a successful real provider ca
 
 ## Release gates
 
-- Integrate the separately reviewed PR #59 validation/diagnostic fix.
+- PR #59 validation/diagnostic fix integrated into Phase 7; combined automated
+  regression passed on 2026-10-02 (222 backend and 59 frontend tests).
 - Verify multi-action rollback and concurrent retry behavior on real PostgreSQL,
   not only pg-mem (which does not restore table state on ROLLBACK).
 - Complete browser QA and a paid-provider smoke test with user authorization.
