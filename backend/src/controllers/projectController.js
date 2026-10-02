@@ -21,7 +21,8 @@ const getProjects = async (req, res) => {
        GROUP BY project_id
      ) all_task_counts ON all_task_counts.project_id = p.id
      WHERE p.archived_at ${archivedCondition}
-     GROUP BY p.id, pm.role, all_task_counts.total_task_count
+     GROUP BY p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+              p.created_at, p.updated_at, pm.role, all_task_counts.total_task_count
      ORDER BY p.updated_at DESC, p.id DESC`,
     [req.user.id]
   );
@@ -45,7 +46,8 @@ const getProjectById = async (req, res, next) => {
        GROUP BY project_id
      ) all_task_counts ON all_task_counts.project_id = p.id
      WHERE p.id = $1
-     GROUP BY p.id, pm.role, all_task_counts.total_task_count`,
+     GROUP BY p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+              p.created_at, p.updated_at, pm.role, all_task_counts.total_task_count`,
     [req.params.id, req.user.id]
   );
   if (result.rows.length === 0) {

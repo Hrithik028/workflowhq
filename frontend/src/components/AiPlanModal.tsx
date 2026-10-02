@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { aiPlannerApi } from "../api/aiPlanner";
 import { getErrorMessage } from "../api/client";
 import { githubApi } from "../api/github";
+import { AiModelPicker } from "./AiModelPicker";
+import { budgetModels as providerDefaults } from "../lib/aiModels";
 import type {
   AiContextSource,
   AiPlanPreview,
@@ -12,12 +14,6 @@ import type {
   Project,
   ProjectDevelopment
 } from "../types";
-
-const providerDefaults: Record<AiProvider, string> = {
-  openai: "gpt-5-mini",
-  anthropic: "claude-sonnet-5",
-  google: "gemini-3.8-flash"
-};
 
 interface AiPlanModalProps {
   initialProjectId?: number | null;
@@ -30,7 +26,6 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
   const [projectId, setProjectId] = useState(String(initialProjectId || projects[0]?.id || ""));
   const [provider, setProvider] = useState<AiProvider>("openai");
   const [model, setModel] = useState(providerDefaults.openai);
-  const [apiKey, setApiKey] = useState("");
   const [goal, setGoal] = useState("");
   const [context, setContext] = useState("");
   const [maxItems, setMaxItems] = useState(8);
@@ -88,8 +83,8 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
     event.preventDefault();
     clearPreview();
     const version = previewVersion.current;
-    if (!projectId || !apiKey.trim() || !goal.trim() || !model.trim()) {
-      setError("Choose a project and provide a model, API key, and planning goal.");
+    if (!projectId || !goal.trim() || !model.trim()) {
+      setError("Choose a project and provide a model and planning goal.");
       return;
     }
     setBusy("preview");
@@ -97,7 +92,6 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
     try {
       const preview = await aiPlannerApi.preview(Number(projectId), {
         provider,
-        apiKey: apiKey.trim(),
         model: model.trim(),
         goal: goal.trim(),
         context: context.trim() || undefined,
@@ -113,7 +107,6 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
       setPreviewContext(preview.context);
       setApproval(preview.approval);
       setSelected(new Set(preview.plan.tasks.map((task) => task.tempId)));
-      setApiKey("");
     } catch (previewError) {
       setError(getErrorMessage(previewError, "Unable to generate a safe task preview."));
     } finally {
@@ -214,8 +207,8 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
           <div className="ai-plan-safety-note">
             <KeyRound size={18} />
             <p>
-              <strong>Your key is request-scoped.</strong> It is sent only to generate this preview,
-              then cleared. WorkHQ does not store it.
+              <strong>Your saved provider credential stays server-side.</strong> Manage personal
+              providers in Settings; this preview never receives the plaintext key.
             </p>
           </div>
           <div className="modal-form-grid">
@@ -250,30 +243,15 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
                 <option value="google">Google Gemini</option>
               </select>
             </label>
-            <label>
-              <span>Model</span>
-              <input
-                aria-label="AI model"
-                value={model}
-                onChange={(event) => {
-                  setModel(event.target.value);
-                  clearPreview();
-                }}
-              />
-            </label>
-            <label>
-              <span>API key</span>
-              <input
-                aria-label="Provider API key"
-                autoComplete="off"
-                type="password"
-                value={apiKey}
-                onChange={(event) => {
-                  setApiKey(event.target.value);
-                  clearPreview();
-                }}
-              />
-            </label>
+            <AiModelPicker
+              key={provider}
+              provider={provider}
+              value={model}
+              onChange={(value) => {
+                setModel(value);
+                clearPreview();
+              }}
+            />
           </div>
           <label>
             <span>What should we plan?</span>

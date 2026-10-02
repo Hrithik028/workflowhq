@@ -1,4 +1,4 @@
-import { ArrowUpRight, FolderKanban, Github, PencilLine, Plus } from "lucide-react";
+import { ArrowUpRight, Bot, FolderKanban, Github, PencilLine, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
@@ -165,12 +165,20 @@ function Projects() {
                   <strong>{project.name}</strong>
                   <span>{project.description || "Outcome not defined yet."}</span>
                   {!isDemo ? (
-                    <Link
-                      className="project-register-development"
-                      to={`/projects/${project.id}/development`}
-                    >
-                      <Github size={13} /> Development
-                    </Link>
+                    <span className="project-register-tools">
+                      <Link
+                        className="project-register-development"
+                        to={`/projects/${project.id}/development`}
+                      >
+                        <Github size={13} /> Development
+                      </Link>
+                      <Link
+                        className="project-register-development"
+                        to={`/projects/${project.id}/ai-conversations`}
+                      >
+                        <Bot size={13} /> AI workspace
+                      </Link>
+                    </span>
                   ) : null}
                 </div>
                 <div className="project-register-progress">

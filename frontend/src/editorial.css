@@ -7330,6 +7330,386 @@ html[data-motion="reduced"] *::after {
   color: var(--signal);
 }
 
+.project-register-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.ai-conversations-page {
+  max-width: none;
+}
+
+.ai-conversation-create,
+.ai-conversation-prompt {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--rule);
+  background: #fff;
+}
+
+.ai-conversation-create {
+  grid-template-columns: minmax(220px, 2fr) minmax(130px, 1fr) minmax(180px, 1fr) auto;
+  align-items: end;
+}
+
+.ai-conversation-create label,
+.ai-conversation-prompt label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ai-conversation-create input,
+.ai-conversation-create select,
+.ai-conversation-prompt input,
+.ai-conversation-prompt textarea {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+  background: #fff;
+  color: var(--carbon);
+  font: inherit;
+  font-size: 0.82rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.ai-conversation-create-actions,
+.ai-prompt-footer,
+.ai-proposal-card footer,
+.ai-proposal-card footer > div {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.ai-conversation-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  min-height: 640px;
+  border: 1px solid var(--rule);
+  background: #fff;
+}
+
+.ai-conversation-index {
+  border-right: 1px solid var(--rule);
+  background: #f6f4ef;
+}
+
+.ai-conversation-index > header,
+.ai-proposal-history > header,
+.ai-run-history > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 15px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ai-conversation-index > header span {
+  margin-left: auto;
+  font-family: "Courier New", monospace;
+}
+
+.ai-conversation-index > button {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  padding: 15px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  color: var(--carbon);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-conversation-index > button.active {
+  box-shadow: inset 3px 0 0 var(--signal);
+  background: #fff;
+}
+
+.ai-conversation-index > button span,
+.ai-conversation-index > button small,
+.ai-conversation-index > p {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.ai-conversation-index > p {
+  padding: 18px;
+  line-height: 1.6;
+}
+
+.ai-conversation-workspace {
+  min-width: 0;
+  padding: 20px;
+}
+
+.ai-conversation-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ai-conversation-title h2,
+.ai-proposal-history h3,
+.ai-run-history h3 {
+  margin: 3px 0;
+}
+
+.ai-conversation-title p {
+  margin: 0;
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.72rem;
+}
+
+.ai-retention-badge,
+.ai-proposal-card footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.ai-request-key-note {
+  padding: 9px 11px;
+  border-left: 3px solid #0b4f82;
+  background: #eef6fb;
+  color: #0b4f82;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ai-prompt-footer {
+  justify-content: space-between;
+}
+
+.ai-prompt-footer label {
+  width: min(100%, 360px);
+}
+
+.ai-proposal-history,
+.ai-run-history,
+.ai-message-history {
+  margin-top: 18px;
+  border: 1px solid var(--rule);
+}
+
+.ai-proposal-card {
+  padding: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ai-proposal-card:last-child {
+  border-bottom: 0;
+}
+
+.ai-proposal-card > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-proposal-card > header div {
+  display: grid;
+  gap: 4px;
+}
+
+.ai-proposal-card > header span,
+.ai-proposal-card > header b {
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.ai-proposal-card.pending > header b {
+  color: #0b6b45;
+}
+
+.ai-proposal-card.superseded,
+.ai-proposal-card.discarded {
+  background: #f7f5f1;
+}
+
+.ai-revision-diff {
+  display: grid;
+  gap: 5px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.74rem;
+}
+
+.ai-revision-diff li::before {
+  display: inline-block;
+  width: 18px;
+  font-family: "Courier New", monospace;
+  font-weight: 900;
+}
+
+.ai-revision-diff .added::before {
+  content: "+";
+  color: #0b6b45;
+}
+.ai-revision-diff .changed::before {
+  content: "~";
+  color: #8a5a00;
+}
+.ai-revision-diff .removed::before {
+  content: "-";
+  color: #a12b2b;
+}
+
+.ai-proposal-tasks {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+}
+
+.ai-proposal-tasks > div {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid #ddd8ce;
+  font-size: 0.72rem;
+}
+
+.ai-proposal-tasks span,
+.ai-proposal-tasks small {
+  color: var(--muted);
+}
+
+.ai-proposal-evidence {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  padding: 11px;
+  background: #f6f4ef;
+  font-size: 0.7rem;
+}
+
+.ai-proposal-evidence small {
+  color: var(--muted);
+}
+
+.ai-proposal-card footer {
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.ai-retained-note {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.ai-run-history > div {
+  display: grid;
+  grid-template-columns: 90px 160px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.7rem;
+}
+
+.ai-run-history > div:last-child {
+  border-bottom: 0;
+}
+
+.ai-message-history > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 15px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ai-message-history h3 {
+  margin: 0;
+}
+
+.ai-message-history > article {
+  display: grid;
+  gap: 5px;
+  margin: 12px;
+  padding: 12px;
+  border-left: 3px solid #0b4f82;
+  background: #f4f8fb;
+}
+
+.ai-message-history > article.assistant {
+  border-left-color: var(--signal);
+  background: #f8f5ed;
+}
+
+.ai-message-history > article span,
+.ai-message-history > article small {
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.ai-message-history > article p,
+.ai-message-history > p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.ai-message-history > p {
+  padding: 14px;
+  color: var(--muted);
+}
+
+.ai-run-history b.completed {
+  color: #0b6b45;
+}
+.ai-run-history b.failed {
+  color: #a12b2b;
+}
+
+@media (max-width: 900px) {
+  .ai-conversation-create,
+  .ai-conversation-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-conversation-index {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+}
+
+@media (max-width: 620px) {
+  .ai-conversation-title,
+  .ai-prompt-footer,
+  .ai-proposal-card footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ai-proposal-tasks > div,
+  .ai-run-history > div {
+    grid-template-columns: 1fr;
+  }
+}
+
 .live-development article a {
   color: var(--carbon);
   font-size: 0.68rem;
@@ -8033,4 +8413,26 @@ html[data-motion="reduced"] *::after {
     align-items: stretch;
     flex-direction: column;
   }
+}
+/* Explicit human review of bounded AI mutation proposals. */
+.ai-action-review ol {
+  padding-left: 1.5rem;
+}
+.ai-action-review li {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border, #b8b2a6);
+}
+.ai-action-review dl {
+  margin: 0.75rem 0;
+}
+.ai-action-review dl > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 25%) minmax(0, 1fr);
+  gap: 0.75rem;
+  margin: 0.4rem 0;
+}
+.ai-action-review dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

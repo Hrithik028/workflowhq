@@ -67,9 +67,59 @@ export interface AiTaskPlan {
   tasks: AiPlannedTask[];
 }
 
+export type AiTaskReference = number | `new:${string}`;
+export interface AiActionFields {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  startDate?: string | null;
+  dueDate?: string | null;
+  taskType?: TaskType;
+  parentRef?: AiTaskReference | null;
+  assigneeId?: number | null;
+  sprintId?: number | null;
+}
+interface AiActionBase {
+  id: string;
+  evidenceIds: string[];
+}
+interface AiActionTarget {
+  taskRef: AiTaskReference;
+  expectedVersion?: number;
+}
+export type AiPlannedAction =
+  | (AiActionBase & {
+      type: "task.create";
+      tempId: AiTaskReference;
+      fields: AiActionFields & { title: string };
+    })
+  | (AiActionBase & AiActionTarget & { type: "task.update"; fields: AiActionFields })
+  | (AiActionBase & AiActionTarget & { type: "task.archive" | "task.restore" })
+  | (AiActionBase & AiActionTarget & { type: "criterion.add"; body: string })
+  | (AiActionBase &
+      AiActionTarget & {
+        type: "criterion.update";
+        criterionId: number;
+        fields: { body?: string; completed?: boolean };
+      })
+  | (AiActionBase &
+      AiActionTarget & { type: "criterion.complete" | "criterion.remove"; criterionId: number })
+  | (AiActionBase & AiActionTarget & { type: "criterion.reorder"; criterionIds: number[] });
+export interface AiActionPlan {
+  summary: string;
+  actions: AiPlannedAction[];
+}
+export type AiProposalPlan = AiTaskPlan | AiActionPlan;
+export interface AiActionExecution {
+  executionId: number;
+  idempotent: boolean;
+  results: Array<{ actionId: string; type: string; taskId: number }>;
+  references: Record<string, number>;
+}
+
 export interface AiPlanPreviewInput {
   provider: AiProvider;
-  apiKey: string;
   model: string;
   goal: string;
   context?: string;
@@ -79,6 +129,15 @@ export interface AiPlanPreviewInput {
     includeGithubActivity: boolean;
     repositoryIds: number[];
   };
+}
+
+export interface AiCredentialStatus {
+  provider: AiProvider;
+  configured: boolean;
+  maskedSuffix: string | null;
+  keyVersion: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface AiContextSource {
@@ -103,6 +162,78 @@ export interface AiPlanPreview {
     sources: AiContextSource[];
     duplicates: Array<{ tempId: string; issueKey: string; title: string }>;
   };
+}
+
+export type AiProposalState = "pending" | "superseded" | "discarded" | "applied";
+
+export interface AiConversation {
+  id: string;
+  projectId: number;
+  createdBy: number;
+  title: string;
+  provider: AiProvider;
+  model: string;
+  status: "active" | "discarded";
+  runCount: number;
+  proposalCount: number;
+  detailExpiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiConversationMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string | null;
+  expired: boolean;
+  contentSha256: string | null;
+  detailExpiresAt: string;
+  createdAt: string;
+}
+
+export interface AiProposalDiff {
+  added: string[];
+  changed: Array<{ from: string; to: string }>;
+  removed: string[];
+}
+
+export interface AiProposalRevision {
+  id: string;
+  runId: string;
+  revisionNumber: number;
+  state: AiProposalState;
+  summary: string | null;
+  plan: AiProposalPlan | null;
+  diff: AiProposalDiff | null;
+  evidenceSummary: {
+    taskCount: number;
+    githubCount: number;
+    items: AiContextSource[];
+  } | null;
+  approvalId: string | null;
+  canApprove: boolean;
+  expired: boolean;
+  expiresAt: string;
+  detailExpiresAt: string;
+  createdAt: string;
+}
+
+export interface AiConversationRun {
+  id: string;
+  status: "running" | "completed" | "failed";
+  provider: AiProvider;
+  model: string;
+  errorCode: string | null;
+  evidenceCounts: { taskCount?: number; githubCount?: number };
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface AiConversationDetail {
+  conversation: AiConversation;
+  messages: AiConversationMessage[];
+  runs: AiConversationRun[];
+  proposals: AiProposalRevision[];
 }
 
 export interface ProjectMember {

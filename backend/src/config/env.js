@@ -18,6 +18,16 @@ const envSchema = z
     AI_PLANNER_ENABLED: z.enum(["true", "false"]).default("false"),
     AI_PLANNER_TIMEOUT_MS: z.coerce.number().int().min(5000).max(60000).default(30000),
     AI_PLAN_APPROVAL_TTL_MINUTES: z.coerce.number().int().min(5).max(60).default(15),
+    AI_CONVERSATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(30).default(15),
+    AI_CREDENTIAL_VAULT_ENABLED: z.enum(["true", "false"]).default("false"),
+    AI_CREDENTIAL_MASTER_KEYS_JSON: z.string().optional(),
+    AI_CREDENTIAL_ACTIVE_KEY_VERSION: z.coerce.number().int().positive().default(1),
+    AI_CREDENTIAL_VALIDATION_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(3000)
+      .max(30000)
+      .default(10000),
     MFA_ENABLED: z.enum(["true", "false"]).default("false"),
     ACCOUNT_ENCRYPTION_KEY_BASE64: z.string().optional(),
     GITHUB_INTEGRATION_ENABLED: z.enum(["true", "false"]).default("false"),
@@ -43,6 +53,62 @@ const envSchema = z
     RESEND_API_KEY: z.string().min(1).optional()
   })
   .superRefine((values, context) => {
+    if (values.AI_PLANNER_ENABLED === "true" && values.AI_CREDENTIAL_VAULT_ENABLED !== "true") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["AI_CREDENTIAL_VAULT_ENABLED"],
+        message: "AI_CREDENTIAL_VAULT_ENABLED must be true when AI planning is enabled."
+      });
+    }
+
+    if (values.AI_CREDENTIAL_VAULT_ENABLED === "true") {
+      let keys;
+      try {
+        keys = JSON.parse(values.AI_CREDENTIAL_MASTER_KEYS_JSON || "");
+      } catch {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["AI_CREDENTIAL_MASTER_KEYS_JSON"],
+          message: "AI_CREDENTIAL_MASTER_KEYS_JSON must be a JSON object of versioned keys."
+        });
+        keys = undefined;
+      }
+      if (
+        keys !== undefined &&
+        (keys === null || Array.isArray(keys) || typeof keys !== "object")
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["AI_CREDENTIAL_MASTER_KEYS_JSON"],
+          message: "AI_CREDENTIAL_MASTER_KEYS_JSON must be a JSON object of versioned keys."
+        });
+      } else if (keys) {
+        for (const [version, encoded] of Object.entries(keys)) {
+          const decoded = Buffer.from(String(encoded), "base64");
+          if (
+            !/^[1-9]\d*$/u.test(version) ||
+            typeof encoded !== "string" ||
+            decoded.length !== 32 ||
+            decoded.toString("base64") !== encoded
+          ) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["AI_CREDENTIAL_MASTER_KEYS_JSON"],
+              message: "Each credential key version must contain exactly 32 base64-encoded bytes."
+            });
+            break;
+          }
+        }
+        if (!Object.hasOwn(keys, String(values.AI_CREDENTIAL_ACTIVE_KEY_VERSION))) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["AI_CREDENTIAL_ACTIVE_KEY_VERSION"],
+            message: "The active credential key version must exist in the configured key ring."
+          });
+        }
+      }
+    }
+
     if (values.GITHUB_INTEGRATION_ENABLED === "true") {
       for (const key of [
         "GITHUB_APP_ID",
@@ -105,6 +171,13 @@ const loadConfig = (overrides = {}) => {
   const corsOrigins = values.CORS_ORIGIN.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const credentialKeys = values.AI_CREDENTIAL_MASTER_KEYS_JSON
+    ? Object.fromEntries(
+        Object.entries(JSON.parse(values.AI_CREDENTIAL_MASTER_KEYS_JSON)).map(
+          ([version, value]) => [Number(version), Buffer.from(String(value), "base64")]
+        )
+      )
+    : {};
 
   return {
     nodeEnv: values.NODE_ENV,
@@ -124,6 +197,11 @@ const loadConfig = (overrides = {}) => {
     aiPlannerEnabled: values.AI_PLANNER_ENABLED === "true",
     aiPlannerTimeoutMs: values.AI_PLANNER_TIMEOUT_MS,
     aiPlanApprovalTtlMinutes: values.AI_PLAN_APPROVAL_TTL_MINUTES,
+    aiConversationRetentionDays: values.AI_CONVERSATION_RETENTION_DAYS,
+    aiCredentialVaultEnabled: values.AI_CREDENTIAL_VAULT_ENABLED === "true",
+    aiCredentialMasterKeys: credentialKeys,
+    aiCredentialActiveKeyVersion: values.AI_CREDENTIAL_ACTIVE_KEY_VERSION,
+    aiCredentialValidationTimeoutMs: values.AI_CREDENTIAL_VALIDATION_TIMEOUT_MS,
     mfaEnabled: values.MFA_ENABLED === "true",
     accountEncryptionKeyBase64: values.ACCOUNT_ENCRYPTION_KEY_BASE64,
     githubIntegrationEnabled: values.GITHUB_INTEGRATION_ENABLED === "true",

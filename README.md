@@ -200,12 +200,24 @@ Enable the capability on the **backend only**:
 ```env
 AI_PLANNER_ENABLED=true
 AI_PLANNER_TIMEOUT_MS=30000
+AI_CONVERSATION_RETENTION_DAYS=15
+AI_CREDENTIAL_VAULT_ENABLED=true
+AI_CREDENTIAL_MASTER_KEYS_JSON={"1":"<base64-encoded 32-byte key>"}
+AI_CREDENTIAL_ACTIVE_KEY_VERSION=1
 ```
 
-The user chooses a project, provider, and model, then supplies their own provider API key for that
-single preview request. WorkHQ does not save the key in PostgreSQL, application configuration,
-activity records, or the browser after the preview returns. The server calls only fixed official
-provider endpoints; users cannot supply an arbitrary provider URL.
+Each user saves their own OpenAI, Anthropic, or Google Gemini credential in **Settings → AI
+providers**. WorkHQ encrypts it with AES-256-GCM before PostgreSQL receives it and returns only a
+masked suffix to the browser. Ciphertext is bound to the owning user, provider, encryption format,
+and key version. The server calls only fixed official provider endpoints; users cannot supply an
+arbitrary provider URL. The separate **Validate only** action calls the provider without saving the
+submitted credential.
+
+The master-key ring belongs only in the backend secret store. AI planning fails closed when the
+vault or active key is missing, and a credential that fails authentication cannot be used. Follow
+[the credential key rotation and recovery runbook](docs/ai-credential-key-rotation.md) before
+changing or retiring a key. The decrypted credential exists only inside the backend provider
+request and is never returned by the API.
 
 Users decide whether a preview may use existing WorkHQ tickets and explicitly choose which linked
 repositories may contribute synchronized GitHub activity. WorkHQ sends bounded metadata only: up
@@ -232,12 +244,33 @@ rules as the manual API. The explicit action types are `task.create`, `task.upda
 `criterion.remove`. Updates can change ticket fields, hierarchy, assignee, status, and sprint.
 Permanent ticket deletion is deliberately not part of the AI action contract.
 
+In **Project → AI conversations**, the default proposal mode creates new tickets
+only. Select **Propose ticket and criteria changes** to request a bounded action
+proposal instead. The review shows target ticket IDs, reviewed versions, explicit
+field values and criterion IDs; it also links to current tickets for inspection.
+Approve the entire proposal only after checking **I reviewed all actions and approve
+these changes**. Generation itself does not mutate tickets. Retries reuse a key
+derived from the approval ID to avoid duplicate execution.
+
+Generated actions use the project's supplied ticket/version and criterion catalog,
+not invented database IDs. Action context can include archived tickets for restore;
+ordinary creation-only context still excludes them. Generation currently emits one
+field per update action and does not propose assignment or sprint changes. Such
+requests require manual editing until their membership context is integrated.
+
 Existing-ticket actions carry the ticket `version` shown by the API. WorkflowHQ locks and rechecks
 every reviewed version and the caller's current permissions before making any change. Temporary
 references such as `new:epic-1` let one transaction create a hierarchy and then update its new
 tickets. The apply request must include an `idempotencyKey`; a successful retry returns the recorded
 result rather than duplicating work. Every action, audit record, approval consumption, and
 idempotency record commits together, or the entire plan is rolled back.
+
+Project AI workspaces retain provider/model-pinned conversations, run status, proposal revisions,
+human-readable diffs, and evidence summaries. Only the latest pending revision can be approved;
+generating a replacement immediately supersedes prior approvals. Detailed prompts, messages,
+proposals, diffs, and evidence labels are scrubbed after 15 days by a background retention pass,
+while minimal non-secret run metadata remains for audit. Provider credentials are never written to
+conversation history.
 
 ### GitHub workflow automation
 
@@ -325,7 +358,7 @@ Both applications are containerised. Production requires a managed PostgreSQL da
 
 - Replace the product screenshots whenever the production interface changes materially.
 - Add richer repository-health alerts and an operator-facing integration audit dashboard.
-- Add approval-based, provider-neutral AI task planning with request-scoped user credentials.
+- Add approval-based, provider-neutral AI task planning with encrypted user-owned credentials.
 - Add a one-time Jira importer before considering bidirectional synchronization.
 - Add in-app and email notifications for assignments, mentions, reviews, checks, and deployments.
 - Add custom project statuses, transition rules, roadmaps, and dependency tracking.

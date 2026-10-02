@@ -269,7 +269,6 @@ const aiPlannerSchemas = {
   preview: z
     .object({
       provider: z.enum(["openai", "anthropic", "google"]),
-      apiKey: z.string().trim().min(10).max(500),
       model: z.string().trim().min(1).max(120),
       goal: z.string().trim().min(10).max(5000),
       context: z.string().trim().max(10000).default(""),
@@ -308,4 +307,49 @@ const aiPlannerSchemas = {
   plan: planSchema
 };
 
-module.exports = { aiPlannerSchemas };
+const aiConversationSchemas = {
+  params: z.object({
+    id: z.coerce.number().int().positive(),
+    conversationId: z.string().uuid().optional(),
+    proposalId: z.string().uuid().optional()
+  }),
+  create: z
+    .object({
+      title: z
+        .string()
+        .trim()
+        .min(1)
+        .max(160)
+        .regex(/^[^\u0000-\u001F\u007F]+$/u, "Title contains unsupported control characters."),
+      provider: z.enum(["openai", "anthropic", "google"]),
+      model: z
+        .string()
+        .trim()
+        .min(1)
+        .max(120)
+        .regex(/^[^\u0000-\u001F\u007F]+$/u, "Model contains unsupported control characters.")
+    })
+    .strict(),
+  run: z
+    .object({
+      outputMode: z.enum(["tasks", "actions"]).default("tasks"),
+      goal: z.string().trim().min(10).max(5000),
+      context: z.string().trim().max(10000).default(""),
+      maxItems: z.coerce.number().int().min(1).max(30).default(12),
+      contextOptions: z
+        .object({
+          includeProjectTasks: z.boolean().default(true),
+          includeGithubActivity: z.boolean().default(true),
+          repositoryIds: z.array(z.coerce.number().int().positive()).max(20).default([])
+        })
+        .strict()
+        .default({
+          includeProjectTasks: true,
+          includeGithubActivity: true,
+          repositoryIds: []
+        })
+    })
+    .strict()
+};
+
+module.exports = { aiConversationSchemas, aiPlannerSchemas };

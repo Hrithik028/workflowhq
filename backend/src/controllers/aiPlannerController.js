@@ -11,6 +11,7 @@ const {
 } = require("../lib/aiPlanExecutor");
 const { AppError } = require("../lib/errors");
 const { buildProjectAiContext } = require("../lib/aiProjectContext");
+const { loadCredential } = require("../lib/aiCredentialVault");
 const { getProjectRole } = require("../lib/projectAccess");
 
 const loadEditableProject = async (db, projectId, userId) => {
@@ -43,8 +44,9 @@ const validatePlanEvidence = async (db, projectId, plan) => {
   if (taskIds.length > 0) {
     const result = await db.query(
       `SELECT id FROM tasks
-       WHERE project_id = $1 AND archived_at IS NULL AND id = ANY($2::int[])`,
-      [projectId, taskIds]
+       WHERE project_id = $1 ${plan.actions ? "" : "AND archived_at IS NULL"}
+         AND id IN (${taskIds.map((_, index) => `$${index + 2}`).join(", ")})`,
+      [projectId, ...taskIds]
     );
     result.rows.forEach((row) => valid.add(`task:${row.id}`));
   }
@@ -53,8 +55,9 @@ const validatePlanEvidence = async (db, projectId, plan) => {
       `SELECT gde.id
        FROM github_development_events gde
        JOIN project_github_repositories pgr ON pgr.repository_id = gde.repository_id
-       WHERE pgr.project_id = $1 AND gde.id = ANY($2::bigint[])`,
-      [projectId, githubIds]
+       WHERE pgr.project_id = $1
+         AND gde.id IN (${githubIds.map((_, index) => `$${index + 2}`).join(", ")})`,
+      [projectId, ...githubIds]
     );
     result.rows.forEach((row) => valid.add(`github:${row.id}`));
   }
@@ -68,13 +71,26 @@ const validatePlanEvidence = async (db, projectId, plan) => {
 };
 
 const previewAiPlan = async (req, res) => {
+  if (!req.app.locals.config.aiPlannerEnabled) {
+    throw new AppError(
+      503,
+      "AI_PLANNER_DISABLED",
+      "AI task planning is not enabled on this deployment."
+    );
+  }
   const project = await loadEditableProject(req.app.locals.db, req.params.id, req.user.id);
   const projectContext = await buildProjectAiContext(req.app.locals.db, {
     projectId: Number(project.id),
     options: req.body.contextOptions
   });
+  const apiKey = await loadCredential(
+    req.app.locals.db,
+    { provider: req.body.provider, userId: req.user.id },
+    req.app.locals.config
+  );
   const plan = await req.app.locals.aiPlanner.preview({
     ...req.body,
+    apiKey,
     project: { id: Number(project.id), name: project.name, description: project.description },
     projectContext
   });
@@ -92,7 +108,7 @@ const previewAiPlan = async (req, res) => {
         }));
   const duplicates = proposals.flatMap((proposal) => {
     const existing = normalizedExisting.get(proposal.title.trim().toLowerCase());
-    return existing ? [{ ...proposal, ...existing }] : [];
+    return existing ? [{ ...proposal, issueKey: existing.issueKey, title: existing.title }] : [];
   });
   const approval = await createAiPlanApproval(req.app.locals.db, {
     userId: req.user.id,
