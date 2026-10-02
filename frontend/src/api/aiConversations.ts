@@ -13,7 +13,9 @@ export interface CreateAiConversationInput {
   model: string;
 }
 
-export type RunAiConversationInput = Omit<AiPlanPreviewInput, "provider" | "model">;
+export type RunAiConversationInput = Omit<AiPlanPreviewInput, "provider" | "model"> & {
+  outputMode?: "tasks" | "actions";
+};
 
 export const aiConversationsApi = {
   async list(projectId: number): Promise<AiConversation[]> {

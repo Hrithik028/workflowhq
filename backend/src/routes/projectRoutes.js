@@ -105,7 +105,6 @@ router.post(
 );
 router.post(
   "/:id/ai-plan/apply",
-  asyncHandler(requirePermission("tasks.create")),
   validate({ params: aiPlannerSchemas.params, body: aiPlannerSchemas.apply }),
   asyncHandler(applyAiPlan)
 );

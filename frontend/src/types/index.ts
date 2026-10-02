@@ -67,6 +67,57 @@ export interface AiTaskPlan {
   tasks: AiPlannedTask[];
 }
 
+export type AiTaskReference = number | `new:${string}`;
+export interface AiActionFields {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  startDate?: string | null;
+  dueDate?: string | null;
+  taskType?: TaskType;
+  parentRef?: AiTaskReference | null;
+  assigneeId?: number | null;
+  sprintId?: number | null;
+}
+interface AiActionBase {
+  id: string;
+  evidenceIds: string[];
+}
+interface AiActionTarget {
+  taskRef: AiTaskReference;
+  expectedVersion?: number;
+}
+export type AiPlannedAction =
+  | (AiActionBase & {
+      type: "task.create";
+      tempId: AiTaskReference;
+      fields: AiActionFields & { title: string };
+    })
+  | (AiActionBase & AiActionTarget & { type: "task.update"; fields: AiActionFields })
+  | (AiActionBase & AiActionTarget & { type: "task.archive" | "task.restore" })
+  | (AiActionBase & AiActionTarget & { type: "criterion.add"; body: string })
+  | (AiActionBase &
+      AiActionTarget & {
+        type: "criterion.update";
+        criterionId: number;
+        fields: { body?: string; completed?: boolean };
+      })
+  | (AiActionBase &
+      AiActionTarget & { type: "criterion.complete" | "criterion.remove"; criterionId: number })
+  | (AiActionBase & AiActionTarget & { type: "criterion.reorder"; criterionIds: number[] });
+export interface AiActionPlan {
+  summary: string;
+  actions: AiPlannedAction[];
+}
+export type AiProposalPlan = AiTaskPlan | AiActionPlan;
+export interface AiActionExecution {
+  executionId: number;
+  idempotent: boolean;
+  results: Array<{ actionId: string; type: string; taskId: number }>;
+  references: Record<string, number>;
+}
+
 export interface AiPlanPreviewInput {
   provider: AiProvider;
   model: string;
@@ -152,7 +203,7 @@ export interface AiProposalRevision {
   revisionNumber: number;
   state: AiProposalState;
   summary: string | null;
-  plan: AiTaskPlan | null;
+  plan: AiProposalPlan | null;
   diff: AiProposalDiff | null;
   evidenceSummary: {
     taskCount: number;

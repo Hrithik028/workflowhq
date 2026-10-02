@@ -238,6 +238,33 @@ Each preview also receives a short-lived, one-time server approval. WorkHQ store
 reviewed summary and proposed tasks, never the provider key or full prompt. Applying a plan accepts
 an exact reviewed subset, rejects altered tasks, and prevents accidental or malicious replay.
 
+Approved action plans can also execute a bounded set of ticket mutations through the same domain
+rules as the manual API. The explicit action types are `task.create`, `task.update`, `task.archive`,
+`task.restore`, `criterion.add`, `criterion.update`, `criterion.complete`, `criterion.reorder`, and
+`criterion.remove`. Updates can change ticket fields, hierarchy, assignee, status, and sprint.
+Permanent ticket deletion is deliberately not part of the AI action contract.
+
+In **Project → AI conversations**, the default proposal mode creates new tickets
+only. Select **Propose ticket and criteria changes** to request a bounded action
+proposal instead. The review shows target ticket IDs, reviewed versions, explicit
+field values and criterion IDs; it also links to current tickets for inspection.
+Approve the entire proposal only after checking **I reviewed all actions and approve
+these changes**. Generation itself does not mutate tickets. Retries reuse a key
+derived from the approval ID to avoid duplicate execution.
+
+Generated actions use the project's supplied ticket/version and criterion catalog,
+not invented database IDs. Action context can include archived tickets for restore;
+ordinary creation-only context still excludes them. Generation currently emits one
+field per update action and does not propose assignment or sprint changes. Such
+requests require manual editing until their membership context is integrated.
+
+Existing-ticket actions carry the ticket `version` shown by the API. WorkflowHQ locks and rechecks
+every reviewed version and the caller's current permissions before making any change. Temporary
+references such as `new:epic-1` let one transaction create a hierarchy and then update its new
+tickets. The apply request must include an `idempotencyKey`; a successful retry returns the recorded
+result rather than duplicating work. Every action, audit record, approval consumption, and
+idempotency record commits together, or the entire plan is rolled back.
+
 Project AI workspaces retain provider/model-pinned conversations, run status, proposal revisions,
 human-readable diffs, and evidence summaries. Only the latest pending revision can be approved;
 generating a replacement immediately supersedes prior approvals. Detailed prompts, messages,

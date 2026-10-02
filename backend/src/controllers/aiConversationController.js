@@ -268,7 +268,8 @@ const runConversation = async (req, res) => {
   try {
     projectContext = await buildProjectAiContext(db, {
       projectId: Number(conversation.project_id),
-      options: req.body.contextOptions
+      options: req.body.contextOptions,
+      actionMode: req.body.outputMode === "actions"
     });
     const apiKey = await loadCredential(
       db,
@@ -293,6 +294,7 @@ const runConversation = async (req, res) => {
         .join("\n\n")
         .slice(0, 16000),
       maxItems: req.body.maxItems,
+      outputMode: req.body.outputMode,
       project: {
         id: Number(conversation.project_id),
         name: conversation.project.name,

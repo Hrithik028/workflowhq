@@ -93,6 +93,69 @@ describe("AI conversations", () => {
         }
       });
 
+  it("keeps action revisions read-only until explicit approval and records the applied revision", async () => {
+    const task = (
+      await request(app).post("/api/tasks").set(auth(owner.token)).send({
+        projectId: project.id,
+        title: "Existing work",
+        status: "todo",
+        priority: "medium",
+        taskType: "task"
+      })
+    ).body.data;
+    const actionPlan = {
+      summary: "Start existing work",
+      actions: [
+        {
+          id: "start",
+          type: "task.update",
+          taskRef: task.id,
+          expectedVersion: task.version,
+          fields: { status: "in_progress" },
+          evidenceIds: [`task:${task.id}`]
+        }
+      ]
+    };
+    planner.preview.mockResolvedValueOnce(actionPlan);
+    const conversationId = (await createConversation()).body.data.id;
+    const run = await request(app)
+      .post(`/api/projects/${project.id}/ai-conversations/${conversationId}/runs`)
+      .set(auth(owner.token))
+      .send({ outputMode: "actions", goal: "Start the existing project ticket", maxItems: 4 });
+    expect(run.status).toBe(201);
+    const proposal = run.body.data.proposal;
+    expect(proposal.plan).toEqual(actionPlan);
+    expect(planner.preview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputMode: "actions",
+        projectContext: expect.objectContaining({
+          existingTasks: expect.arrayContaining([
+            expect.objectContaining({ id: task.id, version: task.version })
+          ])
+        })
+      })
+    );
+    expect(
+      (await db.query("SELECT status FROM tasks WHERE id = $1", [task.id])).rows[0].status
+    ).toBe("todo");
+    const applied = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({
+        approvalId: proposal.approvalId,
+        plan: actionPlan,
+        idempotencyKey: `proposal:${proposal.approvalId}`
+      });
+    expect(applied.status, JSON.stringify(applied.body)).toBe(200);
+    expect(
+      (await db.query("SELECT status FROM tasks WHERE id = $1", [task.id])).rows[0].status
+    ).toBe("in_progress");
+    expect(
+      (await db.query("SELECT state FROM ai_proposal_revisions WHERE id = $1", [proposal.id]))
+        .rows[0].state
+    ).toBe("applied");
+  });
+
   it("pins provider and model, persists a versioned proposal, and never stores the key", async () => {
     const created = await createConversation();
     const conversationId = created.body.data.id;
@@ -133,6 +196,70 @@ describe("AI conversations", () => {
     expect(JSON.stringify(persisted.map((result) => result.rows))).not.toContain(
       "saved-conversation-provider-secret"
     );
+  });
+
+  it("supplies archived ticket and criteria context for an approved restore", async () => {
+    const task = (
+      await request(app).post("/api/tasks").set(auth(owner.token)).send({
+        projectId: project.id,
+        title: "Archived work",
+        priority: "medium",
+        status: "todo",
+        taskType: "task"
+      })
+    ).body.data;
+    await db.query(
+      "INSERT INTO task_acceptance_criteria (task_id, body, position) VALUES ($1, 'Original criterion', 0)",
+      [task.id]
+    );
+    await db.query(
+      "UPDATE tasks SET archived_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = $1",
+      [task.id]
+    );
+    const restoredPlan = {
+      summary: "Restore archived work",
+      actions: [
+        {
+          id: "restore",
+          type: "task.restore",
+          taskRef: task.id,
+          expectedVersion: task.version + 1,
+          evidenceIds: [`task:${task.id}`]
+        }
+      ]
+    };
+    planner.preview.mockResolvedValueOnce(restoredPlan);
+    const conversationId = (await createConversation()).body.data.id;
+    const run = await request(app)
+      .post(`/api/projects/${project.id}/ai-conversations/${conversationId}/runs`)
+      .set(auth(owner.token))
+      .send({ outputMode: "actions", goal: "Restore the archived project ticket", maxItems: 4 });
+    expect(run.status).toBe(201);
+    expect(planner.preview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectContext: expect.objectContaining({
+          existingTasks: expect.arrayContaining([
+            expect.objectContaining({
+              archived: true,
+              criteria: [expect.objectContaining({ body: "Original criterion" })]
+            })
+          ])
+        })
+      })
+    );
+    const proposal = run.body.data.proposal;
+    const applied = await request(app)
+      .post(`/api/projects/${project.id}/ai-plan/apply`)
+      .set(auth(owner.token))
+      .send({
+        approvalId: proposal.approvalId,
+        plan: restoredPlan,
+        idempotencyKey: `proposal:${proposal.approvalId}`
+      });
+    expect(applied.status, JSON.stringify(applied.body)).toBe(200);
+    expect(
+      (await db.query("SELECT archived_at FROM tasks WHERE id = $1", [task.id])).rows[0].archived_at
+    ).toBeNull();
   });
 
   it("fails closed when planning is disabled", async () => {

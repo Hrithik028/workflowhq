@@ -7,6 +7,7 @@ import ProjectAiConversations from "./ProjectAiConversations";
 
 const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
+  applyActions: vi.fn(),
   create: vi.fn(),
   discard: vi.fn(),
   get: vi.fn(),
@@ -24,7 +25,9 @@ vi.mock("../api/aiConversations", () => ({
     run: mocks.run
   }
 }));
-vi.mock("../api/aiPlanner", () => ({ aiPlannerApi: { apply: mocks.apply } }));
+vi.mock("../api/aiPlanner", () => ({
+  aiPlannerApi: { apply: mocks.apply, applyActions: mocks.applyActions }
+}));
 vi.mock("../api/workspace", () => ({ workspaceApi: { listProjects: mocks.listProjects } }));
 
 const conversation = {
@@ -110,6 +113,88 @@ const detail = {
 };
 
 describe("Project AI conversation workspace", () => {
+  it("uses creation-only by default and sends action mode only when explicitly selected", async () => {
+    const user = userEvent.setup();
+    mocks.run.mockResolvedValue(detail.proposals[1]);
+    render(
+      <MemoryRouter initialEntries={["/projects/4/ai-conversations"]}>
+        <Routes>
+          <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    const mode = await screen.findByRole("combobox", { name: "Proposal mode" });
+    expect(mode).toHaveValue("tasks");
+    await user.selectOptions(mode, "actions");
+    await user.type(
+      screen.getByRole("textbox", { name: "Planning goal" }),
+      "Start the existing project ticket"
+    );
+    await user.click(screen.getByRole("button", { name: "Generate revision" }));
+    await screen.findByText("A new proposal revision is ready for review.");
+    expect(mocks.run).toHaveBeenCalledWith(
+      4,
+      conversation.id,
+      expect.objectContaining({ outputMode: "actions" })
+    );
+    expect(mocks.applyActions).not.toHaveBeenCalled();
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
+  it("requires action confirmation and reuses the same execution key after a failed request", async () => {
+    const user = userEvent.setup();
+    const actionPlan = {
+      summary: "Archive reviewed work",
+      actions: [
+        {
+          id: "archive",
+          type: "task.archive" as const,
+          taskRef: 7,
+          expectedVersion: 2,
+          evidenceIds: []
+        }
+      ]
+    };
+    const pending = detail.proposals.find((proposal) => proposal.canApprove)!;
+    mocks.get.mockResolvedValue({ ...detail, proposals: [{ ...pending, plan: actionPlan }] });
+    mocks.applyActions
+      .mockRejectedValueOnce(new Error("Connection interrupted"))
+      .mockResolvedValueOnce({
+        executionId: 1,
+        idempotent: true,
+        results: [{ actionId: "archive" }]
+      });
+    render(
+      <MemoryRouter initialEntries={["/projects/4/ai-conversations"]}>
+        <Routes>
+          <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    const approve = await screen.findByRole("button", { name: /approve and apply actions/i });
+    expect(approve).toBeDisabled();
+    expect(screen.getByText(/reviewed version 2/)).toBeInTheDocument();
+    expect(mocks.applyActions).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("checkbox", { name: /reviewed all actions/i }));
+    await user.click(approve);
+    await screen.findByText("Connection interrupted");
+    await user.click(screen.getByRole("button", { name: /approve and apply actions/i }));
+    expect(await screen.findByText(/1 approved actions applied/)).toBeInTheDocument();
+    expect(mocks.applyActions).toHaveBeenNthCalledWith(
+      1,
+      4,
+      pending.approvalId,
+      actionPlan,
+      `proposal:${pending.approvalId}`
+    );
+    expect(mocks.applyActions).toHaveBeenNthCalledWith(
+      2,
+      4,
+      pending.approvalId,
+      actionPlan,
+      `proposal:${pending.approvalId}`
+    );
+    expect(mocks.apply).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.listProjects.mockResolvedValue([

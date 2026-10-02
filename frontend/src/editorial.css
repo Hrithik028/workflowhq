@@ -8414,3 +8414,25 @@ html[data-motion="reduced"] *::after {
     flex-direction: column;
   }
 }
+/* Explicit human review of bounded AI mutation proposals. */
+.ai-action-review ol {
+  padding-left: 1.5rem;
+}
+.ai-action-review li {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border, #b8b2a6);
+}
+.ai-action-review dl {
+  margin: 0.75rem 0;
+}
+.ai-action-review dl > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 25%) minmax(0, 1fr);
+  gap: 0.75rem;
+  margin: 0.4rem 0;
+}
+.ai-action-review dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

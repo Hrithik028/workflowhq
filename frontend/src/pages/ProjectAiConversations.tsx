@@ -18,6 +18,7 @@ import { aiPlannerApi } from "../api/aiPlanner";
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import { AiModelPicker } from "../components/AiModelPicker";
+import { AiActionReview } from "../components/AiActionReview";
 import { budgetModels as providerDefaults } from "../lib/aiModels";
 import type {
   AiConversation,
@@ -70,6 +71,8 @@ function ProjectAiConversations() {
   const [model, setModel] = useState(providerDefaults.openai);
   const [goal, setGoal] = useState("");
   const [context, setContext] = useState("");
+  const [outputMode, setOutputMode] = useState<"tasks" | "actions">("tasks");
+  const [confirmedProposal, setConfirmedProposal] = useState("");
   const [busy, setBusy] = useState<"create" | "run" | "approve" | "discard" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -154,6 +157,7 @@ function ProjectAiConversations() {
         goal,
         context,
         maxItems: 12,
+        outputMode,
         contextOptions: {
           includeProjectTasks: true,
           includeGithubActivity: false,
@@ -178,9 +182,23 @@ function ProjectAiConversations() {
     setBusy("approve");
     setError("");
     try {
-      const created = await aiPlannerApi.apply(projectId, proposal.approvalId, proposal.plan);
+      if ("actions" in proposal.plan) {
+        if (confirmedProposal !== proposal.id) return;
+        const key = `proposal:${proposal.approvalId}`;
+        const result = await aiPlannerApi.applyActions(
+          projectId,
+          proposal.approvalId,
+          proposal.plan,
+          key
+        );
+        setNotice(
+          `${result.results.length} approved actions applied${result.idempotent ? " (retry confirmed)" : ""}.`
+        );
+      } else {
+        const created = await aiPlannerApi.apply(projectId, proposal.approvalId, proposal.plan);
+        setNotice(`${created.length} task${created.length === 1 ? "" : "s"} created.`);
+      }
       await loadDetail();
-      setNotice(`${created.length} task${created.length === 1 ? "" : "s"} created.`);
     } catch (approveError) {
       setError(getErrorMessage(approveError, "Unable to approve this proposal."));
       await loadDetail().catch(() => undefined);
@@ -197,7 +215,7 @@ function ProjectAiConversations() {
     try {
       await aiConversationsApi.discard(projectId, selectedId, proposal.id);
       await loadDetail();
-      setNotice("Proposal discarded. No tasks were created.");
+      setNotice("Proposal discarded. No changes were made.");
     } catch (discardError) {
       setError(getErrorMessage(discardError, "Unable to discard this proposal."));
     } finally {
@@ -321,6 +339,16 @@ function ProjectAiConversations() {
                     history.
                   </div>
                   <label>
+                    <span>Proposal mode</span>
+                    <select
+                      value={outputMode}
+                      onChange={(event) => setOutputMode(event.target.value as "tasks" | "actions")}
+                    >
+                      <option value="tasks">Create new tickets only</option>
+                      <option value="actions">Propose ticket and criteria changes</option>
+                    </select>
+                  </label>
+                  <label>
                     <span>Planning goal</span>
                     <textarea
                       required
@@ -381,7 +409,9 @@ function ProjectAiConversations() {
                       <b>{proposal.state}</b>
                     </header>
                     <ProposalDiff diff={proposal.diff} />
-                    {proposal.plan ? (
+                    {proposal.plan && "actions" in proposal.plan ? (
+                      <AiActionReview plan={proposal.plan} />
+                    ) : proposal.plan ? (
                       <div className="ai-proposal-tasks">
                         {proposal.plan.tasks.map((task) => (
                           <div key={task.tempId}>
@@ -410,6 +440,18 @@ function ProjectAiConversations() {
                       </span>
                       {proposal.canApprove && canEdit ? (
                         <div>
+                          {proposal.plan && "actions" in proposal.plan ? (
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={confirmedProposal === proposal.id}
+                                onChange={(event) =>
+                                  setConfirmedProposal(event.target.checked ? proposal.id : "")
+                                }
+                              />
+                              I reviewed all actions and approve these changes
+                            </label>
+                          ) : null}
                           <button
                             className="button secondary danger"
                             disabled={busy !== null}
@@ -420,12 +462,23 @@ function ProjectAiConversations() {
                           </button>
                           <button
                             className="button primary"
-                            disabled={busy !== null}
+                            disabled={
+                              busy !== null ||
+                              Boolean(
+                                proposal.plan &&
+                                "actions" in proposal.plan &&
+                                confirmedProposal !== proposal.id
+                              )
+                            }
                             type="button"
                             onClick={() => void approve()}
                           >
                             <Check size={15} />{" "}
-                            {busy === "approve" ? "Creating…" : "Approve and create"}
+                            {busy === "approve"
+                              ? "Applying…"
+                              : proposal.plan && "actions" in proposal.plan
+                                ? "Approve and apply actions"
+                                : "Approve and create"}
                           </button>
                         </div>
                       ) : null}

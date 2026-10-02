@@ -21,28 +21,46 @@ const parseJson = (value, fallback) => {
   return value;
 };
 
-const proposalDiff = (previousPlan, nextPlan) => {
-  if (!previousPlan) {
-    return { added: nextPlan.tasks.map((task) => task.title), changed: [], removed: [] };
+// Keep the conversation diff shape stable for both legacy tasks and executor actions.
+const proposalItems = (plan) => {
+  if (Array.isArray(plan.actions)) {
+    return plan.actions.map((action) => ({
+      id: `action:${action.id}`,
+      label:
+        action.type === "task.create" ? action.fields.title : `${action.type}: ${action.taskRef}`,
+      value: action
+    }));
   }
-  const previous = new Map(previousPlan.tasks.map((task) => [task.tempId, task]));
-  const next = new Map(nextPlan.tasks.map((task) => [task.tempId, task]));
+  return plan.tasks.map((task) => ({
+    id: `task:${task.tempId}`,
+    label: task.title,
+    value: task
+  }));
+};
+
+const proposalDiff = (previousPlan, nextPlan) => {
+  const nextItems = proposalItems(nextPlan);
+  if (!previousPlan) {
+    return { added: nextItems.map((item) => item.label), changed: [], removed: [] };
+  }
+  const previous = new Map(proposalItems(previousPlan).map((item) => [item.id, item]));
+  const next = new Map(nextItems.map((item) => [item.id, item]));
   const changed = [];
   for (const [id, task] of next) {
     const before = previous.get(id);
-    if (before && JSON.stringify(before) !== JSON.stringify(task)) {
-      changed.push({ from: before.title, to: task.title });
+    if (before && JSON.stringify(before.value) !== JSON.stringify(task.value)) {
+      changed.push({ from: before.label, to: task.label });
     }
   }
   return {
-    added: [...next.entries()].filter(([id]) => !previous.has(id)).map(([, task]) => task.title),
+    added: [...next.entries()].filter(([id]) => !previous.has(id)).map(([, task]) => task.label),
     changed,
-    removed: [...previous.entries()].filter(([id]) => !next.has(id)).map(([, task]) => task.title)
+    removed: [...previous.entries()].filter(([id]) => !next.has(id)).map(([, task]) => task.label)
   };
 };
 
 const summarizeEvidence = (plan, projectContext) => {
-  const referenced = new Set(plan.tasks.flatMap((task) => task.evidenceIds || []));
+  const referenced = new Set(proposalItems(plan).flatMap((item) => item.value.evidenceIds || []));
   const items = projectContext.sources
     .filter((source) => referenced.has(source.id))
     .slice(0, 40)
