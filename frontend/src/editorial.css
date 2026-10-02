@@ -8436,3 +8436,128 @@ html[data-motion="reduced"] *::after {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Readable proposal cards; technical metadata remains available on demand. */
+.ai-action-review-intro {
+  padding: 1rem;
+  background: var(--paper, #f5f2e9);
+  border-left: 3px solid var(--accent, #ff4d00);
+}
+.ai-action-review-intro p {
+  margin: 0.5rem 0 0;
+  line-height: 1.6;
+}
+.ai-action-review .ai-action-cards {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+.ai-action-review .ai-action-card {
+  border: 1px solid var(--rule, #b8b2a6);
+  padding: 1.25rem;
+  min-width: 0;
+}
+.ai-action-card > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.ai-action-number {
+  border: 1px solid var(--rule, #b8b2a6);
+  padding: 0.3rem 0.6rem;
+}
+.ai-action-card > header > div {
+  flex: 1;
+  min-width: 10rem;
+}
+.ai-action-card h4 {
+  margin: 0.3rem 0 0;
+  font-size: 1.15rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ai-action-card dt {
+  color: var(--muted, #655f55);
+}
+.ai-action-card p,
+.ai-ticket-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.ai-grouped-criteria {
+  margin-top: 1rem;
+  border-top: 1px solid var(--rule, #b8b2a6);
+  padding-top: 1rem;
+}
+.ai-grouped-criteria h5 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.ai-grouped-criteria ul {
+  padding-left: 1.25rem;
+}
+.ai-action-review .ai-grouped-criteria li {
+  padding: 0.35rem 0;
+  border: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-action-technical,
+.ai-revision-comparison {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+.ai-action-technical summary,
+.ai-revision-comparison summary {
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+.ai-proposal-card footer .ai-approval-controls {
+  display: grid;
+  width: 100%;
+  gap: 0.75rem;
+}
+.ai-approval-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--rule, #b8b2a6);
+  padding: 0.85rem;
+  line-height: 1.5;
+}
+.ai-approval-confirmation input {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+}
+.ai-approval-help {
+  margin: 0;
+  line-height: 1.5;
+}
+.ai-proposal-tasks > div > p,
+.ai-proposal-tasks > div > ul {
+  grid-column: 1 / -1;
+  margin: 0.25rem 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-approval-buttons {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+@media (max-width: 540px) {
+  .ai-action-review dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+  .ai-approval-buttons .button {
+    width: 100%;
+  }
+}

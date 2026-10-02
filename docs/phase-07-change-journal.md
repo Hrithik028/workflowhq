@@ -118,3 +118,46 @@ Verification passed: 222 backend tests across 35 files, 59 serial frontend tests
 across 23 files, backend/frontend lint, TypeScript checking and frontend production
 build. The final staged release audit inspected 277 source files successfully. No assertions
 were weakened and no paid provider requests or production mutations were made.
+
+## 2026-10-02 — Browser preflight for manual QA
+
+Inspected the existing authenticated production AI-conversations tab and Render
+dashboard. Render's last successful backend deployment is master `3fb76f6`,
+containing Phase 6 and PR #59, not Phase 7 `45d09f7`. After refreshing the app,
+conversation history loaded, but no Phase 7 proposal-mode selector was present.
+The retained earlier run showed `AI_PLAN_INVALID`; no new generation was attempted.
+
+The user-created PR #60 was visible with no base-branch conflicts and checks in
+progress. No merge, deployment, paid provider call, or production record mutation
+was performed. Phase 7 manual execution remains blocked in that production tab
+until a Phase 7 preview is available or an explicitly approved release is deployed.
+This is a preflight observation, not a passing end-to-end manual test.
+
+## 2026-10-02 — Readable proposal review (local only)
+
+Replaced raw action labels with readable ticket/criteria cards, friendly field and
+status names, and expandable technical references. Consecutive criterion additions
+for a new ticket appear under its ticket card; nonconsecutive actions keep their
+original order. New-ticket null defaults move to technical details as "Not set";
+explicit clearing of existing-ticket fields remains visible as "Clear value".
+The original signed proposal is not mutated by rendering or grouping.
+
+Creation-only proposals now expose descriptions and individual criteria. Revision
+diffs are expandable, and approval has a dedicated confirmation row, explanatory
+text and grouped buttons. Confirmation, permission checks and retry keys remain
+unchanged. No direct editing of signed proposals or approval bypass was introduced.
+
+Verification: 61 frontend tests passed across 23 files, TypeScript, lint and Vite
+production build passed. Inspected the local sample preview in the browser and
+expanded its technical section; grouped criteria and unset metadata displayed
+correctly. The preview makes no API calls. No live tickets were changed, and these
+layout changes have not been committed, pushed or deployed.
+
+## 2026-10-02 — Approved proposal-layout publication
+
+The user approved pushing the reviewed layout changes. Created a separate branch
+`fix/ai-proposal-review` from current master `e34341e`, preserving the local changes.
+Final focused review/workspace checks passed (7 tests), formatting passed and the
+release audit inspected 279 source files successfully. The prior full frontend
+baseline was 61 passing tests, with lint, TypeScript and production build passing.
+Publication does not authorize merging or mark production execution QA complete.
