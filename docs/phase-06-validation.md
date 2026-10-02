@@ -44,3 +44,24 @@ GitHub CI must verify real PostgreSQL migrations, CodeQL and container builds.
 After merge and deployment, repeat a production conversation smoke test with an
 account-authorized provider/model and verify both services run the merged release.
 Do not treat local fake-provider testing as confirmation of real model access.
+
+## CI incident and correction — PR #58
+
+GitHub Actions run 36978854308 stopped at the backend test step: 186 tests passed
+and the vault's ciphertext-tampering test failed. The fixture changed the final
+Base64url character, which can change unused padding bits without changing decoded
+ciphertext bytes. Randomized encryption therefore made the assertion intermittent.
+
+The test now decodes the ciphertext, copies it, flips one actual bit, asserts the
+bytes differ, and re-encodes it. The safe integrity-error assertion remains intact;
+no production encryption behavior, credentials, or database schema were changed.
+
+Local verification after the correction:
+
+- Backend: all 32 test files and 187 tests passed.
+- Backend ESLint passed.
+- 1,000 randomized encrypt/tamper/decrypt checks rejected actual ciphertext tampering
+  with the expected safe error, using only disposable fixture credentials.
+
+The replacement GitHub CI run must still pass before merge. Local tests do not
+confirm the PostgreSQL migration and container-build release gates.
