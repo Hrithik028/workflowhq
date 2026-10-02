@@ -200,6 +200,7 @@ Enable the capability on the **backend only**:
 ```env
 AI_PLANNER_ENABLED=true
 AI_PLANNER_TIMEOUT_MS=30000
+AI_CONVERSATION_RETENTION_DAYS=15
 AI_CREDENTIAL_VAULT_ENABLED=true
 AI_CREDENTIAL_MASTER_KEYS_JSON={"1":"<base64-encoded 32-byte key>"}
 AI_CREDENTIAL_ACTIVE_KEY_VERSION=1
@@ -236,6 +237,13 @@ title matches are flagged before approval to reduce accidental duplicate tickets
 Each preview also receives a short-lived, one-time server approval. WorkHQ stores only hashes of the
 reviewed summary and proposed tasks, never the provider key or full prompt. Applying a plan accepts
 an exact reviewed subset, rejects altered tasks, and prevents accidental or malicious replay.
+
+Project AI workspaces retain provider/model-pinned conversations, run status, proposal revisions,
+human-readable diffs, and evidence summaries. Only the latest pending revision can be approved;
+generating a replacement immediately supersedes prior approvals. Detailed prompts, messages,
+proposals, diffs, and evidence labels are scrubbed after 15 days by a background retention pass,
+while minimal non-secret run metadata remains for audit. Provider credentials are never written to
+conversation history.
 
 ### GitHub workflow automation
 

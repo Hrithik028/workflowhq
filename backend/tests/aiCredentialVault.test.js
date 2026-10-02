@@ -41,14 +41,18 @@ describe("AI credential encryption", () => {
       { credential: "fixture-tamper-test-secret", provider: "openai", userId: 7 },
       vaultConfig
     );
+    const originalBytes = Buffer.from(encrypted.ciphertext, "base64url");
+    const tamperedBytes = Buffer.from(originalBytes);
+    // Changing an encoded tail character can alter only ignored padding bits.
+    // Flip an actual ciphertext bit so every run tests genuine tampering.
+    tamperedBytes[0] ^= 1;
+    expect(tamperedBytes.equals(originalBytes)).toBe(false);
     const tampered = {
       user_id: 7,
       provider: "openai",
       encryption_version: 1,
       key_version: 1,
-      ciphertext: `${encrypted.ciphertext.slice(0, -1)}${
-        encrypted.ciphertext.endsWith("A") ? "B" : "A"
-      }`,
+      ciphertext: tamperedBytes.toString("base64url"),
       iv: encrypted.iv,
       auth_tag: encrypted.authTag
     };

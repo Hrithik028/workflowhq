@@ -24,6 +24,7 @@ const testConfig = {
   aiPlannerEnabled: false,
   aiPlannerTimeoutMs: 30000,
   aiPlanApprovalTtlMinutes: 15,
+  aiConversationRetentionDays: 15,
   aiCredentialVaultEnabled: false,
   aiCredentialMasterKeys: {},
   aiCredentialActiveKeyVersion: 1,

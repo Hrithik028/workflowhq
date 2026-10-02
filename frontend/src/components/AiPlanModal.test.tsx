@@ -113,6 +113,7 @@ describe("AiPlanModal", () => {
       />
     );
 
+    await browser.selectOptions(screen.getByRole("combobox", { name: /model preference/i }), "custom");
     await browser.clear(screen.getByRole("textbox", { name: /ai model/i }));
     await browser.type(screen.getByRole("textbox", { name: /ai model/i }), "gpt-test");
     await browser.type(

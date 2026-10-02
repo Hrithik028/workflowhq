@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { aiPlannerApi } from "../api/aiPlanner";
 import { getErrorMessage } from "../api/client";
 import { githubApi } from "../api/github";
+import { AiModelPicker } from "./AiModelPicker";
+import { budgetModels as providerDefaults } from "../lib/aiModels";
 import type {
   AiContextSource,
   AiPlanPreview,
@@ -12,12 +14,6 @@ import type {
   Project,
   ProjectDevelopment
 } from "../types";
-
-const providerDefaults: Record<AiProvider, string> = {
-  openai: "gpt-5-mini",
-  anthropic: "claude-sonnet-5",
-  google: "gemini-3.8-flash"
-};
 
 interface AiPlanModalProps {
   initialProjectId?: number | null;
@@ -247,17 +243,15 @@ function AiPlanModal({ initialProjectId, onApplied, onClose, projects }: AiPlanM
                 <option value="google">Google Gemini</option>
               </select>
             </label>
-            <label>
-              <span>Model</span>
-              <input
-                aria-label="AI model"
-                value={model}
-                onChange={(event) => {
-                  setModel(event.target.value);
-                  clearPreview();
-                }}
-              />
-            </label>
+            <AiModelPicker
+              key={provider}
+              provider={provider}
+              value={model}
+              onChange={(value) => {
+                setModel(value);
+                clearPreview();
+              }}
+            />
           </div>
           <label>
             <span>What should we plan?</span>

@@ -1,5 +1,12 @@
 const express = require("express");
 const { applyAiPlan, previewAiPlan } = require("../controllers/aiPlannerController");
+const {
+  createConversation,
+  discardProposal,
+  getConversation,
+  listConversations,
+  runConversation
+} = require("../controllers/aiConversationController");
 
 const {
   archiveProject,
@@ -49,7 +56,7 @@ const {
   sprintSchemas,
   workflowSchemas
 } = require("../validation/schemas");
-const { aiPlannerSchemas } = require("../validation/aiPlannerSchemas");
+const { aiConversationSchemas, aiPlannerSchemas } = require("../validation/aiPlannerSchemas");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -62,6 +69,34 @@ router.post(
   asyncHandler(createProject)
 );
 router.get("/:id", validate({ params: projectSchemas.params }), asyncHandler(getProjectById));
+router.get(
+  "/:id/ai-conversations",
+  validate({ params: aiConversationSchemas.params }),
+  asyncHandler(listConversations)
+);
+router.post(
+  "/:id/ai-conversations",
+  asyncHandler(requirePermission("tasks.create")),
+  validate({ params: aiConversationSchemas.params, body: aiConversationSchemas.create }),
+  asyncHandler(createConversation)
+);
+router.get(
+  "/:id/ai-conversations/:conversationId",
+  validate({ params: aiConversationSchemas.params }),
+  asyncHandler(getConversation)
+);
+router.post(
+  "/:id/ai-conversations/:conversationId/runs",
+  asyncHandler(requirePermission("tasks.create")),
+  validate({ params: aiConversationSchemas.params, body: aiConversationSchemas.run }),
+  asyncHandler(runConversation)
+);
+router.post(
+  "/:id/ai-conversations/:conversationId/proposals/:proposalId/discard",
+  asyncHandler(requirePermission("tasks.create")),
+  validate({ params: aiConversationSchemas.params }),
+  asyncHandler(discardProposal)
+);
 router.post(
   "/:id/ai-plan/preview",
   asyncHandler(requirePermission("tasks.create")),
