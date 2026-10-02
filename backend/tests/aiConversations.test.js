@@ -1,6 +1,7 @@
 const request = require("supertest");
 
 const { purgeExpiredAiConversationDetails } = require("../src/lib/aiConversations");
+const { createAiPlanner } = require("../src/lib/aiPlanner");
 const { auth, buildTestApp, registerUser } = require("./helpers/testApp");
 
 const firstPlan = {
@@ -156,6 +157,53 @@ describe("AI conversations", () => {
     expect(runs.rows[0].status).toBe("failed");
     const tasks = await db.query("SELECT id FROM tasks WHERE project_id = $1", [project.id]);
     expect(tasks.rows).toHaveLength(0);
+  });
+
+  it("records invalid provider plans safely and permits a valid manually requested revision", async () => {
+    const conversationId = (await createConversation()).body.data.id;
+    app.locals.aiPlanner = createAiPlanner({ ...app.locals.config, aiPlannerTimeoutMs: 1000 });
+    const invalidPlan = {
+      ...firstPlan,
+      tasks: [{ ...firstPlan.tasks[0], parentTempId: "AIC-123" }]
+    };
+    const output = (plan) =>
+      new Response(
+        JSON.stringify({
+          output: [{ content: [{ type: "output_text", text: JSON.stringify(plan) }] }]
+        })
+      );
+    const fetchMock = globalThis.vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(output(invalidPlan))
+      .mockResolvedValueOnce(output(firstPlan));
+    try {
+      const failed = await runConversation(conversationId);
+      expect(failed.status).toBe(502);
+      expect(failed.body.error).toMatchObject({
+        code: "AI_PLAN_INVALID",
+        details: {
+          stage: "schema_validation",
+          issues: [{ path: "tasks.0.parentTempId", code: "custom" }]
+        }
+      });
+      expect(failed.body.error.message).toContain("No tickets were created");
+      expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(0);
+      expect((await db.query("SELECT * FROM ai_proposal_revisions")).rows).toHaveLength(0);
+      expect((await db.query("SELECT * FROM ai_plan_approvals")).rows).toHaveLength(0);
+      expect(
+        (await db.query("SELECT status, error_code FROM ai_conversation_runs")).rows[0]
+      ).toMatchObject({ status: "failed", error_code: "AI_PLAN_INVALID" });
+      expect(
+        JSON.stringify((await db.query("SELECT * FROM ai_conversation_messages")).rows)
+      ).not.toContain("AIC-123");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const valid = await runConversation(conversationId);
+      expect(valid.status).toBe(201);
+      expect(valid.body.data.proposal).toMatchObject({ revisionNumber: 1, canApprove: true });
+      expect((await db.query("SELECT * FROM tasks")).rows).toHaveLength(0);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 
   it("supersedes earlier revisions and only allows the latest proposal to apply", async () => {
