@@ -6,9 +6,11 @@ const taskPlanJsonSchema = {
   additionalProperties: false,
   required: ["summary", "tasks"],
   properties: {
-    summary: { type: "string" },
+    summary: { type: "string", minLength: 1, maxLength: 1000 },
     tasks: {
       type: "array",
+      minItems: 1,
+      maxItems: 30,
       items: {
         type: "object",
         additionalProperties: false,
@@ -24,22 +26,30 @@ const taskPlanJsonSchema = {
           "acceptanceCriteria"
         ],
         properties: {
-          tempId: { type: "string" },
-          parentTempId: { type: ["string", "null"] },
+          tempId: { type: "string", minLength: 1, maxLength: 40, pattern: "^[A-Za-z0-9_-]+$" },
+          parentTempId: {
+            anyOf: [{ type: "string", minLength: 1, maxLength: 40 }, { type: "null" }]
+          },
           taskType: {
             type: "string",
             enum: ["initiative", "epic", "story", "task", "bug", "subtask"]
           },
-          title: { type: "string" },
-          description: { type: "string" },
+          title: { type: "string", minLength: 1, maxLength: 200 },
+          description: { type: "string", maxLength: 5000 },
           priority: { type: "string", enum: ["low", "medium", "high"] },
-          dueDate: { anyOf: [{ type: "string" }, { type: "null" }] },
+          dueDate: {
+            anyOf: [{ type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" }, { type: "null" }]
+          },
           evidenceIds: {
             type: "array",
             maxItems: 8,
-            items: { type: "string" }
+            items: { type: "string", pattern: "^(?:task|github):\\d+$" }
           },
-          acceptanceCriteria: { type: "array", items: { type: "string" } }
+          acceptanceCriteria: {
+            type: "array",
+            maxItems: 12,
+            items: { type: "string", minLength: 1, maxLength: 1000 }
+          }
         }
       }
     }
@@ -50,7 +60,14 @@ const parseJson = (value) => {
   try {
     return JSON.parse(value);
   } catch {
-    throw new AppError(502, "AI_PLAN_INVALID", "The selected model returned an invalid task plan.");
+    throw new AppError(
+      502,
+      "AI_PLAN_INVALID",
+      "The selected model returned an invalid task plan.",
+      {
+        stage: "json_parse"
+      }
+    );
   }
 };
 
@@ -83,7 +100,7 @@ const requestJson = async ({ url, headers, body, timeoutMs }) => {
 };
 
 const adapters = {
-  openai: async ({ apiKey, model, prompt, timeoutMs }) => {
+  openai: async ({ apiKey, model, prompt, timeoutMs, schema }) => {
     const data = await requestJson({
       url: "https://api.openai.com/v1/responses",
       headers: { authorization: `Bearer ${apiKey}` },
@@ -99,7 +116,7 @@ const adapters = {
             type: "json_schema",
             name: "workflowhq_task_plan",
             strict: true,
-            schema: taskPlanJsonSchema
+            schema
           }
         }
       }
@@ -109,7 +126,7 @@ const adapters = {
       .find((item) => item.type === "output_text")?.text;
     return parseJson(text || "");
   },
-  anthropic: async ({ apiKey, model, prompt, timeoutMs }) => {
+  anthropic: async ({ apiKey, model, prompt, timeoutMs, schema }) => {
     const data = await requestJson({
       url: "https://api.anthropic.com/v1/messages",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
@@ -117,13 +134,13 @@ const adapters = {
       body: {
         model,
         max_tokens: 5000,
-        system: `Return only JSON matching this schema: ${JSON.stringify(taskPlanJsonSchema)}`,
+        system: `Return only JSON matching this schema: ${JSON.stringify(schema)}`,
         messages: [{ role: "user", content: prompt }]
       }
     });
     return parseJson(data.content?.find((item) => item.type === "text")?.text || "");
   },
-  google: async ({ apiKey, model, prompt, timeoutMs }) => {
+  google: async ({ apiKey, model, prompt, timeoutMs, schema }) => {
     const data = await requestJson({
       url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       headers: { "x-goog-api-key": apiKey },
@@ -132,7 +149,7 @@ const adapters = {
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseJsonSchema: taskPlanJsonSchema
+          responseJsonSchema: schema
         }
       }
     });
@@ -161,19 +178,60 @@ const createAiPlanner = (config) => ({
       input.projectContext?.sources?.length
         ? "For each proposed task, include only relevant evidence IDs from the supplied records. Use an empty evidenceIds array when no record supports it."
         : "Use an empty evidenceIds array because no project records were supplied.",
-      `Create no more than ${input.maxItems} work items. Use stable temporary IDs and parentTempId links. Include concise acceptance criteria. Use an ISO YYYY-MM-DD dueDate when the context provides a real deadline; otherwise use null.`
+      `Create no more than ${input.maxItems} work items. Use stable temporary IDs and parentTempId links. Include concise acceptance criteria. Use an ISO YYYY-MM-DD dueDate when the context provides a real deadline; otherwise use null.`,
+      "Temporary IDs must be unique and contain only letters, digits, underscores or hyphens. parentTempId must be null for a root item, or exactly match another tempId included in this proposal, never an existing project ticket key or database ID. Parents must be higher-level items: initiative > epic > story > task/bug > subtask. For a single standalone task, use parentTempId: null. Never emit an empty string as parentTempId or dueDate."
     ]
       .filter(Boolean)
       .join("\n\n");
-    const result = await adapter({ ...input, prompt, timeoutMs: config.aiPlannerTimeoutMs });
-    const limited = { ...result, tasks: result.tasks?.slice(0, input.maxItems) };
-    const parsed = aiPlannerSchemas.plan.safeParse(limited);
+    const schema = {
+      ...taskPlanJsonSchema,
+      properties: {
+        ...taskPlanJsonSchema.properties,
+        tasks: { ...taskPlanJsonSchema.properties.tasks, maxItems: input.maxItems }
+      }
+    };
+    const result = await adapter({
+      ...input,
+      prompt,
+      schema,
+      timeoutMs: config.aiPlannerTimeoutMs
+    });
+    const parsed = aiPlannerSchemas.plan.safeParse(result);
     if (!parsed.success)
       throw new AppError(
         502,
         "AI_PLAN_INVALID",
-        "The selected model returned a plan that WorkflowHQ could not safely validate."
+        "The selected model returned a plan that WorkflowHQ could not safely validate.",
+        {
+          stage: "schema_validation",
+          // Never include Zod messages, input values or unknown property names.
+          issues: parsed.error.issues.slice(0, 12).map((issue) => ({
+            code: issue.code,
+            path: issue.path
+              .map((part) =>
+                typeof part === "number" ||
+                [
+                  "summary",
+                  "tasks",
+                  ...taskPlanJsonSchema.properties.tasks.items.required
+                ].includes(part)
+                  ? part
+                  : "field"
+              )
+              .join(".")
+          }))
+        }
       );
+    if (parsed.data.tasks.length > input.maxItems) {
+      throw new AppError(
+        502,
+        "AI_PLAN_INVALID",
+        "The selected model exceeded the requested item limit.",
+        {
+          stage: "item_limit"
+        }
+      );
+    }
     const allowedEvidence = new Set(
       (input.projectContext?.sources || []).map((source) => source.id)
     );
