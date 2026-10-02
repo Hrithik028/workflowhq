@@ -11,6 +11,7 @@ const {
   summarizeEvidence
 } = require("../lib/aiConversations");
 const { buildProjectAiContext } = require("../lib/aiProjectContext");
+const { loadCredential } = require("../lib/aiCredentialVault");
 const { AppError } = require("../lib/errors");
 const { getProjectRole } = require("../lib/projectAccess");
 
@@ -91,13 +92,14 @@ const listConversations = async (req, res) => {
   await scrubExpiredConversationDetails(req.app.locals.db, req.params.id);
   const result = await req.app.locals.db.query(
     `SELECT c.*,
-            COUNT(DISTINCT r.id)::int AS run_count,
-            COUNT(DISTINCT p.id)::int AS proposal_count
+            COALESCE(r.run_count, 0)::int AS run_count,
+            COALESCE(p.proposal_count, 0)::int AS proposal_count
      FROM ai_conversations c
-     LEFT JOIN ai_conversation_runs r ON r.conversation_id = c.id
-     LEFT JOIN ai_proposal_revisions p ON p.conversation_id = c.id
+     LEFT JOIN (SELECT conversation_id, COUNT(*) AS run_count FROM ai_conversation_runs
+                GROUP BY conversation_id) r ON r.conversation_id = c.id
+     LEFT JOIN (SELECT conversation_id, COUNT(*) AS proposal_count FROM ai_proposal_revisions
+                GROUP BY conversation_id) p ON p.conversation_id = c.id
      WHERE c.project_id = $1
-     GROUP BY c.id
      ORDER BY c.updated_at DESC, c.id DESC
      LIMIT 100`,
     [req.params.id]
@@ -206,6 +208,13 @@ const addMessage = async (db, { conversationId, userId, role, content, expiresAt
 
 const runConversation = async (req, res) => {
   const db = req.app.locals.db;
+  if (!req.app.locals.config.aiPlannerEnabled) {
+    throw new AppError(
+      503,
+      "AI_PLANNER_DISABLED",
+      "AI task planning is not enabled on this deployment."
+    );
+  }
   const conversation = await loadConversation(db, {
     projectId: req.params.id,
     conversationId: req.params.conversationId,
@@ -261,10 +270,18 @@ const runConversation = async (req, res) => {
       projectId: Number(conversation.project_id),
       options: req.body.contextOptions
     });
+    const apiKey = await loadCredential(
+      db,
+      {
+        provider: conversation.provider,
+        userId: req.user.id
+      },
+      req.app.locals.config
+    );
     plan = await req.app.locals.aiPlanner.preview({
       provider: conversation.provider,
       model: conversation.model,
-      apiKey: req.body.apiKey,
+      apiKey,
       goal,
       context: [
         context,

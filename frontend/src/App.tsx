@@ -13,6 +13,7 @@ import Projects from "./pages/Projects";
 import Register from "./pages/Register";
 import Settings from "./pages/SettingsAdmin";
 import GitHubIntegration from "./pages/GitHubIntegration";
+import AiIntegrations from "./pages/AiIntegrations";
 import InvitationPage from "./pages/InvitationPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -137,6 +138,7 @@ function App() {
           }
         />
         <Route path="/settings/integrations/github" element={<GitHubIntegration />} />
+        <Route path="/settings/integrations/ai" element={<AiIntegrations />} />
         <Route path="/invitations/:token" element={<InvitationPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to={authenticated ? "/app" : "/login"} />} />

@@ -48,10 +48,19 @@ describe("AI conversations", () => {
   beforeEach(async () => {
     planner = { preview: globalThis.vi.fn().mockResolvedValue(firstPlan) };
     ({ app, db } = await buildTestApp({
-      config: { aiPlannerEnabled: true },
+      config: {
+        aiPlannerEnabled: true,
+        aiCredentialVaultEnabled: true,
+        aiCredentialMasterKeys: { 1: Buffer.alloc(32, 7) },
+        aiCredentialActiveKeyVersion: 1
+      },
       aiPlanner: planner
     }));
     owner = await registerUser(app, "conversation-owner");
+    await request(app)
+      .post("/api/ai/credentials")
+      .set(auth(owner.token))
+      .send({ provider: "openai", credential: "saved-conversation-provider-secret" });
     project = (
       await request(app)
         .post("/api/projects")
@@ -73,7 +82,6 @@ describe("AI conversations", () => {
       .post(`/api/projects/${project.id}/ai-conversations/${conversationId}/runs`)
       .set(auth(owner.token))
       .send({
-        apiKey: "request-only-provider-secret",
         goal: "Create a persistent and secure planning workflow.",
         context: "Do not persist the credential.",
         maxItems: 8,
@@ -91,6 +99,17 @@ describe("AI conversations", () => {
 
     expect(created.status).toBe(201);
     expect(run.status).toBe(201);
+    const listed = await request(app)
+      .get(`/api/projects/${project.id}/ai-conversations`)
+      .set(auth(owner.token));
+    expect(listed.status).toBe(200);
+    expect(listed.body.data[0]).toMatchObject({
+      id: conversationId,
+      title: "Release plan",
+      provider: "openai",
+      runCount: 1,
+      proposalCount: 1
+    });
     expect(run.body.data.proposal).toMatchObject({
       revisionNumber: 1,
       canApprove: true,
@@ -100,7 +119,7 @@ describe("AI conversations", () => {
       expect.objectContaining({
         provider: "openai",
         model: "test-model",
-        apiKey: "request-only-provider-secret"
+        apiKey: "saved-conversation-provider-secret"
       })
     );
     const persisted = await Promise.all([
@@ -111,8 +130,32 @@ describe("AI conversations", () => {
       db.query("SELECT * FROM ai_plan_approvals")
     ]);
     expect(JSON.stringify(persisted.map((result) => result.rows))).not.toContain(
-      "request-only-provider-secret"
+      "saved-conversation-provider-secret"
     );
+  });
+
+  it("fails closed when planning is disabled", async () => {
+    const conversationId = (await createConversation()).body.data.id;
+    app.locals.config.aiPlannerEnabled = false;
+    const run = await runConversation(conversationId);
+    expect(run.status).toBe(503);
+    expect(run.body.error.code).toBe("AI_PLANNER_DISABLED");
+    expect(planner.preview).not.toHaveBeenCalled();
+  });
+
+  it("records missing credentials as a failed run without creating work", async () => {
+    const conversationId = (await createConversation()).body.data.id;
+    await db.query("DELETE FROM ai_provider_credentials WHERE user_id = $1", [owner.user.id]);
+    const run = await runConversation(conversationId);
+    expect(run.status).toBe(409);
+    expect(planner.preview).not.toHaveBeenCalled();
+    const runs = await db.query(
+      "SELECT status FROM ai_conversation_runs WHERE conversation_id = $1",
+      [conversationId]
+    );
+    expect(runs.rows[0].status).toBe("failed");
+    const tasks = await db.query("SELECT id FROM tasks WHERE project_id = $1", [project.id]);
+    expect(tasks.rows).toHaveLength(0);
   });
 
   it("supersedes earlier revisions and only allows the latest proposal to apply", async () => {

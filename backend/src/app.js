@@ -9,10 +9,12 @@ const { AppError } = require("./lib/errors");
 const { createGithubServices } = require("./lib/githubClient");
 const { createInvitationMailer } = require("./lib/invitationMailer");
 const { createAiPlanner } = require("./lib/aiPlanner");
+const { createAiCredentialValidator } = require("./lib/aiCredentialValidator");
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 const { requestLogger } = require("./middleware/requestLogger");
 const { createRateLimiter, requireTrustedOrigin } = require("./middleware/requestSecurity");
 const activityRoutes = require("./routes/activityRoutes");
+const aiCredentialRoutes = require("./routes/aiCredentialRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const authRoutes = require("./routes/authRoutes");
 const githubIntegrationRoutes = require("./routes/githubIntegrationRoutes");
@@ -37,7 +39,8 @@ const createApp = ({
   config = loadConfig(),
   github,
   invitationMailer,
-  aiPlanner
+  aiPlanner,
+  aiCredentialValidator
 } = {}) => {
   const app = express();
   app.locals.db = db;
@@ -45,6 +48,7 @@ const createApp = ({
   app.locals.github = github === undefined ? createGithubServices(config) : github;
   app.locals.invitationMailer = invitationMailer || createInvitationMailer(config);
   app.locals.aiPlanner = aiPlanner || createAiPlanner(config);
+  app.locals.aiCredentialValidator = aiCredentialValidator || createAiCredentialValidator(config);
 
   if (config.trustProxy) {
     app.set("trust proxy", 1);
@@ -124,11 +128,13 @@ const createApp = ({
   app.use("/api/admin/platform-owner/transfer", ownershipTransferLimiter);
   app.use("/api/github/installations", expensiveActionLimiter);
   app.use("/api/github/webhook-deliveries", expensiveActionLimiter);
+  app.use("/api/ai/credentials/validate", expensiveActionLimiter);
   app.use("/api/projects/:id/ai-plan", expensiveActionLimiter);
   app.use("/api/projects/:id/ai-conversations/:conversationId/runs", expensiveActionLimiter);
   app.use("/api/auth/refresh", requireTrustedOrigin);
   app.use("/api/auth/logout", requireTrustedOrigin);
   app.use("/api/auth", authRoutes);
+  app.use("/api/ai/credentials", aiCredentialRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/github", githubIntegrationRoutes);
   app.use("/api/invitations", invitationRoutes);

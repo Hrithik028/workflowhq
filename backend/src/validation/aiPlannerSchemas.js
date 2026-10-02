@@ -69,7 +69,6 @@ const aiPlannerSchemas = {
   preview: z
     .object({
       provider: z.enum(["openai", "anthropic", "google"]),
-      apiKey: z.string().trim().min(10).max(500),
       model: z.string().trim().min(1).max(120),
       goal: z.string().trim().min(10).max(5000),
       context: z.string().trim().max(10000).default(""),
@@ -122,7 +121,6 @@ const aiConversationSchemas = {
     .strict(),
   run: z
     .object({
-      apiKey: z.string().trim().min(10).max(500),
       goal: z.string().trim().min(10).max(5000),
       context: z.string().trim().max(10000).default(""),
       maxItems: z.coerce.number().int().min(1).max(30).default(12),
