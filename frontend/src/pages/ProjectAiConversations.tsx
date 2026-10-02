@@ -408,7 +408,10 @@ function ProjectAiConversations() {
                       </div>
                       <b>{proposal.state}</b>
                     </header>
-                    <ProposalDiff diff={proposal.diff} />
+                    <details className="ai-revision-comparison">
+                      <summary>Changes from the previous revision</summary>
+                      <ProposalDiff diff={proposal.diff} />
+                    </details>
                     {proposal.plan && "actions" in proposal.plan ? (
                       <AiActionReview plan={proposal.plan} />
                     ) : proposal.plan ? (
@@ -418,6 +421,12 @@ function ProjectAiConversations() {
                             <span>{task.taskType}</span>
                             <strong>{task.title}</strong>
                             <small>{task.acceptanceCriteria.length} acceptance criteria</small>
+                            <p className="ai-ticket-description">{task.description}</p>
+                            <ul>
+                              {task.acceptanceCriteria.map((criterion, index) => (
+                                <li key={index}>{criterion}</li>
+                              ))}
+                            </ul>
                           </div>
                         ))}
                       </div>
@@ -439,9 +448,9 @@ function ProjectAiConversations() {
                         <Clock3 size={14} /> Approval expires {readableTime(proposal.expiresAt)}
                       </span>
                       {proposal.canApprove && canEdit ? (
-                        <div>
+                        <div className="ai-approval-controls">
                           {proposal.plan && "actions" in proposal.plan ? (
-                            <label>
+                            <label className="ai-approval-confirmation">
                               <input
                                 type="checkbox"
                                 checked={confirmedProposal === proposal.id}
@@ -452,34 +461,40 @@ function ProjectAiConversations() {
                               I reviewed all actions and approve these changes
                             </label>
                           ) : null}
-                          <button
-                            className="button secondary danger"
-                            disabled={busy !== null}
-                            type="button"
-                            onClick={() => void discard()}
-                          >
-                            <Trash2 size={15} /> {busy === "discard" ? "Discarding…" : "Discard"}
-                          </button>
-                          <button
-                            className="button primary"
-                            disabled={
-                              busy !== null ||
-                              Boolean(
-                                proposal.plan &&
-                                "actions" in proposal.plan &&
-                                confirmedProposal !== proposal.id
-                              )
-                            }
-                            type="button"
-                            onClick={() => void approve()}
-                          >
-                            <Check size={15} />{" "}
-                            {busy === "approve"
-                              ? "Applying…"
-                              : proposal.plan && "actions" in proposal.plan
-                                ? "Approve and apply actions"
-                                : "Approve and create"}
-                          </button>
+                          <p className="ai-approval-help">
+                            Apply this revision only after reviewing it. Approval changes the
+                            project; generating a proposal does not.
+                          </p>
+                          <div className="ai-approval-buttons">
+                            <button
+                              className="button secondary danger"
+                              disabled={busy !== null}
+                              type="button"
+                              onClick={() => void discard()}
+                            >
+                              <Trash2 size={15} /> {busy === "discard" ? "Discarding…" : "Discard"}
+                            </button>
+                            <button
+                              className="button primary"
+                              disabled={
+                                busy !== null ||
+                                Boolean(
+                                  proposal.plan &&
+                                  "actions" in proposal.plan &&
+                                  confirmedProposal !== proposal.id
+                                )
+                              }
+                              type="button"
+                              onClick={() => void approve()}
+                            >
+                              <Check size={15} />{" "}
+                              {busy === "approve"
+                                ? "Applying…"
+                                : proposal.plan && "actions" in proposal.plan
+                                  ? "Approve and apply actions"
+                                  : "Approve and create"}
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </footer>
