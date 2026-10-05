@@ -30,7 +30,7 @@ function ForgotPassword() {
     <AuthLayout
       eyebrow="Account recovery"
       title="Reset your password"
-      copy="Request a secure, single-use reset link for your WorkflowHQ account."
+      copy="Request a secure, single-use reset link for your WorkFlowHQ account."
     >
       {sent ? (
         <section className="auth-confirmation" aria-live="polite">

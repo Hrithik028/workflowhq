@@ -46,7 +46,7 @@ function VerifyEmail() {
     <AuthLayout
       eyebrow="Email verification"
       title={state === "verified" ? "Email verified" : "Verify your account"}
-      copy="WorkflowHQ verifies account ownership before allowing access."
+      copy="WorkFlowHQ verifies account ownership before allowing access."
     >
       <section className="auth-confirmation" aria-live="polite">
         {state === "checking" ? <p>Checking your verification link…</p> : null}
