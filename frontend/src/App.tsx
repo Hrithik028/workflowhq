@@ -3,11 +3,13 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { authApi } from "./api/auth";
 import AppLayout from "./components/AppLayout";
+import { PublicGlowContext } from "./public-glow-context";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Calendar from "./pages/Calendar";
 import ArchivePage from "./pages/ArchivePage";
 import { demoCredentials } from "./demo/credentials";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Overview from "./pages/OverviewEngineering";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
@@ -17,7 +19,6 @@ import GitHubIntegration from "./pages/GitHubIntegration";
 import AiIntegrations from "./pages/AiIntegrations";
 import InvitationPage from "./pages/InvitationPage";
 import JiraImport from "./pages/JiraImport";
-import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import SecuritySettings from "./pages/SecuritySettings";
@@ -33,7 +34,7 @@ import type { Session, User } from "./types";
 
 const demoUser: User = {
   id: 1,
-  name: "WorkflowHQ Demo",
+  name: "WorkFlowHQ Demo",
   email: demoCredentials.email,
   role: "user",
   createdAt: new Date().toISOString()
@@ -73,72 +74,74 @@ function App() {
   const authenticated = Boolean(session);
 
   return (
-    <Routes>
-      <Route path="/" element={<Landing authenticated={authenticated} />} />
-      <Route
-        path="/login"
-        element={
-          authenticated ? (
-            <Navigate replace to="/app" />
-          ) : (
-            <Login onDemo={handleDemo} onSuccess={handleSession} />
-          )
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          authenticated ? (
-            <Navigate replace to="/app" />
-          ) : (
-            <Register onDemo={handleDemo} onSuccess={handleSession} />
-          )
-        }
-      />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/verify-email" element={<VerifyEmail />} />
-      <Route
-        element={
-          <ProtectedRoute isAuthenticated={authenticated} isChecking={isCheckingAuth}>
-            <AppLayout isDemo={isDemo} onLogout={handleLogout} user={session?.user ?? null} />
-          </ProtectedRoute>
-        }
-      >
-        <Route path="/app" element={<Overview />} />
-        <Route path="/workflow" element={<Workspace />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/projects/:id/development" element={<ProjectDevelopment />} />
-        <Route path="/projects/:id/jira-import" element={<JiraImport />} />
-        <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />
-        <Route path="/projects/:id/workflow-settings" element={<ProjectWorkflowSettings />} />
-        <Route path="/tasks" element={<Tasks />} />
-        <Route path="/tasks/:id" element={<TaskDetail />} />
-        <Route path="/calendar" element={<Calendar />} />
-        <Route path="/content" element={<Content />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/inbox" element={<Inbox />} />
-        <Route path="/archive" element={<ArchivePage />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/settings/ai-governance" element={<AiGovernance />} />
+    <PublicGlowContext.Provider value={!authenticated}>
+      <Routes>
+        <Route path="/" element={<Landing authenticated={authenticated} />} />
         <Route
-          path="/settings/security"
+          path="/login"
           element={
-            <SecuritySettings
-              onSignedOut={() => {
-                setIsDemo(false);
-                setSession(null);
-              }}
-            />
+            authenticated ? (
+              <Navigate replace to="/app" />
+            ) : (
+              <Login onDemo={handleDemo} onSuccess={handleSession} />
+            )
           }
         />
-        <Route path="/settings/integrations/github" element={<GitHubIntegration />} />
-        <Route path="/settings/integrations/ai" element={<AiIntegrations />} />
-        <Route path="/invitations/:token" element={<InvitationPage />} />
-      </Route>
-      <Route path="*" element={<Navigate replace to={authenticated ? "/app" : "/login"} />} />
-    </Routes>
+        <Route
+          path="/register"
+          element={
+            authenticated ? (
+              <Navigate replace to="/app" />
+            ) : (
+              <Register onDemo={handleDemo} onSuccess={handleSession} />
+            )
+          }
+        />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route
+          element={
+            <ProtectedRoute isAuthenticated={authenticated} isChecking={isCheckingAuth}>
+              <AppLayout isDemo={isDemo} onLogout={handleLogout} user={session?.user ?? null} />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/app" element={<Overview />} />
+          <Route path="/workflow" element={<Workspace />} />
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:id/development" element={<ProjectDevelopment />} />
+          <Route path="/projects/:id/jira-import" element={<JiraImport />} />
+          <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />
+          <Route path="/projects/:id/workflow-settings" element={<ProjectWorkflowSettings />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/tasks/:id" element={<TaskDetail />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/content" element={<Content />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/inbox" element={<Inbox />} />
+          <Route path="/archive" element={<ArchivePage />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/ai-governance" element={<AiGovernance />} />
+          <Route
+            path="/settings/security"
+            element={
+              <SecuritySettings
+                onSignedOut={() => {
+                  setIsDemo(false);
+                  setSession(null);
+                }}
+              />
+            }
+          />
+          <Route path="/settings/integrations/github" element={<GitHubIntegration />} />
+          <Route path="/settings/integrations/ai" element={<AiIntegrations />} />
+          <Route path="/invitations/:token" element={<InvitationPage />} />
+        </Route>
+        <Route path="*" element={<Navigate replace to={authenticated ? "/app" : "/login"} />} />
+      </Routes>
+    </PublicGlowContext.Provider>
   );
 }
 

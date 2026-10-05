@@ -15,6 +15,8 @@ import {
 import { Link, NavLink, Outlet } from "react-router-dom";
 
 import type { User } from "../types";
+import { ThemeToggle } from "../theme";
+import BrandMark from "./BrandMark";
 
 export interface LayoutContext {
   isDemo: boolean;
@@ -34,13 +36,12 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
     <div className="product-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span className="sidebar-wordmark brand-mark" aria-label="WorkflowHQ">
-            <b aria-hidden="true">W</b>
-            <b aria-hidden="true">HQ</b>
+          <span className="sidebar-wordmark brand-mark" aria-label="WorkFlowHQ">
+            <BrandMark width={25} height={25} />
           </span>
           <div>
-            <strong>WorkflowHQ</strong>
-            <span>Work management / 01</span>
+            <strong>WorkFlowHQ</strong>
+            <span>Work management</span>
           </div>
         </div>
 
@@ -91,6 +92,10 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
           </NavLink>
         </nav>
 
+        <div className="sidebar-theme-row">
+          <span>Appearance</span>
+          <ThemeToggle className="sidebar-theme-toggle" />
+        </div>
         <div className="sidebar-account">
           <span className="avatar">{user.name.charAt(0).toUpperCase()}</span>
           <div>

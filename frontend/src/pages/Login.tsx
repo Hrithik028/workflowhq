@@ -88,7 +88,7 @@ function Login({ onDemo, onSuccess, allowDemo = true, registerPath, successPath 
     <AuthLayout
       eyebrow="Welcome back"
       title="Sign in to your workspace"
-      copy="WorkflowHQ brings projects, tasks, deadlines, and delivery progress into one clear workspace."
+      copy="WorkFlowHQ brings projects, tasks, deadlines, and delivery progress into one clear workspace."
     >
       <form className="auth-form" onSubmit={handleSubmit}>
         <label>
@@ -200,7 +200,7 @@ function Login({ onDemo, onSuccess, allowDemo = true, registerPath, successPath 
       ) : null}
 
       <p className="auth-switch">
-        New to WorkflowHQ? <Link to={createAccountPath}>Create an account</Link>
+        New to WorkFlowHQ? <Link to={createAccountPath}>Create an account</Link>
       </p>
     </AuthLayout>
   );
