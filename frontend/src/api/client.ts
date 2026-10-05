@@ -1,6 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 import type { ApiErrorPayload, Session } from "../types";
+import { requestActivity } from "./requestActivity";
 
 let accessToken: string | null = null;
 let refreshRequest: Promise<Session> | null = null;
@@ -20,14 +21,26 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  (config as ActivityConfig)._finishActivity = requestActivity.begin();
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
   return config;
 });
 
+interface ActivityConfig extends InternalAxiosRequestConfig {
+  _finishActivity?: () => void;
+}
+
+const finishActivity = (config?: InternalAxiosRequestConfig) => {
+  const activityConfig = config as ActivityConfig | undefined;
+  activityConfig?._finishActivity?.();
+  if (activityConfig) delete activityConfig._finishActivity;
+};
+
 const requestRefresh = async () => {
   if (!refreshRequest) {
+    const finish = requestActivity.begin();
     refreshRequest = axios
       .post<{ data: Session }>(
         `${api.defaults.baseURL}/auth/refresh`,
@@ -39,6 +52,7 @@ const requestRefresh = async () => {
         return response.data.data;
       })
       .finally(() => {
+        finish();
         refreshRequest = null;
       });
   }
@@ -50,8 +64,12 @@ interface RetryConfig extends InternalAxiosRequestConfig {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    finishActivity(response.config);
+    return response;
+  },
   async (error: AxiosError) => {
+    finishActivity(error.config);
     const original = error.config as RetryConfig | undefined;
     const isAuthRoute = original?.url?.includes("/auth/");
     if (error.response?.status === 401 && original && !original._retry && !isAuthRoute) {
