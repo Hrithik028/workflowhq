@@ -22,6 +22,12 @@ const testConfig = {
   expensiveActionRateLimit: 20,
   webhookRateLimit: 600,
   aiPlannerEnabled: false,
+  aiDailyRunsMax: 100,
+  aiPromptCharactersMax: 50000,
+  aiOutputTokensMax: 10000,
+  aiProposedActionsMax: 50,
+  aiTimeoutMsMax: 60000,
+  aiUsageRetentionDaysMax: 90,
   aiPlannerTimeoutMs: 30000,
   aiPlanApprovalTtlMinutes: 15,
   aiConversationRetentionDays: 15,
@@ -64,6 +70,13 @@ const buildTestApp = async ({
       .replaceAll("TIMESTAMPTZ", "TIMESTAMP");
     await db.query(sql);
   }
+
+  // Test-only allowlists keep mock models subject to the same mandatory boundary.
+  await db.query("UPDATE ai_governance_settings SET provider_policies = $1::jsonb", [
+    JSON.stringify(["openai", "anthropic", "google"].map((provider) => ({
+      provider, enabled: true, allowedModels: ["test-model"], defaultModel: "test-model"
+    })))
+  ]);
 
   return {
     app: createApp({

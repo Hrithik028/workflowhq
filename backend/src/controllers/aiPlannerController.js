@@ -90,6 +90,7 @@ const previewAiPlan = async (req, res) => {
   );
   const plan = await req.app.locals.aiPlanner.preview({
     ...req.body,
+    governanceUserId: req.user.id,
     apiKey,
     project: { id: Number(project.id), name: project.name, description: project.description },
     projectContext

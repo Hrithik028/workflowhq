@@ -12,6 +12,7 @@ import Overview from "./pages/OverviewEngineering";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
 import Settings from "./pages/SettingsAdmin";
+import AiGovernance from "./pages/AiGovernance";
 import GitHubIntegration from "./pages/GitHubIntegration";
 import AiIntegrations from "./pages/AiIntegrations";
 import InvitationPage from "./pages/InvitationPage";
@@ -126,6 +127,7 @@ function App() {
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/archive" element={<ArchivePage />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/ai-governance" element={<AiGovernance />} />
         <Route
           path="/settings/security"
           element={

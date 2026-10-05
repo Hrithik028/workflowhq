@@ -26,7 +26,7 @@ the release gate before the next phase is merged.
 5. Record auditable summaries without retaining raw provider payloads or secrets.
 6. Add migrations rather than editing an applied migration.
 7. Add backend authorization tests, frontend interaction tests, and a production smoke plan.
-8. Keep each phase behind a disabled-by-default capability flag until its release gate passes.
+8. Keep optional capabilities behind release gates; AI governance is mandatory whenever AI is available and cannot be switched off.
 
 ## LLM provider boundary
 

@@ -1,6 +1,8 @@
 import { api } from "./client";
 import type {
   AdminAuditEntry,
+  AiGovernanceSnapshot,
+  AiGovernanceUpdate,
   AdminOverview,
   AdminUser,
   PermissionKey,
@@ -63,6 +65,16 @@ export const adminApi = {
         sessionsInvalidated: boolean;
       };
     }>("/admin/platform-owner/transfer", { targetUserId, password });
+    return response.data.data;
+  },
+
+  async getAiGovernance(): Promise<AiGovernanceSnapshot> {
+    const response = await api.get<{ data: AiGovernanceSnapshot }>("/admin/ai-governance");
+    return response.data.data;
+  },
+
+  async updateAiGovernance(input: AiGovernanceUpdate): Promise<AiGovernanceSnapshot> {
+    const response = await api.put<{ data: AiGovernanceSnapshot }>("/admin/ai-governance", input);
     return response.data.data;
   }
 };

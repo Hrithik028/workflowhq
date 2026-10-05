@@ -9,6 +9,7 @@ const { AppError } = require("./lib/errors");
 const { createGithubServices } = require("./lib/githubClient");
 const { createInvitationMailer } = require("./lib/invitationMailer");
 const { createAiPlanner } = require("./lib/aiPlanner");
+const { createGovernedAiPlanner } = require("./lib/governedAiPlanner");
 const { createAiCredentialValidator } = require("./lib/aiCredentialValidator");
 const { errorHandler, notFound } = require("./middleware/errorMiddleware");
 const { requestLogger } = require("./middleware/requestLogger");
@@ -47,7 +48,11 @@ const createApp = ({
   app.locals.config = config;
   app.locals.github = github === undefined ? createGithubServices(config) : github;
   app.locals.invitationMailer = invitationMailer || createInvitationMailer(config);
-  app.locals.aiPlanner = aiPlanner || createAiPlanner(config);
+  app.locals.aiPlanner = createGovernedAiPlanner({
+    db,
+    config,
+    planner: aiPlanner || createAiPlanner(config)
+  });
   app.locals.aiCredentialValidator = aiCredentialValidator || createAiCredentialValidator(config);
 
   if (config.trustProxy) {

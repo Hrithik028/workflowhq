@@ -52,9 +52,22 @@ describe("AI planner provider adapters", () => {
       .mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
     const planner = createAiPlanner({ aiPlannerEnabled: true, aiPlannerTimeoutMs: 1000 });
 
-    await expect(planner.preview({ ...input, provider })).resolves.toEqual(taskPlan);
+    await expect(
+      planner.preview({
+        ...input,
+        provider,
+        runtimeLimits: { maxOutputTokens: 1200, requestTimeoutMs: 500 }
+      })
+    ).resolves.toEqual(taskPlan);
     expect(fetchMock).toHaveBeenCalledWith(url, expect.objectContaining({ method: "POST" }));
     const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(
+      provider === "openai"
+        ? sent.max_output_tokens
+        : provider === "google"
+          ? sent.generationConfig.maxOutputTokens
+          : sent.max_tokens
+    ).toBe(1200);
     const schema =
       provider === "openai"
         ? sent.text.format.schema

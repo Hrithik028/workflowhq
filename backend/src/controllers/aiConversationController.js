@@ -280,6 +280,7 @@ const runConversation = async (req, res) => {
       req.app.locals.config
     );
     plan = await req.app.locals.aiPlanner.preview({
+      governanceUserId: req.user.id,
       provider: conversation.provider,
       model: conversation.model,
       apiKey,
