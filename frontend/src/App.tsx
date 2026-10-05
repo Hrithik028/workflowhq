@@ -16,6 +16,8 @@ import AiGovernance from "./pages/AiGovernance";
 import GitHubIntegration from "./pages/GitHubIntegration";
 import AiIntegrations from "./pages/AiIntegrations";
 import InvitationPage from "./pages/InvitationPage";
+import JiraImport from "./pages/JiraImport";
+import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import SecuritySettings from "./pages/SecuritySettings";
@@ -72,16 +74,7 @@ function App() {
 
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          authenticated ? (
-            <Navigate replace to="/app" />
-          ) : (
-            <Login onDemo={handleDemo} onSuccess={handleSession} />
-          )
-        }
-      />
+      <Route path="/" element={<Landing authenticated={authenticated} />} />
       <Route
         path="/login"
         element={
@@ -116,6 +109,7 @@ function App() {
         <Route path="/workflow" element={<Workspace />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id/development" element={<ProjectDevelopment />} />
+        <Route path="/projects/:id/jira-import" element={<JiraImport />} />
         <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />
         <Route path="/projects/:id/workflow-settings" element={<ProjectWorkflowSettings />} />
         <Route path="/tasks" element={<Tasks />} />

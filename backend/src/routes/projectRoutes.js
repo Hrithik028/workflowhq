@@ -38,6 +38,7 @@ const {
   getProjectWorkflow,
   updateProjectWorkflow
 } = require("../controllers/projectWorkflowController");
+const { applyJiraImport, previewJiraImport } = require("../controllers/jiraImportController");
 const {
   createSprint,
   deleteSprint,
@@ -57,6 +58,7 @@ const {
   workflowSchemas
 } = require("../validation/schemas");
 const { aiConversationSchemas, aiPlannerSchemas } = require("../validation/aiPlannerSchemas");
+const { jiraImportSchemas } = require("../validation/jiraImportSchemas");
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -69,6 +71,18 @@ router.post(
   asyncHandler(createProject)
 );
 router.get("/:id", validate({ params: projectSchemas.params }), asyncHandler(getProjectById));
+router.post(
+  "/:id/jira-import/preview",
+  asyncHandler(requirePermission("tasks.create")),
+  validate({ params: jiraImportSchemas.params, body: jiraImportSchemas.preview }),
+  asyncHandler(previewJiraImport)
+);
+router.post(
+  "/:id/jira-import/apply",
+  asyncHandler(requirePermission("tasks.create")),
+  validate({ params: jiraImportSchemas.params, body: jiraImportSchemas.apply }),
+  asyncHandler(applyJiraImport)
+);
 router.get(
   "/:id/ai-conversations",
   validate({ params: aiConversationSchemas.params }),

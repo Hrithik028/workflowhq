@@ -9,6 +9,134 @@
   --editorial-muted: #302e2a;
 }
 
+.landing-page {
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--carbon);
+}
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 2px solid var(--carbon);
+  padding: 22px clamp(20px, 5vw, 72px);
+}
+
+.landing-logo {
+  font: 900 1.8rem Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+}
+
+.landing-logo span,
+.landing-kicker {
+  color: var(--signal);
+}
+
+.landing-nav nav a,
+.landing-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.landing-nav nav a,
+.landing-kicker {
+  font: 700 0.8rem "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.landing-hero {
+  max-width: 1100px;
+  padding: clamp(72px, 11vw, 160px) clamp(20px, 5vw, 72px);
+}
+
+.landing-hero h1 {
+  max-width: 950px;
+  margin: 16px 0 22px;
+  font: 900 clamp(3.5rem, 9vw, 8rem)/0.93 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+}
+
+.landing-hero > p:not(.landing-kicker) {
+  max-width: 640px;
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.landing-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 2px solid var(--carbon);
+}
+
+.landing-features article {
+  min-height: 180px;
+  padding: 30px clamp(20px, 4vw, 56px);
+  border-right: 1px solid var(--carbon);
+}
+
+.landing-features article:last-child {
+  border-right: 0;
+}
+
+.jira-import-form,
+.jira-import-preview {
+  max-width: 850px;
+  border: 1px solid var(--carbon);
+  padding: 28px;
+  margin: 24px 0;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.jira-import-form label {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  font-weight: 700;
+}
+
+.jira-import-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.jira-import-issues {
+  max-height: 420px;
+  overflow: auto;
+  border-top: 1px solid var(--rule);
+  margin: 20px 0;
+}
+
+.jira-import-issues label {
+  display: flex;
+  gap: 15px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.jira-import-issues label > span {
+  display: grid;
+  gap: 4px;
+}
+
+.landing-features h2 {
+  margin: 18px 0 8px;
+}
+
+@media (max-width: 720px) {
+  .landing-features { grid-template-columns: 1fr; }
+  .landing-features article { border-right: 0; border-bottom: 1px solid var(--carbon); }
+}
+
 body {
   background: var(--paper);
 }

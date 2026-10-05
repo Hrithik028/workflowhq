@@ -1,4 +1,5 @@
 import {
+  ArrowUpRight,
   BarChart3,
   Archive,
   CalendarDays,
@@ -11,7 +12,7 @@ import {
   PieChart,
   Settings
 } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 
 import type { User } from "../types";
 
@@ -44,6 +45,10 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
         </div>
 
         <nav className="sidebar-nav" aria-label="Main navigation">
+          <Link aria-label="Back to landing page" to="/">
+            <ArrowUpRight size={18} strokeWidth={2} />
+            <span>Landing page</span>
+          </Link>
           <NavLink aria-label="Overview" to="/app">
             <LayoutDashboard size={18} strokeWidth={2} />
             <span>Overview</span>
