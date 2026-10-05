@@ -82,6 +82,9 @@ const createApp = ({
   app.use(helmet());
   app.use(cors(createCorsOptions(config.corsOrigins)));
   app.use("/api/github/webhooks", webhookLimiter, githubWebhookRoutes);
+  // CSV contents can expand when JSON escapes quotes and line breaks. Keep the
+  // larger parser scoped to the bounded Jira import endpoints only.
+  app.use("/api/projects/:id/jira-import", express.json({ limit: "250kb" }));
   app.use(express.json({ limit: "100kb" }));
 
   const authLimiter = rateLimit({

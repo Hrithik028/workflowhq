@@ -9,6 +9,49 @@
   --editorial-muted: #302e2a;
 }
 
+.jira-import-form,
+.jira-import-preview {
+  max-width: 850px;
+  border: 1px solid var(--carbon);
+  padding: 28px;
+  margin: 24px 0;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.jira-import-form label {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  font-weight: 700;
+}
+
+.jira-import-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.jira-import-issues {
+  max-height: 420px;
+  overflow: auto;
+  border-top: 1px solid var(--rule);
+  margin: 20px 0;
+}
+
+.jira-import-issues label {
+  display: flex;
+  gap: 15px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.jira-import-issues label > span {
+  display: grid;
+  gap: 4px;
+}
+
 body {
   background: var(--paper);
 }

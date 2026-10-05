@@ -1,0 +1,3 @@
+Issue key,Summary,Description,Issue Type,Status,Priority,Due Date
+DEMO-1,Verify Jira import,Local browser smoke test,Task,To Do,Medium,2026-11-01
+DEMO-2,Review imported work,Confirm mapping is stable,Bug,In Progress,High,

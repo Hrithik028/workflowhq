@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bot, FolderKanban, Github, PencilLine, Plus } from "lucide-react";
+import { ArrowUpRight, Bot, FileUp, FolderKanban, Github, PencilLine, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
@@ -177,6 +177,16 @@ function Projects() {
                         to={`/projects/${project.id}/ai-conversations`}
                       >
                         <Bot size={13} /> AI workspace
+                      </Link>
+                    </span>
+                  ) : null}
+                  {project.myRole === "owner" ? (
+                    <span className="project-register-tools">
+                      <Link
+                        className="project-register-development"
+                        to={`/projects/${project.id}/jira-import`}
+                      >
+                        <FileUp size={13} /> Jira import
                       </Link>
                     </span>
                   ) : null}

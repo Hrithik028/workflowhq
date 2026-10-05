@@ -1,4 +1,5 @@
 import {
+  ArrowUpRight,
   BarChart3,
   Archive,
   CalendarDays,
@@ -11,7 +12,7 @@ import {
   PieChart,
   Settings
 } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 
 import type { User } from "../types";
 import { ThemeToggle } from "../theme";
@@ -45,6 +46,10 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
         </div>
 
         <nav className="sidebar-nav" aria-label="Main navigation">
+          <Link aria-label="Back to landing page" to="/">
+            <ArrowUpRight size={18} strokeWidth={2} />
+            <span>Landing page</span>
+          </Link>
           <NavLink aria-label="Overview" to="/app">
             <LayoutDashboard size={18} strokeWidth={2} />
             <span>Overview</span>
@@ -87,7 +92,10 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
           </NavLink>
         </nav>
 
-        <div className="sidebar-theme-row"><span>Appearance</span><ThemeToggle className="sidebar-theme-toggle" /></div>
+        <div className="sidebar-theme-row">
+          <span>Appearance</span>
+          <ThemeToggle className="sidebar-theme-toggle" />
+        </div>
         <div className="sidebar-account">
           <span className="avatar">{user.name.charAt(0).toUpperCase()}</span>
           <div>

@@ -55,7 +55,7 @@ export default function FlowLines({ theme }: { theme: "light" | "dark" }) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const paths = svgRef.current?.querySelectorAll("path");
     if (!paths) return;
 
