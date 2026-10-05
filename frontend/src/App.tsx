@@ -3,11 +3,13 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { authApi } from "./api/auth";
 import AppLayout from "./components/AppLayout";
+import { PublicGlowContext } from "./public-glow-context";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Calendar from "./pages/Calendar";
 import ArchivePage from "./pages/ArchivePage";
 import { demoCredentials } from "./demo/credentials";
 import Login from "./pages/Login";
+import Landing from "./pages/Landing";
 import Overview from "./pages/OverviewEngineering";
 import Projects from "./pages/Projects";
 import Register from "./pages/Register";
@@ -31,7 +33,7 @@ import type { Session, User } from "./types";
 
 const demoUser: User = {
   id: 1,
-  name: "WorkflowHQ Demo",
+  name: "WorkFlowHQ Demo",
   email: demoCredentials.email,
   role: "user",
   createdAt: new Date().toISOString()
@@ -71,6 +73,7 @@ function App() {
   const authenticated = Boolean(session);
 
   return (
+    <PublicGlowContext.Provider value={!authenticated}>
     <Routes>
       <Route
         path="/"
@@ -78,7 +81,7 @@ function App() {
           authenticated ? (
             <Navigate replace to="/app" />
           ) : (
-            <Login onDemo={handleDemo} onSuccess={handleSession} />
+            <Landing />
           )
         }
       />
@@ -145,6 +148,7 @@ function App() {
       </Route>
       <Route path="*" element={<Navigate replace to={authenticated ? "/app" : "/login"} />} />
     </Routes>
+    </PublicGlowContext.Provider>
   );
 }
 
