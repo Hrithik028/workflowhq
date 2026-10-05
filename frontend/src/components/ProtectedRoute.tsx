@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { LoadingScreen } from "./LoadingExperience";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -10,13 +11,7 @@ interface ProtectedRouteProps {
 function ProtectedRoute({ children, isAuthenticated, isChecking }: ProtectedRouteProps) {
   const location = useLocation();
   if (isChecking) {
-    return (
-      <main className="loading-screen">
-        <span className="brand-mark">W</span>
-        <span className="loading-dot" />
-        <p>Restoring your workspace…</p>
-      </main>
-    );
+    return <LoadingScreen message="Restoring your workspace" />;
   }
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}`;

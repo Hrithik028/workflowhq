@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { authApi } from "./api/auth";
 import AppLayout from "./components/AppLayout";
+import { LoadingExperience } from "./components/LoadingExperience";
 import { PublicGlowContext } from "./public-glow-context";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Calendar from "./pages/Calendar";
@@ -75,6 +76,7 @@ function App() {
 
   return (
     <PublicGlowContext.Provider value={!authenticated}>
+      <LoadingExperience disabled={isCheckingAuth} />
       <Routes>
         <Route path="/" element={<Landing authenticated={authenticated} />} />
         <Route

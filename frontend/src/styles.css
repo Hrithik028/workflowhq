@@ -2048,36 +2048,6 @@ p {
   background: var(--accent);
 }
 
-.loading-screen {
-  display: grid;
-  min-height: 100vh;
-  place-items: center;
-  align-content: center;
-  gap: 12px;
-  background: var(--canvas);
-  color: #303844;
-  font-size: 0.8rem;
-}
-
-.loading-screen p {
-  margin: 0;
-}
-
-.loading-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 850ms infinite alternate;
-}
-
-@keyframes pulse {
-  to {
-    opacity: 0.25;
-    transform: scale(1.8);
-  }
-}
-
 @media (max-width: 1120px) {
   .auth-page {
     grid-template-columns: minmax(500px, 1fr) minmax(430px, 0.9fr);
