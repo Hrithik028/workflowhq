@@ -5,6 +5,10 @@ import type { ApiErrorPayload, Session } from "../types";
 let accessToken: string | null = null;
 let refreshRequest: Promise<Session> | null = null;
 
+// Generation can use the server's 60-second provider limit plus context/database work.
+// Keep ordinary API calls short; never retry paid generation on a timeout.
+export const AI_GENERATION_TIMEOUT_MS = 90_000;
+
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
 };

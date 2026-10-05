@@ -132,6 +132,7 @@ function ProjectAiConversations() {
     event.preventDefault();
     setBusy("create");
     setError("");
+    setNotice("");
     try {
       const created = await aiConversationsApi.create(projectId, { title, provider, model });
       setTitle("");
@@ -181,6 +182,7 @@ function ProjectAiConversations() {
     if (!proposal?.approvalId || !proposal.plan) return;
     setBusy("approve");
     setError("");
+    setNotice("");
     try {
       if ("actions" in proposal.plan) {
         if (confirmedProposal !== proposal.id) return;
@@ -212,6 +214,7 @@ function ProjectAiConversations() {
     if (!proposal) return;
     setBusy("discard");
     setError("");
+    setNotice("");
     try {
       await aiConversationsApi.discard(projectId, selectedId, proposal.id);
       await loadDetail();
@@ -301,7 +304,12 @@ function ProjectAiConversations() {
               className={conversation.id === selectedId ? "active" : ""}
               key={conversation.id}
               type="button"
-              onClick={() => setSelectedId(conversation.id)}
+              onClick={() => {
+                setSelectedId(conversation.id);
+                setError("");
+                setNotice("");
+                setConfirmedProposal("");
+              }}
             >
               <strong>{conversation.title}</strong>
               <span>
@@ -413,7 +421,11 @@ function ProjectAiConversations() {
                       <ProposalDiff diff={proposal.diff} />
                     </details>
                     {proposal.plan && "actions" in proposal.plan ? (
-                      <AiActionReview plan={proposal.plan} />
+                      <AiActionReview
+                        plan={proposal.plan}
+                        state={proposal.state}
+                        expired={proposal.expired}
+                      />
                     ) : proposal.plan ? (
                       <div className="ai-proposal-tasks">
                         {proposal.plan.tasks.map((task) => (

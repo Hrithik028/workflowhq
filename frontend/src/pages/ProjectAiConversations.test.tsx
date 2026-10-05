@@ -113,6 +113,30 @@ const detail = {
 };
 
 describe("Project AI conversation workspace", () => {
+  it("clears an obsolete generation success notice when approval fails", async () => {
+    const user = userEvent.setup();
+    mocks.run.mockResolvedValue(detail.proposals[0]);
+    mocks.apply.mockRejectedValueOnce(new Error("Ticket changed; generate a new preview."));
+    render(
+      <MemoryRouter initialEntries={["/projects/4/ai-conversations"]}>
+        <Routes>
+          <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await screen.findByRole("textbox", { name: "Planning goal" });
+    await user.type(
+      screen.getByRole("textbox", { name: "Planning goal" }),
+      "Create a reviewable plan"
+    );
+    await user.click(screen.getByRole("button", { name: "Generate revision" }));
+    await screen.findByText("A new proposal revision is ready for review.");
+    await user.click(screen.getByRole("button", { name: /approve and create/i }));
+    await screen.findByText("Ticket changed; generate a new preview.");
+    expect(
+      screen.queryByText("A new proposal revision is ready for review.")
+    ).not.toBeInTheDocument();
+  });
   it("uses creation-only by default and sends action mode only when explicitly selected", async () => {
     const user = userEvent.setup();
     mocks.run.mockResolvedValue(detail.proposals[1]);

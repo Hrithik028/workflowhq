@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, AI_GENERATION_TIMEOUT_MS } from "./client";
 import type {
   AiActionExecution,
   AiActionPlan,
@@ -30,7 +30,8 @@ export const aiPlannerApi = {
   async preview(projectId: number, input: AiPlanPreviewInput): Promise<AiPlanPreview> {
     const response = await api.post<{ data: AiPlanPreview }>(
       `/projects/${projectId}/ai-plan/preview`,
-      input
+      input,
+      { timeout: AI_GENERATION_TIMEOUT_MS }
     );
     return response.data.data;
   },

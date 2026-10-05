@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, AI_GENERATION_TIMEOUT_MS } from "./client";
 import type {
   AiConversation,
   AiConversationDetail,
@@ -47,7 +47,8 @@ export const aiConversationsApi = {
   ): Promise<AiProposalRevision> {
     const response = await api.post<{ data: { proposal: AiProposalRevision } }>(
       `/projects/${projectId}/ai-conversations/${conversationId}/runs`,
-      input
+      input,
+      { timeout: AI_GENERATION_TIMEOUT_MS }
     );
     return response.data.data.proposal;
   },
