@@ -66,7 +66,8 @@ function EngineeringCard({
   const progress = visibleProgressFor(task, isDemo);
   return (
     <article
-      className="engineering-card"
+      className={`engineering-card${busy ? " is-saving" : ""}`}
+      aria-busy={busy}
       aria-label={task.issueKey}
       draggable={canMove && !busy}
       onDragStart={(event) => onDragStart(event, task)}
@@ -94,7 +95,7 @@ function EngineeringCard({
         </footer>
       </Link>
       <label className="engineering-card-move">
-        <span>Move to</span>
+        <span>{busy ? "Saving…" : "Move to"}</span>
         <select
           aria-label={`Move ${task.issueKey} to`}
           value={stageFor(task)}
@@ -128,12 +129,12 @@ function WorkspaceEngineering() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState("");
   const [sprints, setSprints] = useState<Sprint[]>([]);
-  const [movingId, setMovingId] = useState<number | null>(null);
+  const [movingIds, setMovingIds] = useState<Set<number>>(new Set());
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dropStage, setDropStage] = useState<BoardStage | null>(null);
   const [notice, setNotice] = useState("");
   const [initialStatus, setInitialStatus] = useState<TaskStatus>("todo");
-  const moving = useRef(false);
+  const moving = useRef(new Map<number, TaskStatus>());
   const loadVersion = useRef(0);
   const dragId = useRef<number | null>(null);
   const invalidateLoad = useCallback(() => {
@@ -155,38 +156,54 @@ function WorkspaceEngineering() {
   const [newSprintEnd, setNewSprintEnd] = useState("");
   const [isSprintBusy, setIsSprintBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    const version = ++loadVersion.current;
-    setIsLoading(true);
-    try {
-      const query = {
-        limit: 100,
-        search: search || undefined,
-        projectId: projectId ? Number(projectId) : undefined,
-        sort: "updated_at" as const,
-        order: "desc" as const
-      };
-      const [taskResult, projectResult] = await Promise.all([
-        client.listTasks(query),
-        client.listProjects()
-      ]);
-      const allTasks = [...taskResult.data];
-      for (let page = 2; page <= taskResult.pagination.pages; page++) {
+  const load = useCallback(
+    async (background = false) => {
+      const version = ++loadVersion.current;
+      if (!background) setIsLoading(true);
+      try {
+        const query = {
+          limit: 100,
+          search: search || undefined,
+          projectId: projectId ? Number(projectId) : undefined,
+          sort: "updated_at" as const,
+          order: "desc" as const
+        };
+        const [taskResult, projectResult] = await Promise.all([
+          client.listTasks(query),
+          client.listProjects()
+        ]);
+        const allTasks = [...taskResult.data];
+        for (let page = 2; page <= taskResult.pagination.pages; page++) {
+          if (version !== loadVersion.current) return;
+          const result = await client.listTasks({ ...query, page });
+          allTasks.push(...result.data);
+        }
         if (version !== loadVersion.current) return;
-        const result = await client.listTasks({ ...query, page });
-        allTasks.push(...result.data);
+        setTasks((current) => {
+          const positions = new Map(current.map((task, index) => [task.id, index]));
+          const refreshed = Array.from(
+            new Map(allTasks.map((task) => [task.id, task])).values()
+          ).map((task) =>
+            moving.current.has(task.id) ? { ...task, status: moving.current.get(task.id)! } : task
+          );
+          // Keep the visual order stable during reconciliation, not updated_at order.
+          return background
+            ? refreshed.sort(
+                (a, b) => (positions.get(a.id) ?? Infinity) - (positions.get(b.id) ?? Infinity)
+              )
+            : refreshed;
+        });
+        setProjects(projectResult);
+        if (!background) setError("");
+      } catch (loadError) {
+        if (version === loadVersion.current)
+          setError(getErrorMessage(loadError, "Unable to load the engineering board."));
+      } finally {
+        if (version === loadVersion.current) setIsLoading(false);
       }
-      if (version !== loadVersion.current) return;
-      setTasks(Array.from(new Map(allTasks.map((task) => [task.id, task])).values()));
-      setProjects(projectResult);
-      setError("");
-    } catch (loadError) {
-      if (version === loadVersion.current)
-        setError(getErrorMessage(loadError, "Unable to load the engineering board."));
-    } finally {
-      if (version === loadVersion.current) setIsLoading(false);
-    }
-  }, [client, projectId, search]);
+    },
+    [client, projectId, search]
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), search ? 180 : 0);
@@ -290,13 +307,18 @@ function WorkspaceEngineering() {
   };
 
   const moveTask = async (task: Task, stage: BoardStage) => {
-    if (moving.current || isLoading || !canMove(task) || stageFor(task) === stage) return;
-    moving.current = true;
-    setMovingId(task.id);
+    if (moving.current.has(task.id) || isLoading || !canMove(task) || stageFor(task) === stage)
+      return;
+    moving.current.set(task.id, statusForStage[stage]);
+    setMovingIds(new Set(moving.current.keys()));
     setError("");
     setNotice(`Moving ${task.issueKey}…`);
-    // Keep the existing card in place until the server accepts the change.
-    // Permissions and workspace rules are still enforced by the task API.
+    setTasks((current) =>
+      current.map((item) =>
+        item.id === task.id ? { ...item, status: statusForStage[stage] } : item
+      )
+    );
+    // Only presentation is optimistic; the server still enforces permissions/rules.
     try {
       const updated = await client.updateTask(task.id, {
         projectId: task.projectId,
@@ -315,15 +337,18 @@ function WorkspaceEngineering() {
       setNotice(
         `${task.issueKey} moved to ${stageMeta.find((item) => item.key === stage)!.label}.`
       );
-      await load();
     } catch (moveError) {
       setNotice("");
+      setTasks((current) =>
+        current.map((item) => (item.id === task.id ? { ...item, status: task.status } : item))
+      );
       setError(
         getErrorMessage(moveError, "Unable to confirm the move. Refresh the board before retrying.")
       );
     } finally {
-      moving.current = false;
-      setMovingId(null);
+      moving.current.delete(task.id);
+      setMovingIds(new Set(moving.current.keys()));
+      void load(true);
     }
   };
 
@@ -333,7 +358,7 @@ function WorkspaceEngineering() {
     setDropStage(null);
   };
   const startDrag = (event: DragEvent, task: Task) => {
-    if (!canMove(task) || moving.current || isLoading) {
+    if (!canMove(task) || moving.current.has(task.id) || isLoading) {
       event.preventDefault();
       return;
     }
@@ -343,7 +368,7 @@ function WorkspaceEngineering() {
     event.dataTransfer.setData("text/plain", task.issueKey);
   };
   const dragOver = (event: DragEvent, stage: BoardStage) => {
-    if (dragId.current == null || moving.current) return;
+    if (dragId.current == null || moving.current.has(dragId.current)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDropStage(stage);
@@ -390,7 +415,7 @@ function WorkspaceEngineering() {
             <>
               <select
                 aria-label="Select sprint"
-                disabled={movingId !== null}
+                disabled={movingIds.size > 0}
                 onChange={(event) => updateFilters({ sprint: event.target.value })}
                 value={sprintId}
               >
@@ -464,7 +489,7 @@ function WorkspaceEngineering() {
           <Search size={18} />
           <input
             aria-label="Search issues"
-            disabled={movingId !== null}
+            disabled={movingIds.size > 0}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="SEARCH ISSUES..."
             value={search}
@@ -472,7 +497,7 @@ function WorkspaceEngineering() {
         </label>
         <select
           aria-label="Select project"
-          disabled={movingId !== null}
+          disabled={movingIds.size > 0}
           onChange={(event) => {
             updateFilters({ project: event.target.value, sprint: null });
           }}
@@ -583,7 +608,7 @@ function WorkspaceEngineering() {
                           isDemo={isDemo}
                           task={item}
                           canMove={canMove(item)}
-                          busy={movingId !== null || isLoading}
+                          busy={movingIds.has(item.id) || isLoading}
                           onMove={(task, stage) => void moveTask(task, stage)}
                           onDragStart={startDrag}
                           onDragEnd={endDrag}

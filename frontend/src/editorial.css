@@ -4765,6 +4765,157 @@ html[data-motion="reduced"] *::after {
   box-shadow: 3px 3px 0 #111;
 }
 
+.engineering-card {
+  animation: ticket-arrival 180ms ease-out;
+}
+.engineering-card.is-saving {
+  border-color: var(--signal);
+  box-shadow: inset 3px 0 var(--signal);
+}
+.engineering-card.is-saving .engineering-card-move > span {
+  color: var(--signal);
+}
+@keyframes ticket-arrival {
+  from {
+    opacity: 0.65;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.delivery-flow {
+  margin: 24px 0;
+  padding: 24px;
+  border: 1px solid #77736c;
+  background: rgb(255 255 255 / 35%);
+}
+.delivery-flow h2 {
+  margin: 8px 0;
+  font-size: clamp(24px, 3vw, 38px);
+}
+.delivery-flow header p,
+.delivery-flow-note {
+  color: #57544e;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.delivery-flow-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.delivery-flow-stage {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #c6c0b5;
+  border-top: 4px solid;
+  padding: 20px;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 150ms,
+    box-shadow 150ms;
+}
+.delivery-flow-stage:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px #11111112;
+}
+.delivery-flow-stage:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+.delivery-flow-stage > span {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+.delivery-flow-stage > strong {
+  font-size: clamp(38px, 5vw, 70px);
+  line-height: 1;
+}
+.delivery-flow-stage small {
+  color: #57544e;
+}
+.delivery-flow-stage > b {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+.delivery-flow-track {
+  height: 7px;
+  background: #ded9cf;
+  overflow: hidden;
+}
+.delivery-flow-track i {
+  display: block;
+  height: 100%;
+  transition: width 220ms;
+}
+.delivery-insights-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.analytics-project-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.analytics-project-filter select {
+  padding: 12px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid #77736c;
+  max-width: 100%;
+}
+.delivery-trend svg {
+  display: block;
+  width: 100%;
+  min-height: 190px;
+}
+.delivery-trend circle:focus {
+  outline: none;
+  stroke: #111;
+  stroke-width: 3;
+}
+.delivery-trend details {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.delivery-trend summary {
+  cursor: pointer;
+}
+.delivery-trend table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+.delivery-trend th,
+.delivery-trend td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ded9cf;
+}
+@media (max-width: 750px) {
+  .delivery-flow-lanes,
+  .delivery-insights-grid {
+    grid-template-columns: 1fr;
+  }
+  .delivery-flow {
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .engineering-card {
+    animation: none;
+  }
+  .delivery-flow-stage,
+  .delivery-flow-track i {
+    transition: none;
+  }
+}
+
 .engineering-card-top,
 .engineering-card-signal,
 .engineering-card footer {
