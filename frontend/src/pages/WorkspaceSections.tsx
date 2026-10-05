@@ -7,12 +7,13 @@ import {
   Inbox as InboxIcon,
   Settings2
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import { CategoryBarChart, TrendBarChart } from "../components/AnalyticsCharts";
+import { DeliveryInsights } from "../components/DeliveryInsights";
 import type { LayoutContext } from "../components/AppLayout";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Activity, Project, Task, TaskStats } from "../types";
@@ -36,7 +37,7 @@ const emptyStats: TaskStats = {
 const statusChartColors = { todo: "#2a78d6", in_progress: "#eb6834", completed: "#1baf7a" };
 const priorityChartColors = { high: "#d03b3b", medium: "#fab219", low: "#0ca30c" };
 
-function useSectionData() {
+function useSectionData(projectId = "") {
   const { isDemo } = useOutletContext<LayoutContext>();
   const client = useMemo(() => (isDemo ? demoWorkspaceApi : workspaceApi), [isDemo]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -45,32 +46,59 @@ function useSectionData() {
   const [stats, setStats] = useState<TaskStats>(emptyStats);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const requestVersion = useRef(0);
+  const invalidateRequest = useCallback(() => {
+    requestVersion.current++;
+  }, []);
 
   const load = useCallback(async () => {
+    const version = ++requestVersion.current;
     setIsLoading(true);
     try {
       const [taskResult, projectResult, activityResult, statsResult] = await Promise.all([
-        client.listTasks({ limit: 100, sort: "updated_at", order: "desc" }),
+        client.listTasks({
+          limit: 100,
+          sort: "updated_at",
+          order: "desc",
+          projectId: projectId ? Number(projectId) : undefined
+        }),
         client.listProjects(),
         client.getActivity(10),
-        client.getStats()
+        client.getStats(projectId ? Number(projectId) : undefined)
       ]);
-      setTasks(taskResult.data);
+      const allTasks = [...taskResult.data];
+      for (let page = 2; page <= taskResult.pagination.pages; page++) {
+        if (version !== requestVersion.current) return;
+        const next = await client.listTasks({
+          limit: 100,
+          sort: "updated_at",
+          order: "desc",
+          projectId: projectId ? Number(projectId) : undefined,
+          page
+        });
+        allTasks.push(...next.data);
+      }
+      if (version !== requestVersion.current) return;
+      setTasks(Array.from(new Map(allTasks.map((task) => [task.id, task])).values()));
       setProjects(projectResult);
       setActivities(activityResult);
       setStats(statsResult);
       setError("");
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Unable to load this workspace section."));
+      if (version === requestVersion.current)
+        setError(getErrorMessage(loadError, "Unable to load this workspace section."));
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
-  }, [client]);
+  }, [client, projectId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
+    return () => {
+      window.clearTimeout(timer);
+      invalidateRequest();
+    };
+  }, [load, invalidateRequest]);
 
   return { activities, error, isLoading, projects, stats, tasks };
 }
@@ -184,111 +212,153 @@ export function Content() {
 }
 
 export function Analytics() {
-  const { error, isLoading, projects, stats } = useSectionData();
+  const [projectId, setProjectId] = useState("");
+  const { error, isLoading, projects, stats, tasks } = useSectionData(projectId);
+  const visibleProjects = projectId
+    ? projects.filter((project) => String(project.id) === projectId)
+    : projects;
   const completionRate = stats.totalTasks
     ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
     : 0;
 
   return (
-    <main className="workspace-page editorial-page section-dashboard analytics-section">
+    <main
+      className="workspace-page editorial-page section-dashboard analytics-section"
+      aria-busy={isLoading}
+    >
       <SectionHeader
         index="06"
         title="Delivery analytics."
         copy="A factual view of workload, completion, and project momentum."
-        action={<BarChart3 size={29} strokeWidth={1.5} />}
+        action={
+          <label className="analytics-project-filter">
+            <BarChart3 size={22} />
+            <span>Project</span>
+            <select
+              aria-label="Analytics project"
+              value={projectId}
+              onChange={(event) => setProjectId(event.target.value)}
+            >
+              <option value="">All projects</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
       />
       <SectionState error={error} isLoading={isLoading} />
 
-      <section className="section-stat-strip four" aria-label="Delivery analytics summary">
-        <article>
-          <span>Total tasks</span>
-          <strong>{stats.totalTasks}</strong>
-        </article>
-        <article>
-          <span>Completion</span>
-          <strong>{completionRate}%</strong>
-        </article>
-        <article>
-          <span>In motion</span>
-          <strong>{stats.inProgressTasks}</strong>
-        </article>
-        <article className="signal">
-          <span>Overdue</span>
-          <strong>{stats.overdueTasks}</strong>
-        </article>
-      </section>
+      {!isLoading && !error ? (
+        <DeliveryInsights stats={stats} tasks={tasks} projectId={projectId} />
+      ) : null}
 
-      <div className="analytics-charts-grid">
-        <CategoryBarChart
-          title="Status breakdown"
-          categories={[
-            { key: "todo", label: "Ready", value: stats.todoTasks, color: statusChartColors.todo },
-            {
-              key: "in_progress",
-              label: "In motion",
-              value: stats.inProgressTasks,
-              color: statusChartColors.in_progress
-            },
-            {
-              key: "completed",
-              label: "Shipped",
-              value: stats.completedTasks,
-              color: statusChartColors.completed
-            }
-          ]}
-        />
-        <CategoryBarChart
-          title="Priority breakdown"
-          categories={[
-            {
-              key: "high",
-              label: "High",
-              value: stats.highPriorityTasks,
-              color: priorityChartColors.high
-            },
-            {
-              key: "medium",
-              label: "Medium",
-              value: stats.mediumPriorityTasks,
-              color: priorityChartColors.medium
-            },
-            { key: "low", label: "Low", value: stats.lowPriorityTasks, color: priorityChartColors.low }
-          ]}
-        />
-        <TrendBarChart
-          caption="Tasks marked shipped each day, by last-updated date."
-          color="#ff4d00"
-          data={stats.dailyCompletions}
-          title="Completion trend (14 days)"
-        />
-      </div>
-
-      <section className="analytics-ledger">
-        <header>
-          <span>Project</span>
-          <span>Tasks</span>
-          <span>Shipped</span>
-          <span>Progress</span>
-        </header>
-        {projects.map((project) => {
-          const progress = project.taskCount
-            ? Math.round((project.completedCount / project.taskCount) * 100)
-            : 0;
-          return (
-            <article key={project.id}>
-              <strong>{project.name}</strong>
-              <span>{project.taskCount}</span>
-              <span>{project.completedCount}</span>
-              <div>
-                <b>{progress}%</b>
-                <div className="progress-track">
-                  <span style={{ width: `${progress}%` }} />
-                </div>
-              </div>
+      {!isLoading && !error ? (
+        <>
+          <section className="section-stat-strip four" aria-label="Delivery analytics summary">
+            <article>
+              <span>Total tasks</span>
+              <strong>{stats.totalTasks}</strong>
             </article>
-          );
-        })}
-      </section>
+            <article>
+              <span>Completion</span>
+              <strong>{completionRate}%</strong>
+            </article>
+            <article>
+              <span>In motion</span>
+              <strong>{stats.inProgressTasks}</strong>
+            </article>
+            <article className="signal">
+              <span>Overdue</span>
+              <strong>{stats.overdueTasks}</strong>
+            </article>
+          </section>
+
+          <div className="analytics-charts-grid">
+            <CategoryBarChart
+              title="Status breakdown"
+              categories={[
+                {
+                  key: "todo",
+                  label: "Ready",
+                  value: stats.todoTasks,
+                  color: statusChartColors.todo
+                },
+                {
+                  key: "in_progress",
+                  label: "In motion",
+                  value: stats.inProgressTasks,
+                  color: statusChartColors.in_progress
+                },
+                {
+                  key: "completed",
+                  label: "Shipped",
+                  value: stats.completedTasks,
+                  color: statusChartColors.completed
+                }
+              ]}
+            />
+            <CategoryBarChart
+              title="Priority breakdown"
+              categories={[
+                {
+                  key: "high",
+                  label: "High",
+                  value: stats.highPriorityTasks,
+                  color: priorityChartColors.high
+                },
+                {
+                  key: "medium",
+                  label: "Medium",
+                  value: stats.mediumPriorityTasks,
+                  color: priorityChartColors.medium
+                },
+                {
+                  key: "low",
+                  label: "Low",
+                  value: stats.lowPriorityTasks,
+                  color: priorityChartColors.low
+                }
+              ]}
+            />
+            <TrendBarChart
+              caption="Tasks marked shipped each day, by last-updated date."
+              color="#ff4d00"
+              data={stats.dailyCompletions}
+              title="Completed-issue update trend (14 days)"
+            />
+          </div>
+
+          <section className="analytics-ledger">
+            <header>
+              <span>Project</span>
+              <span>Tasks</span>
+              <span>Shipped</span>
+              <span>Progress</span>
+            </header>
+            {visibleProjects.map((project) => {
+              const progress = project.taskCount
+                ? Math.round((project.completedCount / project.taskCount) * 100)
+                : 0;
+              return (
+                <article key={project.id}>
+                  <strong>{project.name}</strong>
+                  <span>{project.taskCount}</span>
+                  <span>{project.completedCount}</span>
+                  <div>
+                    <b>{progress}%</b>
+                    <div className="progress-track">
+                      <span style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        </>
+      ) : null}
     </main>
   );
 }

@@ -163,7 +163,7 @@ describe("Engineering board lanes", () => {
       expect.objectContaining({ status: "in_progress" })
     );
   });
-  it("keeps the ticket in place on a server rejection and prevents overlapping saves", async () => {
+  it("moves immediately, locks only that ticket and rolls back a rejected save", async () => {
     let reject!: (reason: Error) => void;
     api.updateTask.mockReturnValue(
       new Promise((_resolve, rejectPromise) => {
@@ -173,16 +173,37 @@ describe("Engineering board lanes", () => {
     renderBoard();
     const select = await screen.findByRole("combobox", { name: "Move WHQ-2 to" });
     fireEvent.change(select, { target: { value: "released" } });
-    expect(select).toBeDisabled();
-    expect(select).toHaveValue("backlog");
-    fireEvent.change(screen.getByRole("combobox", { name: "Move WHQ-3 to" }), {
-      target: { value: "released" }
-    });
+    expect(screen.getByRole("combobox", { name: "Move WHQ-2 to" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Move WHQ-2 to" })).toHaveValue("released");
+    expect(screen.getByRole("combobox", { name: "Move WHQ-3 to" })).toBeEnabled();
     expect(api.updateTask).toHaveBeenCalledTimes(1);
     reject(new Error("You do not have permission to edit this task."));
     expect(await screen.findByRole("alert")).toHaveTextContent("You do not have permission");
-    expect(select).toHaveValue("backlog");
-    expect(select).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "Move WHQ-2 to" })).toHaveValue("backlog");
+    expect(screen.getByRole("combobox", { name: "Move WHQ-2 to" })).toBeEnabled();
+  });
+  it("allows independent moves without overwriting a pending optimistic status", async () => {
+    const resolvers = new Map<number, (task: Task) => void>();
+    api.updateTask.mockImplementation((id) => new Promise((resolve) => resolvers.set(id, resolve)));
+    renderBoard();
+    await screen.findByRole("article", { name: "WHQ-2" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Move WHQ-2 to" }), {
+      target: { value: "released" }
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Move WHQ-3 to" }), {
+      target: { value: "progress" }
+    });
+    expect(api.updateTask).toHaveBeenCalledTimes(2);
+    tasks = tasks.map((task) => (task.id === 2 ? { ...task, status: "completed" } : task));
+    resolvers.get(2)!(tasks.find((task) => task.id === 2)!);
+    await waitFor(() => expect(api.listTasks).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("combobox", { name: "Move WHQ-3 to" })).toHaveValue("progress");
+    expect(screen.getByRole("combobox", { name: "Move WHQ-3 to" })).toBeDisabled();
+    tasks = tasks.map((task) => (task.id === 3 ? { ...task, status: "in_progress" } : task));
+    resolvers.get(3)!(tasks.find((task) => task.id === 3)!);
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Move WHQ-3 to" })).toBeEnabled()
+    );
   });
   it("prevents project viewers from moving cards", async () => {
     api.listProjects.mockResolvedValue([{ id: 4, key: "WHQ", myRole: "viewer" }]);
