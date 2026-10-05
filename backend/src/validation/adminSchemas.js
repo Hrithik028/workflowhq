@@ -13,6 +13,22 @@ const permissions = z
   })
   .strict();
 
+const aiProviderPolicy = z
+  .object({
+    provider: z.enum(["openai", "anthropic", "google"]),
+    enabled: z.boolean(),
+    allowedModels: z.array(z.string().trim().min(1).max(120)).max(50),
+    defaultModel: z.string().trim().min(1).max(120).nullable()
+  })
+  .strict()
+  .refine(
+    (policy) => policy.defaultModel == null || policy.allowedModels.includes(policy.defaultModel),
+    {
+      message: "The default model must be included in the provider allowlist.",
+      path: ["defaultModel"]
+    }
+  );
+
 const adminSchemas = {
   userParams: z.object({ id: z.coerce.number().int().positive() }),
   userAccess: z
@@ -27,6 +43,21 @@ const adminSchemas = {
       password: z.string().min(8).max(200)
     })
     .strict(),
+  aiGovernance: z
+    .object({
+      providerPolicies: z.array(aiProviderPolicy).length(3),
+      dailyRunLimit: z.number().int().min(1).max(1000),
+      maxPromptCharacters: z.number().int().min(1000).max(100000),
+      maxOutputTokens: z.number().int().min(256).max(20000),
+      maxProposedActions: z.number().int().min(1).max(100),
+      requestTimeoutMs: z.number().int().min(5000).max(120000),
+      retentionDays: z.number().int().min(1).max(365)
+    })
+    .strict()
+    .refine(
+      (settings) => new Set(settings.providerPolicies.map((policy) => policy.provider)).size === 3,
+      { message: "Configure each supported provider exactly once.", path: ["providerPolicies"] }
+    ),
   rules: z
     .object({
       allow_task_deletion: z.boolean(),
