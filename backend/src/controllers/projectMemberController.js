@@ -1,5 +1,6 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
+const { notifyUser } = require("../lib/notifications");
 const { getProjectRole } = require("../lib/projectAccess");
 
 const countOwners = async (db, projectId) => {
@@ -87,6 +88,17 @@ const addMember = async (req, res, next) => {
         entityId: Number(req.params.id),
         entityTitle: target.email,
         details: { role: req.body.role, targetUserId: target.id }
+      });
+      const projectName = await client.query("SELECT name FROM projects WHERE id = $1", [
+        req.params.id
+      ]);
+      await notifyUser(client, {
+        userId: target.id,
+        actorId: req.user.id,
+        projectId: Number(req.params.id),
+        kind: "project_added",
+        title: "Added to a project",
+        body: `You now have access to ${projectName.rows[0].name}.`
       });
       await client.query("COMMIT");
     } catch (error) {

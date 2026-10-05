@@ -19,6 +19,7 @@ import GitHubIntegration from "./pages/GitHubIntegration";
 import AiIntegrations from "./pages/AiIntegrations";
 import InvitationPage from "./pages/InvitationPage";
 import JiraImport from "./pages/JiraImport";
+import Notifications from "./pages/Notifications";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import SecuritySettings from "./pages/SecuritySettings";
@@ -121,6 +122,7 @@ function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/inbox" element={<Inbox />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/archive" element={<ArchivePage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/ai-governance" element={<AiGovernance />} />

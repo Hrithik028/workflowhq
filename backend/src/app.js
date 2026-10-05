@@ -21,6 +21,7 @@ const authRoutes = require("./routes/authRoutes");
 const githubIntegrationRoutes = require("./routes/githubIntegrationRoutes");
 const githubWebhookRoutes = require("./routes/githubWebhookRoutes");
 const invitationRoutes = require("./routes/invitationRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 
@@ -146,6 +147,7 @@ const createApp = ({
   app.use("/api/admin", adminRoutes);
   app.use("/api/github", githubIntegrationRoutes);
   app.use("/api/invitations", invitationRoutes);
+  app.use("/api/notifications", notificationRoutes);
   app.use("/api/projects", projectRoutes);
   app.use("/api/tasks", taskRoutes);
   app.use("/api/activity", activityRoutes);
