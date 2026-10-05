@@ -1,6 +1,7 @@
 const { readCurrentAccess, readWorkspaceRules } = require("./accessControl");
 const { logActivity } = require("./activity");
 const { AppError } = require("./errors");
+const { notifyUser } = require("./notifications");
 const { canAccessTask, getProjectRole } = require("./projectAccess");
 
 const typeRank = {
@@ -252,6 +253,16 @@ const createTask = async (
       ...(source === "manual" ? {} : { source, evidenceIds })
     }
   });
+  await notifyUser(db, {
+    userId: task.assignee_id,
+    actorId: userId,
+    projectId: task.project_id,
+    taskId: task.id,
+    kind: "task_assigned",
+    title: `Assigned to ${task.issue_key}`,
+    body: task.title,
+    dedupeKey: `task-assigned:${task.id}:${task.version}`
+  });
   return task;
 };
 
@@ -364,6 +375,18 @@ const updateTask = async (
       entityId: task.id,
       entityTitle: task.title,
       details: source === "manual" ? activity.details : { ...activity.details, source }
+    });
+  }
+  if (Number(existing.assignee_id || 0) !== Number(task.assignee_id || 0)) {
+    await notifyUser(db, {
+      userId: task.assignee_id,
+      actorId: userId,
+      projectId: task.project_id,
+      taskId: task.id,
+      kind: "task_assigned",
+      title: `Assigned to ${task.issue_key}`,
+      body: task.title,
+      dedupeKey: `task-assigned:${task.id}:${task.version}`
     });
   }
   return task;

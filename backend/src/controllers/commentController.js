@@ -1,5 +1,6 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
+const { notifyUser } = require("../lib/notifications");
 const { canAccessTask, getProjectRole } = require("../lib/projectAccess");
 
 const commentFields = `c.id, c.task_id, c.user_id, c.body, c.created_at, c.updated_at,
@@ -32,32 +33,49 @@ const listComments = async (req, res, next) => {
   return res.status(200).json({ data: result.rows });
 };
 
-const createComment = async (req, res, next) => {
+const createComment = async (req, res) => {
   const db = req.app.locals.db;
-  let task;
+  const client = await db.connect();
   try {
-    task = await loadTask(db, req.params.id, req.user.id);
+    await client.query("BEGIN");
+    const task = await loadTask(client, req.params.id, req.user.id);
+    const inserted = await client.query(
+      "INSERT INTO comments (task_id, user_id, body) VALUES ($1, $2, $3) RETURNING id",
+      [req.params.id, req.user.id, req.body.body]
+    );
+    const result = await client.query(
+      `SELECT ${commentFields} FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = $1`,
+      [inserted.rows[0].id]
+    );
+    const comment = result.rows[0];
+    await logActivity(client, {
+      userId: req.user.id,
+      action: "task_comment_added",
+      entityType: "task",
+      entityId: task.id,
+      entityTitle: task.title,
+      details: {}
+    });
+    for (const userId of new Set([task.user_id, task.assignee_id])) {
+      await notifyUser(client, {
+        userId,
+        actorId: req.user.id,
+        projectId: task.project_id,
+        taskId: task.id,
+        kind: "task_commented",
+        title: `New comment on ${task.issue_key}`,
+        body: task.title,
+        dedupeKey: `task-comment:${comment.id}`
+      });
+    }
+    await client.query("COMMIT");
+    return res.status(201).json({ data: comment });
   } catch (error) {
-    return next(error);
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  const inserted = await db.query(
-    "INSERT INTO comments (task_id, user_id, body) VALUES ($1, $2, $3) RETURNING id",
-    [req.params.id, req.user.id, req.body.body]
-  );
-  const result = await db.query(
-    `SELECT ${commentFields} FROM comments c JOIN users u ON u.id = c.user_id WHERE c.id = $1`,
-    [inserted.rows[0].id]
-  );
-  const comment = result.rows[0];
-  await logActivity(db, {
-    userId: req.user.id,
-    action: "task_comment_added",
-    entityType: "task",
-    entityId: task.id,
-    entityTitle: task.title,
-    details: {}
-  });
-  return res.status(201).json({ data: comment });
 };
 
 const loadOwnComment = async (db, taskId, commentId, userId) => {
