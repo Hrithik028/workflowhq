@@ -2,6 +2,7 @@ const { AppError } = require("./errors");
 
 const MAX_ISSUES = 100;
 const MAX_BYTES = 100_000;
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const parseRows = (csv) => {
   if (Buffer.byteLength(csv, "utf8") > MAX_BYTES) {
@@ -55,6 +56,10 @@ const normalizeHeader = (value) =>
     .replace(/[^a-z0-9]/g, "");
 
 const parseJiraCsv = (csv, jiraProjectKey) => {
+  if (!/^[A-Z][A-Z0-9]{1,19}$/.test(jiraProjectKey)) {
+    throw new AppError(400, "JIRA_CSV_KEY", "Provide a valid Jira project key.");
+  }
+  const issueKeyPattern = new RegExp(`^${escapeRegExp(jiraProjectKey)}-[1-9][0-9]*$`);
   const rows = parseRows(csv.replace(/^\uFEFF/, ""));
   if (rows.length < 2) {
     throw new AppError(
@@ -87,7 +92,7 @@ const parseJiraCsv = (csv, jiraProjectKey) => {
     }
     const sourceKey = cells[keyIndex].trim().toUpperCase();
     const title = cells[titleIndex].trim();
-    if (!new RegExp(`^${jiraProjectKey}-[1-9][0-9]*$`).test(sourceKey) || seen.has(sourceKey)) {
+    if (!issueKeyPattern.test(sourceKey) || seen.has(sourceKey)) {
       throw new AppError(
         400,
         "JIRA_CSV_KEY",

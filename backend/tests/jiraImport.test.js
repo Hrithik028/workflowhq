@@ -22,6 +22,13 @@ describe("Jira CSV parser", () => {
   it("rejects other project keys and duplicate rows", () => {
     expect(() => parseJiraCsv(csv.replace("TEAM-1", "OTHER-1"), "TEAM")).toThrow();
     expect(() => parseJiraCsv(csv.replace("TEAM-2", "TEAM-1"), "TEAM")).toThrow();
+    expect(() => parseJiraCsv(csv.replace("TEAM-1", "TEAM-0"), "TEAM")).toThrow();
+    expect(() => parseJiraCsv(csv.replace("TEAM-1", "TEAM-01"), "TEAM")).toThrow();
+    expect(() => parseJiraCsv(csv.replace("TEAM-1", "TEAM-X"), "TEAM")).toThrow();
+  });
+
+  it("rejects regex metacharacters in a project key before compiling the pattern", () => {
+    expect(() => parseJiraCsv(csv.replaceAll("TEAM-", "TEAMX-"), "TEAM.")).toThrow();
   });
 });
 
