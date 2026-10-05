@@ -3,6 +3,41 @@ import { describe, expect, it } from "vitest";
 import { AiActionReview } from "./AiActionReview";
 
 describe("AI action review", () => {
+  it.each(["applied", "discarded", "superseded"] as const)(
+    "does not show pending approval instructions for a %s revision",
+    (state) => {
+      render(
+        <AiActionReview
+          state={state}
+          plan={{
+            summary: "Review",
+            actions: [
+              {
+                id: "update",
+                type: "task.update",
+                taskRef: 7,
+                expectedVersion: 2,
+                evidenceIds: [],
+                fields: { title: "Reviewed" }
+              }
+            ]
+          }}
+        />
+      );
+      expect(screen.queryByText(/Nothing applied yet/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/then confirm below/)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(
+          state === "applied" ? "1 approved changes · Applied" : "1 proposed changes · Not applied"
+        )
+      ).toBeInTheDocument();
+    }
+  );
+  it("does not invite approval of an expired pending revision", () => {
+    render(<AiActionReview expired plan={{ summary: "Expired", actions: [] }} />);
+    expect(screen.queryByText(/Nothing applied yet|then confirm below/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Not applied/)).toBeInTheDocument();
+  });
   it("groups consecutive criteria under a readable ticket card without changing the plan", () => {
     const plan = {
       summary: "Create test ticket",

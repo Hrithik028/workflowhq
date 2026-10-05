@@ -1,4 +1,4 @@
-import type { AiActionPlan } from "../types";
+import type { AiActionPlan, AiProposalRevision } from "../types";
 
 type Action = AiActionPlan["actions"][number];
 const labels: Record<Action["type"], string> = {
@@ -41,7 +41,18 @@ const values: Record<string, string> = {
   subtask: "Subtask"
 };
 
-export function AiActionReview({ plan }: { plan: AiActionPlan }) {
+export function AiActionReview({
+  plan,
+  state = "pending",
+  expired = false
+}: {
+  plan: AiActionPlan;
+  state?: AiProposalRevision["state"];
+  expired?: boolean;
+}) {
+  const pending = state === "pending" && !expired;
+  const stateLabel =
+    state === "applied" ? "Applied" : pending ? "Nothing applied yet" : "Not applied";
   const newTickets = new Map<number | string, string>(
     plan.actions.flatMap((action) =>
       action.type === "task.create" ? [[action.tempId, action.fields.title] as const] : []
@@ -71,10 +82,16 @@ export function AiActionReview({ plan }: { plan: AiActionPlan }) {
   return (
     <section aria-label="Proposed actions" className="ai-action-review">
       <div className="ai-action-review-intro">
-        <strong>{plan.actions.length} proposed changes · Nothing applied yet</strong>
+        <strong>
+          {plan.actions.length} {state === "applied" ? "approved" : "proposed"} changes ·{" "}
+          {stateLabel}
+        </strong>
         <p>
-          Review the ticket details and criteria, then confirm below. All changes apply together; an
-          invalid or stale ticket blocks the plan.
+          {pending
+            ? "Review the ticket details and criteria, then confirm below. All changes apply together; an invalid or stale ticket blocks the plan."
+            : state === "applied"
+              ? "These approved changes were applied. This revision is retained for reference and cannot be approved again."
+              : "This revision is retained for reference. Its changes have not been applied."}
         </p>
       </div>
       <ol className="ai-action-cards">

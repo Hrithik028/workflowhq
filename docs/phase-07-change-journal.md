@@ -161,3 +161,17 @@ Final focused review/workspace checks passed (7 tests), formatting passed and th
 release audit inspected 279 source files successfully. The prior full frontend
 baseline was 61 passing tests, with lint, TypeScript and production build passing.
 Publication does not authorize merging or mark production execution QA complete.
+
+## 2026-10-05 — WHQ-62 release QA follow-up
+
+Generation requests now have a dedicated 90-second client timeout; ordinary API
+calls keep their shorter timeout and paid generation is never automatically retried.
+Proposal review text distinguishes pending, applied, discarded, superseded and
+expired revisions. Obsolete success notices and confirmation state are cleared
+when changing conversation or beginning approval/discard operations.
+
+Production disposable-ticket checks exercised creation, criteria persistence,
+archive/restore, stale-version rejection and discard. Full local regression and
+real PostgreSQL transaction checks are recorded in the release verification file.
+These fixes follow WHQ-62; migration 029 and mandatory governance belong to WHQ-69
+and are published separately. Publishing is not proof of production deployment.
