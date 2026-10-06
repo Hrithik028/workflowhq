@@ -61,6 +61,10 @@ export const activityCopy = (activity: Activity) => {
       return `Restored project ${title}`;
     case "project_workflow_updated":
       return `Updated GitHub workflow rules for ${title}`;
+    case "task_dependency_added":
+      return `Linked ${detail("blockerIssueKey")} as a blocker for ${title}`;
+    case "task_dependency_removed":
+      return `Removed a blocker from ${title}`;
     case "github_identity_mapped":
       return `Mapped GitHub actor ${title}`;
     case "github_identity_unmapped":

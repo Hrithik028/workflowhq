@@ -12,6 +12,7 @@ import type {
   ProjectInput,
   ProjectInvitation,
   ProjectInvitationReceipt,
+  ProjectRoadmap,
   ProjectWorkflow,
   ProjectWorkflowRule,
   ProjectMember,
@@ -217,6 +218,36 @@ export const workspaceApi: WorkspaceClient = {
   },
   async deleteProject(id: number) {
     await api.delete(`/projects/${id}`);
+  },
+  async getProjectRoadmap(projectId: number): Promise<ProjectRoadmap> {
+    const response = await api.get<{ data: Raw }>(`/projects/${projectId}/roadmap`);
+    const data = response.data.data;
+    const project = data.project as Raw;
+    return {
+      project: {
+        id: Number(project.id),
+        key: String(project.key),
+        name: String(project.name),
+        myRole: project.myRole as ProjectRoadmap["project"]["myRole"]
+      },
+      tasks: ((data.tasks || []) as Raw[]).map((task) => ({
+        id: Number(task.id),
+        issueKey: String(task.issue_key),
+        title: String(task.title),
+        taskType: task.task_type as ProjectRoadmap["tasks"][number]["taskType"],
+        status: task.status as ProjectRoadmap["tasks"][number]["status"],
+        startDate: task.start_date == null ? null : String(task.start_date).slice(0, 10),
+        dueDate: task.due_date == null ? null : String(task.due_date).slice(0, 10),
+        parentId: task.parent_task_id == null ? null : Number(task.parent_task_id)
+      })),
+      dependencies: (data.dependencies || []) as ProjectRoadmap["dependencies"]
+    };
+  },
+  async createTaskDependency(projectId: number, blockerTaskId: number, blockedTaskId: number) {
+    await api.post(`/projects/${projectId}/dependencies`, { blockerTaskId, blockedTaskId });
+  },
+  async deleteTaskDependency(projectId: number, blockerTaskId: number, blockedTaskId: number) {
+    await api.delete(`/projects/${projectId}/dependencies/${blockerTaskId}/${blockedTaskId}`);
   },
   async listTasks(query: TaskQuery = {}) {
     const response = await api.get<{ data: Raw[]; pagination: PaginationMetadata }>("/tasks", {
