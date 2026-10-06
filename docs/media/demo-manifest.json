@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "capturedOn": "2026-10-06",
+  "sourceRevision": "d7f205f (application tree exported for PR #75; merged master 902e618)",
+  "mode": "Session-only built-in demo, light theme. Actual browser captures, explanatory SVGs, no production actions or paid provider calls.",
+  "durationSeconds": 72,
+  "scenes": [
+    {
+      "seconds": 6,
+      "title": "WorkflowHQ",
+      "subtitle": "Plan the work. Follow the code. Approve the AI.",
+      "image": "screenshots/showcase/landing.png"
+    },
+    {
+      "seconds": 8,
+      "title": "01 / The engineering command center",
+      "subtitle": "See tickets, reviews and delivery signals in one workspace.",
+      "image": "screenshots/showcase/overview.png"
+    },
+    {
+      "seconds": 8,
+      "title": "02 / Give every project a clear home",
+      "subtitle": "Projects group outcomes, ownership and delivery progress.",
+      "image": "screenshots/showcase/projects.png"
+    },
+    {
+      "seconds": 8,
+      "title": "03 / Keep the work moving",
+      "subtitle": "Use the board, filters and accessible status controls.",
+      "image": "screenshots/showcase/workflow.png"
+    },
+    {
+      "seconds": 8,
+      "title": "04 / Make done explicit",
+      "subtitle": "Ticket hierarchies and acceptance criteria keep scope visible.",
+      "image": "screenshots/showcase/ticket.png"
+    },
+    {
+      "seconds": 7,
+      "title": "05 / Plan around real deadlines",
+      "subtitle": "The calendar puts sample due dates in context.",
+      "image": "screenshots/showcase/calendar.png"
+    },
+    {
+      "seconds": 7,
+      "title": "06 / Explain progress honestly",
+      "subtitle": "Issue counts describe work state, not individual productivity.",
+      "image": "screenshots/showcase/analytics.png"
+    },
+    {
+      "seconds": 10,
+      "title": "07 / AI proposes. You approve.",
+      "subtitle": "Backend validation, human review and atomic apply protect writes.",
+      "image": "docs/media/ai-approval-flow.svg"
+    },
+    {
+      "seconds": 10,
+      "title": "08 / Designed with explicit boundaries",
+      "subtitle": "React + Express + PostgreSQL; signed webhooks and governed AI.",
+      "image": "docs/media/architecture.svg"
+    }
+  ]
+}
