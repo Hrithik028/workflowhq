@@ -77,16 +77,22 @@ const mapProjectWorkflow = (workflow: Raw): ProjectWorkflow => {
       key: String(project.key),
       name: String(project.name)
     },
-    rules: ((workflow.rules || []) as Raw[]).map(
-      (rule): ProjectWorkflowRule => ({
-        id: Number(rule.id),
-        trigger: rule.trigger as ProjectWorkflowRule["trigger"],
-        enabled: Boolean(rule.enabled),
-        fromStatus: rule.fromStatus as ProjectWorkflowRule["fromStatus"],
-        toStatus: rule.toStatus as ProjectWorkflowRule["toStatus"],
-        updatedAt: String(rule.updatedAt)
-      })
-    )
+    statuses: ((workflow.statuses || []) as Raw[]).map((item) => ({
+      status: item.status as ProjectWorkflow["statuses"][number]["status"],
+      label: String(item.label)
+    })),
+    transitions: ((workflow.transitions || []) as Raw[]).map((item) => ({
+      fromStatus: item.fromStatus as ProjectWorkflow["transitions"][number]["fromStatus"],
+      toStatus: item.toStatus as ProjectWorkflow["transitions"][number]["toStatus"]
+    })),
+    rules: ((workflow.rules || []) as Raw[]).map((rule): ProjectWorkflowRule => ({
+      id: Number(rule.id),
+      trigger: rule.trigger as ProjectWorkflowRule["trigger"],
+      enabled: Boolean(rule.enabled),
+      fromStatus: rule.fromStatus as ProjectWorkflowRule["fromStatus"],
+      toStatus: rule.toStatus as ProjectWorkflowRule["toStatus"],
+      updatedAt: String(rule.updatedAt)
+    }))
   };
 };
 
@@ -277,8 +283,11 @@ export const workspaceApi: WorkspaceClient = {
     const response = await api.get<{ data: Raw }>(`/projects/${projectId}/workflow`);
     return mapProjectWorkflow(response.data.data);
   },
-  async updateProjectWorkflow(projectId: number, rules) {
-    const response = await api.put<{ data: Raw }>(`/projects/${projectId}/workflow`, { rules });
+  async updateProjectWorkflow(projectId: number, rules, configuration) {
+    const response = await api.put<{ data: Raw }>(`/projects/${projectId}/workflow`, {
+      rules,
+      ...configuration
+    });
     return mapProjectWorkflow(response.data.data);
   },
   async updateMemberRole(projectId: number, userId: number, role: ProjectRole) {

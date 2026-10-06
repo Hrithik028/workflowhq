@@ -150,7 +150,6 @@ router.delete(
 
 router.get(
   "/:id/workflow",
-  asyncHandler(requirePermission("projects.edit")),
   validate({ params: workflowSchemas.params }),
   asyncHandler(getProjectWorkflow)
 );

@@ -1,10 +1,8 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
 const { getProjectRole } = require("../lib/projectAccess");
-const {
-  WORKFLOW_TRIGGERS,
-  ensureProjectWorkflowRules
-} = require("../lib/projectWorkflow");
+const { WORKFLOW_TRIGGERS, ensureProjectWorkflowRules } = require("../lib/projectWorkflow");
+const { selectProjectStatusWorkflow } = require("../lib/projectStatusWorkflow");
 
 const mapRule = (row) => ({
   id: Number(row.id),
@@ -15,9 +13,9 @@ const mapRule = (row) => ({
   updatedAt: row.updated_at
 });
 
-const getOwnerProject = async (db, projectId, userId) => {
+const getProject = async (db, projectId, userId, ownerOnly = false) => {
   const role = await getProjectRole(db, projectId, userId);
-  if (role !== "owner") {
+  if (!role || (ownerOnly && role !== "owner")) {
     throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found.");
   }
   const project = (
@@ -53,19 +51,20 @@ const selectRules = async (db, projectId) => {
 
 const getProjectWorkflow = async (req, res) => {
   const db = req.app.locals.db;
-  const project = await getOwnerProject(db, req.params.id, req.user.id);
-  await ensureProjectWorkflowRules(db, project.id, req.user.id);
+  const project = await getProject(db, req.params.id, req.user.id);
+  const configuration = await selectProjectStatusWorkflow(db, project.id);
   return res.status(200).json({
     data: {
       project: { id: Number(project.id), key: project.key, name: project.name },
-      rules: await selectRules(db, project.id)
+      rules: await selectRules(db, project.id),
+      ...configuration
     }
   });
 };
 
 const updateProjectWorkflow = async (req, res) => {
   const db = req.app.locals.db;
-  const project = await getOwnerProject(db, req.params.id, req.user.id);
+  const project = await getProject(db, req.params.id, req.user.id, true);
   const client = await db.connect();
   try {
     await client.query("BEGIN");
@@ -76,15 +75,27 @@ const updateProjectWorkflow = async (req, res) => {
          SET enabled = $1, from_status = $2, to_status = $3,
              updated_by = $4, updated_at = CURRENT_TIMESTAMP
          WHERE project_id = $5 AND trigger_name = $6`,
-        [
-          rule.enabled,
-          rule.fromStatus,
-          rule.toStatus,
-          req.user.id,
-          project.id,
-          rule.trigger
-        ]
+        [rule.enabled, rule.fromStatus, rule.toStatus, req.user.id, project.id, rule.trigger]
       );
+    }
+    if (req.body.statuses) {
+      for (const status of req.body.statuses) {
+        await client.query(
+          `UPDATE project_status_labels SET label = $1
+           WHERE project_id = $2 AND status = $3`,
+          [status.label, project.id, status.status]
+        );
+      }
+      await client.query("DELETE FROM project_status_transitions WHERE project_id = $1", [
+        project.id
+      ]);
+      for (const transition of req.body.transitions) {
+        await client.query(
+          `INSERT INTO project_status_transitions (project_id, from_status, to_status)
+           VALUES ($1, $2, $3)`,
+          [project.id, transition.fromStatus, transition.toStatus]
+        );
+      }
     }
     await logActivity(client, {
       userId: req.user.id,
@@ -93,17 +104,17 @@ const updateProjectWorkflow = async (req, res) => {
       entityId: Number(project.id),
       entityTitle: project.name,
       details: {
-        enabledTriggers: req.body.rules
-          .filter((rule) => rule.enabled)
-          .map((rule) => rule.trigger),
-        ruleCount: WORKFLOW_TRIGGERS.length
+        enabledTriggers: req.body.rules.filter((rule) => rule.enabled).map((rule) => rule.trigger),
+        ruleCount: WORKFLOW_TRIGGERS.length,
+        ...(req.body.statuses ? { statusConfigurationChanged: true } : {})
       }
     });
     await client.query("COMMIT");
     return res.status(200).json({
       data: {
         project: { id: Number(project.id), key: project.key, name: project.name },
-        rules: await selectRules(db, project.id)
+        rules: await selectRules(db, project.id),
+        ...(await selectProjectStatusWorkflow(db, project.id))
       }
     });
   } catch (error) {
