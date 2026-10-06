@@ -1,6 +1,7 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
 const { canAccessTask } = require("../lib/projectAccess");
+const { currentWorkspace } = require("../lib/workspaceContext");
 const {
   createTask: createTaskMutation,
   setTaskArchived,
@@ -59,8 +60,12 @@ const taskJoins = `
 
 // A task is visible to a user when it's their own inbox (no project) ticket,
 // or when they're a member (any role) of the project it belongs to.
-const visibleTaskCondition = (userIndex) =>
-  `((t.project_id IS NULL AND t.user_id = $${userIndex}) OR t.project_id IN (SELECT project_id FROM project_members WHERE user_id = $${userIndex}))`;
+const visibleTaskCondition = (userIndex, values) => {
+  const visibility = `((t.project_id IS NULL AND t.user_id = $${userIndex}) OR t.project_id IN (SELECT project_id FROM project_members WHERE user_id = $${userIndex}))`;
+  if (!currentWorkspace()) return visibility;
+  values.push(currentWorkspace());
+  return `${visibility} AND t.workspace_id = $${values.length}`;
+};
 
 // Labels are attached with one extra batch query per response rather than a
 // JOIN + JSON aggregate in taskFields - pg-mem (used by the test suite) has no
@@ -101,12 +106,14 @@ const attachLabelsToOne = async (db, task) => {
 };
 
 const selectTaskById = async (db, id, userId) => {
+  const values = [id, userId];
+  const visible = visibleTaskCondition(2, values);
   const result = await db.query(
     `SELECT ${taskFields}
      FROM tasks t
      ${taskJoins}
-     WHERE t.id = $1 AND ${visibleTaskCondition(2)}`,
-    [id, userId]
+     WHERE t.id = $1 AND ${visible}`,
+    values
   );
   return attachLabelsToOne(db, result.rows[0]);
 };
@@ -114,7 +121,7 @@ const selectTaskById = async (db, id, userId) => {
 const getTasks = async (req, res) => {
   const { page, limit, status, priority, projectId, search, sort, order, archived } = req.query;
   const values = [req.user.id];
-  const conditions = [visibleTaskCondition(1)];
+  const conditions = [visibleTaskCondition(1, values)];
 
   if (archived) {
     conditions.push("t.archived_at IS NOT NULL");
@@ -396,7 +403,7 @@ const updateTaskRank = async (req, res, next) => {
     const loadNeighborRank = async (id) => {
       if (!id) return null;
       const result = await client.query(
-        "SELECT project_id, user_id, rank FROM tasks WHERE id = $1",
+        "SELECT project_id, user_id, workspace_id, archived_at, rank FROM tasks WHERE id = $1",
         [id]
       );
       const neighbor = result.rows[0];
@@ -404,7 +411,9 @@ const updateTaskRank = async (req, res, next) => {
         neighbor && Number(neighbor.project_id || 0) === Number(task.project_id || 0);
       const sameInboxOwner =
         task.project_id || !neighbor ? true : Number(neighbor.user_id) === Number(task.user_id);
-      if (!neighbor || !sameProject || !sameInboxOwner) {
+      const sameWorkspace =
+        neighbor && Number(neighbor.workspace_id || 0) === Number(task.workspace_id || 0);
+      if (!neighbor || neighbor.archived_at || !sameProject || !sameInboxOwner || !sameWorkspace) {
         throw new AppError(
           422,
           "TASK_RANK_NEIGHBOR_INVALID",
@@ -431,11 +440,11 @@ const updateTaskRank = async (req, res, next) => {
     if (exhausted) {
       const scopeCondition = task.project_id
         ? "project_id = $1"
-        : "project_id IS NULL AND user_id = $1";
+        : "project_id IS NULL AND user_id = $1 AND workspace_id IS NOT DISTINCT FROM $2";
       const scopeValue = task.project_id || req.user.id;
       const allResult = await client.query(
-        `SELECT id FROM tasks WHERE ${scopeCondition} ORDER BY rank ASC NULLS LAST, id ASC`,
-        [scopeValue]
+        `SELECT id FROM tasks WHERE ${scopeCondition} AND archived_at IS NULL ORDER BY rank ASC NULLS LAST, id ASC`,
+        task.project_id ? [scopeValue] : [scopeValue, task.workspace_id]
       );
       for (const [index, row] of allResult.rows.entries()) {
         await client.query(
@@ -481,6 +490,7 @@ const buildDailyCompletions = (rows) => {
 
 const getTaskStats = async (req, res) => {
   const values = [req.user.id];
+  const visible = visibleTaskCondition(1, values);
   let projectCondition = "";
   if (req.query.projectId) {
     values.push(req.query.projectId);
@@ -498,7 +508,7 @@ const getTaskStats = async (req, res) => {
        COALESCE(SUM(CASE WHEN due_date < CURRENT_DATE AND status <> 'completed' THEN 1 ELSE 0 END), 0)::int AS overdue_tasks
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
-     WHERE ${visibleTaskCondition(1)}${projectCondition}
+     WHERE ${visible}${projectCondition}
        AND t.archived_at IS NULL
        AND (t.project_id IS NULL OR p.archived_at IS NULL)`,
     values
@@ -509,7 +519,7 @@ const getTaskStats = async (req, res) => {
     `SELECT t.updated_at::date AS day, COUNT(*)::int AS count
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
-     WHERE ${visibleTaskCondition(1)}${projectCondition}
+     WHERE ${visible}${projectCondition}
        AND t.archived_at IS NULL
        AND (t.project_id IS NULL OR p.archived_at IS NULL)
        AND status = 'completed'

@@ -269,6 +269,7 @@ export interface ProjectInvitationReceipt {
 }
 
 export interface InvitationAcceptance {
+  workspaceId?: number;
   projectId: number;
   projectKey: string;
   projectName: string;

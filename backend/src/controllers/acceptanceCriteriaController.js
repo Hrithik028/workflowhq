@@ -10,9 +10,10 @@ const {
 const criterionFields = `id, task_id, body, completed, position, created_by, created_at, updated_at`;
 
 const loadTask = async (db, taskId, userId) => {
-  const result = await db.query("SELECT id, user_id, project_id, title FROM tasks WHERE id = $1", [
-    taskId
-  ]);
+  const result = await db.query(
+    "SELECT id, user_id, project_id, workspace_id, title FROM tasks WHERE id = $1",
+    [taskId]
+  );
   const task = result.rows[0];
   if (!task || !(await canAccessTask(db, task, userId))) {
     throw new AppError(404, "TASK_NOT_FOUND", "Task not found.");

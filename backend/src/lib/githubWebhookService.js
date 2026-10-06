@@ -1,8 +1,5 @@
 const { AppError } = require("./errors");
-const {
-  applyProjectWorkflowAutomation,
-  workflowTriggerFor
-} = require("./projectWorkflow");
+const { applyProjectWorkflowAutomation, workflowTriggerFor } = require("./projectWorkflow");
 
 const DEVELOPMENT_EVENTS = new Set([
   "push",
@@ -163,7 +160,7 @@ const normalizeDevelopmentEvents = (name, payload) => {
 const findInstallation = async (client, githubId) => {
   if (!githubId) return null;
   const result = await client.query(
-    `SELECT id, user_id, github_installation_id, connection_status
+    `SELECT id, user_id, workspace_id, github_installation_id, connection_status
      FROM github_installations WHERE github_installation_id = $1`,
     [githubId]
   );
@@ -172,6 +169,13 @@ const findInstallation = async (client, githubId) => {
 
 const upsertRepository = async (client, installation, repository) => {
   if (!installation || !repository?.id) return null;
+  // Background work derives its tenant from the stored installation, never payloads.
+  const stored = await client.query(
+    "SELECT user_id, workspace_id FROM github_installations WHERE id = $1",
+    [installation.id]
+  );
+  const root = stored.rows[0];
+  if (!root?.workspace_id || Number(root.user_id) !== Number(installation.user_id)) return null;
   const owner = text(repository.owner?.login || repository.full_name?.split("/")[0], 255);
   const name = text(repository.name || repository.full_name?.split("/")[1], 255);
   if (!owner || !name) return null;
@@ -179,8 +183,8 @@ const upsertRepository = async (client, installation, repository) => {
   const result = await client.query(
     `INSERT INTO github_repositories (user_id, installation_id, github_repository_id,
        github_node_id, owner_login, name, full_name, html_url, default_branch,
-       is_private, is_archived, removed_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULL,CURRENT_TIMESTAMP)
+       is_private, is_archived, workspace_id, removed_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NULL,CURRENT_TIMESTAMP)
      ON CONFLICT (github_repository_id) DO UPDATE SET
        installation_id=EXCLUDED.installation_id,
        github_node_id=EXCLUDED.github_node_id, owner_login=EXCLUDED.owner_login,
@@ -188,7 +192,9 @@ const upsertRepository = async (client, installation, repository) => {
        default_branch=EXCLUDED.default_branch, is_private=EXCLUDED.is_private,
        is_archived=EXCLUDED.is_archived, removed_at=NULL, updated_at=CURRENT_TIMESTAMP
      WHERE github_repositories.user_id=EXCLUDED.user_id
-     RETURNING id, user_id, installation_id, full_name`,
+       AND github_repositories.workspace_id=EXCLUDED.workspace_id
+       AND github_repositories.installation_id=EXCLUDED.installation_id
+     RETURNING id, user_id, workspace_id, installation_id, full_name`,
     [
       installation.user_id,
       installation.id,
@@ -200,7 +206,8 @@ const upsertRepository = async (client, installation, repository) => {
       safeUrl(repository.html_url, `https://github.com/${fullName}`),
       text(repository.default_branch || "main", 255),
       repository.private === true,
-      repository.archived === true
+      repository.archived === true,
+      root.workspace_id
     ]
   );
   return result.rows[0] || null;
@@ -321,8 +328,9 @@ const linkEvent = async (client, repository, stored, item) => {
      JOIN tasks t ON t.project_id=link.project_id
      JOIN projects project ON project.id = t.project_id
      WHERE link.repository_id=$1 AND t.issue_key=ANY($2::text[])
+       AND project.workspace_id=$3 AND t.workspace_id=$3
        AND t.archived_at IS NULL AND project.archived_at IS NULL`,
-    [repository.id, item.issueKeys]
+    [repository.id, item.issueKeys, repository.workspace_id]
   );
   for (const task of tasks.rows) {
     await client.query(

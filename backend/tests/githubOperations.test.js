@@ -34,9 +34,9 @@ describe("GitHub identity mapping and webhook recovery", () => {
     installation = (
       await db.query(
         `INSERT INTO github_installations
-           (user_id, github_installation_id, github_account_id, account_login,
+           (workspace_id, user_id, github_installation_id, github_account_id, account_login,
             account_type, repository_selection)
-         VALUES ($1, 7001, 8001, 'WorkflowHQ', 'Organization', 'selected')
+         VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1, 7001, 8001, 'WorkflowHQ', 'Organization', 'selected')
          RETURNING id`,
         [owner.user.id]
       )
@@ -44,17 +44,17 @@ describe("GitHub identity mapping and webhook recovery", () => {
     repository = (
       await db.query(
         `INSERT INTO github_repositories
-           (user_id, installation_id, github_repository_id, github_node_id,
+           (workspace_id, user_id, installation_id, github_repository_id, github_node_id,
             owner_login, name, full_name, html_url, selected)
-         VALUES ($1, $2, 9001, 'R_9001', 'workflowhq', 'app',
+         VALUES ((SELECT workspace_id FROM github_installations WHERE id = $2), $1, $2, 9001, 'R_9001', 'workflowhq', 'app',
                  'workflowhq/app', 'https://github.com/workflowhq/app', TRUE)
          RETURNING id`,
         [owner.user.id, installation.id]
       )
     ).rows[0];
     await db.query(
-      `INSERT INTO project_github_repositories (repository_id, project_id, linked_by)
-       VALUES ($1, $2, $3)`,
+      `INSERT INTO project_github_repositories (workspace_id, repository_id, project_id, linked_by)
+       VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1, $2, $3)`,
       [repository.id, projectId, owner.user.id]
     );
     await db.query(
@@ -73,36 +73,23 @@ describe("GitHub identity mapping and webhook recovery", () => {
   });
 
   it("maps an observed GitHub actor only to an eligible project member", async () => {
-    const before = await request(app)
-      .get("/api/github/identities")
-      .set(auth(owner.token));
-    const invalid = await request(app)
-      .put("/api/github/identities")
-      .set(auth(owner.token))
-      .send({
-        installationId: installation.id,
-        githubLogin: "octocat",
-        userId: outsider.user.id
-      });
-    const mapped = await request(app)
-      .put("/api/github/identities")
-      .set(auth(owner.token))
-      .send({
-        installationId: installation.id,
-        githubLogin: "OCTOCAT",
-        userId: member.user.id
-      });
-    const remapped = await request(app)
-      .put("/api/github/identities")
-      .set(auth(owner.token))
-      .send({
-        installationId: installation.id,
-        githubLogin: "octocat",
-        userId: owner.user.id
-      });
-    const after = await request(app)
-      .get("/api/github/identities")
-      .set(auth(owner.token));
+    const before = await request(app).get("/api/github/identities").set(auth(owner.token));
+    const invalid = await request(app).put("/api/github/identities").set(auth(owner.token)).send({
+      installationId: installation.id,
+      githubLogin: "octocat",
+      userId: outsider.user.id
+    });
+    const mapped = await request(app).put("/api/github/identities").set(auth(owner.token)).send({
+      installationId: installation.id,
+      githubLogin: "OCTOCAT",
+      userId: member.user.id
+    });
+    const remapped = await request(app).put("/api/github/identities").set(auth(owner.token)).send({
+      installationId: installation.id,
+      githubLogin: "octocat",
+      userId: owner.user.id
+    });
+    const after = await request(app).get("/api/github/identities").set(auth(owner.token));
 
     expect(before.status).toBe(200);
     expect(before.body.data.actors[0]).toMatchObject({
@@ -127,14 +114,11 @@ describe("GitHub identity mapping and webhook recovery", () => {
   });
 
   it("enriches historical development data dynamically and permits unmapping", async () => {
-    const mapped = await request(app)
-      .put("/api/github/identities")
-      .set(auth(owner.token))
-      .send({
-        installationId: installation.id,
-        githubLogin: "octocat",
-        userId: member.user.id
-      });
+    const mapped = await request(app).put("/api/github/identities").set(auth(owner.token)).send({
+      installationId: installation.id,
+      githubLogin: "octocat",
+      userId: member.user.id
+    });
     const development = await request(app)
       .get(`/api/github/projects/${projectId}/development`)
       .set(auth(member.token));

@@ -53,6 +53,7 @@ const {
 const { asyncHandler } = require("../lib/asyncHandler");
 const { requirePermission, requireRule } = require("../middleware/accessControl");
 const authMiddleware = require("../middleware/authMiddleware");
+const { assertProjectWorkspace } = require("../lib/workspaceContext");
 const { validate } = require("../middleware/validate");
 const {
   labelSchemas,
@@ -68,6 +69,10 @@ const { jiraImportSchemas } = require("../validation/jiraImportSchemas");
 
 const router = express.Router();
 router.use(authMiddleware);
+router.param("id", (req, _res, next, id) => {
+  if (!/^[1-9]\d*$/.test(id)) return next();
+  assertProjectWorkspace(req.app.locals.db, Number(id)).then(() => next(), next);
+});
 
 router.get("/", validate({ query: projectSchemas.list }), asyncHandler(getProjects));
 router.post(

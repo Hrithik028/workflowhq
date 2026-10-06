@@ -1,6 +1,8 @@
 const { createHash, randomBytes } = require("node:crypto");
 
 const { logActivity } = require("../lib/activity");
+const { notifyUser } = require("../lib/notifications");
+const { addProjectCollaboratorToWorkspace } = require("../lib/workspaceMembership");
 const { AppError } = require("../lib/errors");
 
 const hashInvitationToken = (token) => createHash("sha256").update(token).digest("hex");
@@ -41,11 +43,7 @@ const getOwnerProject = async (db, projectId, userId) => {
     );
   }
   if (project.archived_at) {
-    throw new AppError(
-      409,
-      "PROJECT_ARCHIVED",
-      "Restore this project before inviting members."
-    );
+    throw new AppError(409, "PROJECT_ARCHIVED", "Restore this project before inviting members.");
   }
   return project;
 };
@@ -213,20 +211,30 @@ const revokeProjectInvitation = async (req, res) => {
 };
 
 const loadRecipientInvitation = async (db, token, userId, { lock = false } = {}) => {
-  const [invitationResult, userResult] = await Promise.all([
-    db.query(
-      `SELECT invitation.*, project.key AS project_key, project.name AS project_name,
+  if (lock) {
+    // Lock concrete rows before loading display joins. PostgreSQL cannot lock
+    // the nullable inviter side of a LEFT JOIN with an unqualified FOR UPDATE.
+    const locked = await db.query(
+      "SELECT project_id FROM project_invitations WHERE token_hash = $1 FOR UPDATE",
+      [hashInvitationToken(token)]
+    );
+    if (locked.rows[0])
+      await db.query("SELECT id FROM projects WHERE id = $1 FOR UPDATE", [
+        locked.rows[0].project_id
+      ]);
+  }
+  const invitationResult = await db.query(
+    `SELECT invitation.*, project.key AS project_key, project.name AS project_name,
               project.archived_at AS project_archived_at,
+              project.workspace_id AS project_workspace_id,
               inviter.name AS invited_by_name
        FROM project_invitations invitation
        JOIN projects project ON project.id = invitation.project_id
        LEFT JOIN users inviter ON inviter.id = invitation.invited_by
-       WHERE invitation.token_hash = $1
-       ${lock ? "FOR UPDATE" : ""}`,
-      [hashInvitationToken(token)]
-    ),
-    db.query("SELECT email FROM users WHERE id = $1", [userId])
-  ]);
+       WHERE invitation.token_hash = $1`,
+    [hashInvitationToken(token)]
+  );
+  const userResult = await db.query("SELECT email FROM users WHERE id = $1", [userId]);
   const invitation = invitationResult.rows[0];
   if (!invitation) {
     throw new AppError(404, "INVITATION_INVALID", "This invitation link is invalid.");
@@ -251,11 +259,7 @@ const loadRecipientInvitation = async (db, token, userId, { lock = false } = {})
 };
 
 const inspectInvitation = async (req, res) => {
-  const invitation = await loadRecipientInvitation(
-    req.app.locals.db,
-    req.body.token,
-    req.user.id
-  );
+  const invitation = await loadRecipientInvitation(req.app.locals.db, req.body.token, req.user.id);
   return res.status(200).json({ data: mapInvitation(invitation) });
 };
 
@@ -268,6 +272,17 @@ const acceptInvitation = async (req, res) => {
       lock: true
     });
     if (invitation.status === "accepted") {
+      const membership = await client.query(
+        "SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2",
+        [invitation.project_id, req.user.id]
+      );
+      if (!membership.rows[0])
+        throw new AppError(
+          410,
+          "INVITATION_ACCESS_REVOKED",
+          "Your project access was removed. Ask the owner for a new invitation."
+        );
+      await addProjectCollaboratorToWorkspace(client, invitation.project_id, req.user.id);
       await client.query("COMMIT");
       return res.status(200).json({
         data: {
@@ -275,7 +290,10 @@ const acceptInvitation = async (req, res) => {
           projectKey: invitation.project_key,
           projectName: invitation.project_name,
           role: invitation.role,
-          alreadyAccepted: true
+          alreadyAccepted: true,
+          workspaceId: req.app.locals.config.workspacesEnabled
+            ? Number(invitation.project_workspace_id)
+            : undefined
         }
       });
     }
@@ -285,6 +303,7 @@ const acceptInvitation = async (req, res) => {
        ON CONFLICT (project_id, user_id) DO NOTHING`,
       [invitation.project_id, req.user.id, invitation.role, invitation.invited_by]
     );
+    await addProjectCollaboratorToWorkspace(client, invitation.project_id, req.user.id);
     await client.query(
       `UPDATE project_invitations
        SET status = 'accepted', accepted_by = $1, responded_at = CURRENT_TIMESTAMP,
@@ -300,6 +319,15 @@ const acceptInvitation = async (req, res) => {
       entityTitle: invitation.project_name,
       details: { role: invitation.role }
     });
+    await notifyUser(client, {
+      userId: req.user.id,
+      actorId: invitation.invited_by,
+      projectId: invitation.project_id,
+      kind: "project_added",
+      title: "Joined a project",
+      body: `You now have access to ${invitation.project_name}.`,
+      dedupeKey: `invitation-accepted:${invitation.id}`
+    });
     await client.query("COMMIT");
     return res.status(200).json({
       data: {
@@ -307,7 +335,10 @@ const acceptInvitation = async (req, res) => {
         projectKey: invitation.project_key,
         projectName: invitation.project_name,
         role: invitation.role,
-        alreadyAccepted: false
+        alreadyAccepted: false,
+        workspaceId: req.app.locals.config.workspacesEnabled
+          ? Number(invitation.project_workspace_id)
+          : undefined
       }
     });
   } catch (error) {

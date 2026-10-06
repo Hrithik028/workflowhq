@@ -6,10 +6,13 @@ const { errorHandler } = require("../src/middleware/errorMiddleware");
 const githubIntegrationRoutes = require("../src/routes/githubIntegrationRoutes");
 const { buildTestApp, testConfig } = require("./helpers/testApp");
 
+const { ensurePersonalWorkspace } = require("../src/lib/personalWorkspace");
+const { ensureProjectStatusWorkflow } = require("../src/lib/projectStatusWorkflow");
+
 const accessToken = async (db, user) => {
   const session = await db.query(
-    `INSERT INTO refresh_sessions (user_id, token_hash, expires_at)
-     VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '7 days') RETURNING id`,
+    `INSERT INTO refresh_sessions (workspace_id, user_id, token_hash, expires_at)
+     VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1, $2, CURRENT_TIMESTAMP + INTERVAL '7 days') RETURNING id`,
     [user.id, `test-${user.id}-${Date.now()}-${Math.random()}`]
   );
   return jwt.sign(
@@ -62,17 +65,19 @@ describe("GitHub integration foundation", () => {
          VALUES ('Outsider', 'github-outsider@example.com', 'hash') RETURNING id, email`
       )
     ).rows[0];
+    await ensurePersonalWorkspace(db, owner);
+    await ensurePersonalWorkspace(db, outsider);
     ownerProject = (
       await db.query(
-        `INSERT INTO projects (user_id, key, name)
-         VALUES ($1, 'WHQ', 'WorkflowHQ') RETURNING id`,
+        `INSERT INTO projects (workspace_id, user_id, key, name)
+         VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1, 'WHQ', 'WorkflowHQ') RETURNING id`,
         [owner.id]
       )
     ).rows[0];
     outsiderProject = (
       await db.query(
-        `INSERT INTO projects (user_id, key, name)
-         VALUES ($1, 'OUT', 'Private project') RETURNING id`,
+        `INSERT INTO projects (workspace_id, user_id, key, name)
+         VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1, 'OUT', 'Private project') RETURNING id`,
         [outsider.id]
       )
     ).rows[0];
@@ -81,29 +86,30 @@ describe("GitHub integration foundation", () => {
        VALUES ($1, $2, 'owner'), ($3, $4, 'owner')`,
       [ownerProject.id, owner.id, outsiderProject.id, outsider.id]
     );
+    await ensureProjectStatusWorkflow(db, ownerProject.id);
     ownerTask = (
       await db.query(
-        `INSERT INTO tasks (user_id, project_id, issue_key, title)
-         VALUES ($1, $2, 'WHQ-1', 'Connect repository activity') RETURNING id`,
+        `INSERT INTO tasks (workspace_id, user_id, project_id, issue_key, title)
+         VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1, $2, 'WHQ-1', 'Connect repository activity') RETURNING id`,
         [owner.id, ownerProject.id]
       )
     ).rows[0];
     const installation = (
       await db.query(
-        `INSERT INTO github_installations (
+        `INSERT INTO github_installations (workspace_id,
            user_id, github_installation_id, github_account_id, account_login,
            account_type, repository_selection
-         ) VALUES ($1, 7001, 8001, 'workflowhq', 'Organization', 'selected')
+         ) VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1, 7001, 8001, 'workflowhq', 'Organization', 'selected')
          RETURNING id`,
         [owner.id]
       )
     ).rows[0];
     repository = (
       await db.query(
-        `INSERT INTO github_repositories (
+        `INSERT INTO github_repositories (workspace_id,
            user_id, installation_id, github_repository_id, github_node_id,
            owner_login, name, full_name, html_url
-         ) VALUES ($1, $2, 9001, 'R_node', 'workflowhq', 'app',
+         ) VALUES ((SELECT workspace_id FROM github_installations WHERE id = $2), $1, $2, 9001, 'R_node', 'workflowhq', 'app',
                    'workflowhq/app', 'https://github.com/workflowhq/app')
          RETURNING id`,
         [owner.id, installation.id]
@@ -175,8 +181,8 @@ describe("GitHub integration foundation", () => {
   it("moves one repository between owned projects without creating duplicate assignments", async () => {
     const secondProject = (
       await db.query(
-        `INSERT INTO projects (user_id, key, name)
-         VALUES ($1, 'API', 'API platform') RETURNING id`,
+        `INSERT INTO projects (workspace_id, user_id, key, name)
+         VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1, 'API', 'API platform') RETURNING id`,
         [owner.id]
       )
     ).rows[0];

@@ -1,6 +1,10 @@
 const { createAiCredentialValidator } = require("../lib/aiCredentialValidator");
 const { PROVIDERS, encryptCredential, requireVaultConfig } = require("../lib/aiCredentialVault");
 const { AppError } = require("../lib/errors");
+const { currentWorkspace } = require("../lib/workspaceContext");
+const { ensurePersonalWorkspace } = require("../lib/personalWorkspace");
+const credentialWorkspace = (req) =>
+  currentWorkspace() || ensurePersonalWorkspace(req.app.locals.db, req.user);
 
 const serialize = (row) => ({
   provider: row.provider,
@@ -16,8 +20,8 @@ const listCredentials = async (req, res) => {
   const result = await req.app.locals.db.query(
     `SELECT provider, masked_suffix, key_version, created_at, updated_at
      FROM ai_provider_credentials
-     WHERE user_id = $1`,
-    [req.user.id]
+     WHERE user_id = $1 AND workspace_id = $2`,
+    [req.user.id, await credentialWorkspace(req)]
   );
   const byProvider = new Map(result.rows.map((row) => [row.provider, serialize(row)]));
   return res.status(200).json({
@@ -46,8 +50,9 @@ const validateCredential = async (req, res) => {
 const writeCredential = async (req, res, { mode }) => {
   requireVaultConfig(req.app.locals.config);
   const provider = mode === "create" ? req.body.provider : req.params.provider;
+  const workspaceId = await credentialWorkspace(req);
   const encrypted = encryptCredential(
-    { credential: req.body.credential, provider, userId: req.user.id },
+    { credential: req.body.credential, provider, userId: req.user.id, workspaceId },
     req.app.locals.config
   );
   const client = await req.app.locals.db.connect();
@@ -57,8 +62,8 @@ const writeCredential = async (req, res, { mode }) => {
     if (mode === "create") {
       result = await client.query(
         `INSERT INTO ai_provider_credentials
-           (user_id, provider, encryption_version, key_version, ciphertext, iv, auth_tag, masked_suffix)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (user_id, provider, encryption_version, key_version, ciphertext, iv, auth_tag, masked_suffix, workspace_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING provider, masked_suffix, key_version, created_at, updated_at`,
         [
           req.user.id,
@@ -68,7 +73,8 @@ const writeCredential = async (req, res, { mode }) => {
           encrypted.ciphertext,
           encrypted.iv,
           encrypted.authTag,
-          encrypted.maskedSuffix
+          encrypted.maskedSuffix,
+          workspaceId
         ]
       );
     } else {
@@ -77,7 +83,7 @@ const writeCredential = async (req, res, { mode }) => {
          SET encryption_version = $3, key_version = $4, ciphertext = $5, iv = $6,
              auth_tag = $7, masked_suffix = $8,
              updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $1 AND provider = $2
+         WHERE user_id = $1 AND provider = $2 AND workspace_id = $9
          RETURNING provider, masked_suffix, key_version, created_at, updated_at`,
         [
           req.user.id,
@@ -87,7 +93,8 @@ const writeCredential = async (req, res, { mode }) => {
           encrypted.ciphertext,
           encrypted.iv,
           encrypted.authTag,
-          encrypted.maskedSuffix
+          encrypted.maskedSuffix,
+          workspaceId
         ]
       );
       if (!result.rows[0]) {
@@ -135,9 +142,9 @@ const removeCredential = async (req, res) => {
     await client.query("BEGIN");
     const result = await client.query(
       `DELETE FROM ai_provider_credentials
-       WHERE user_id = $1 AND provider = $2
+       WHERE user_id = $1 AND provider = $2 AND workspace_id = $3
        RETURNING key_version`,
-      [req.user.id, req.params.provider]
+      [req.user.id, req.params.provider, await credentialWorkspace(req)]
     );
     if (!result.rows[0]) {
       throw new AppError(

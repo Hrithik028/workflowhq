@@ -4501,6 +4501,15 @@ html[data-motion="reduced"] *::after {
   position: relative;
 }
 
+.engineering-board-header {
+  flex-wrap: wrap;
+}
+
+.engineering-board-header .engineering-header-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .engineering-board-toolbar {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) 170px minmax(180px, 270px) 140px auto 120px;
@@ -7556,7 +7565,7 @@ html[data-motion="reduced"] *::after {
 }
 
 .workflow-settings-header p {
-  color: #292722;
+  color: var(--editorial-muted);
   font-weight: 700;
 }
 
@@ -7565,10 +7574,10 @@ html[data-motion="reduced"] *::after {
   grid-template-columns: auto 1fr;
   gap: 14px;
   margin: 20px 0;
-  border: 1px solid #168c4b;
+  border: 1px solid var(--rule);
   padding: 16px 18px;
-  background: #eff9f1;
-  color: #073f24;
+  background: color-mix(in srgb, var(--blueprint) 10%, var(--panel));
+  color: var(--carbon);
 }
 
 .workflow-safety-note > svg {
@@ -7581,7 +7590,7 @@ html[data-motion="reduced"] *::after {
 
 .workflow-safety-note p {
   margin: 4px 0 0;
-  color: #193c2a;
+  color: var(--editorial-muted);
   font-size: 0.74rem;
   font-weight: 750;
   line-height: 1.55;
@@ -7623,6 +7632,7 @@ html[data-motion="reduced"] *::after {
 
 .workflow-status-names label {
   display: grid;
+  align-content: start;
   gap: 7px;
   color: var(--editorial-muted);
   font-size: 0.72rem;
@@ -7639,6 +7649,46 @@ html[data-motion="reduced"] *::after {
   font: inherit;
   font-size: 0.85rem;
   text-transform: none;
+}
+
+.workflow-customization button {
+  min-height: 38px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--paper);
+  color: var(--carbon);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.workflow-customization button:hover:not(:disabled) {
+  border-color: var(--signal);
+  background: var(--paper-deep);
+}
+.workflow-customization button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.workflow-customization > label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+.workflow-customization select {
+  max-width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--paper);
+  color: var(--carbon);
+  font: inherit;
+}
+.workflow-transition-list label {
+  overflow-wrap: anywhere;
 }
 
 .workflow-transition-list label {
@@ -7728,7 +7778,7 @@ html[data-motion="reduced"] *::after {
 
 .workflow-rule-signal p {
   margin: 4px 0 0;
-  color: #3b3832;
+  color: var(--editorial-muted);
   font-size: 0.68rem;
   font-weight: 750;
   line-height: 1.45;
@@ -7768,7 +7818,7 @@ html[data-motion="reduced"] *::after {
   gap: 16px;
   border-bottom: 1px solid var(--carbon);
   padding: 16px 2px;
-  color: #24211d;
+  color: var(--editorial-muted);
   font:
     750 0.68rem "Courier New",
     monospace;
@@ -9142,7 +9192,7 @@ html[data-motion="reduced"] *::after {
   content: "";
   width: 0.55rem;
   height: 0.55rem;
-  background: #ff4b00;
+  background: var(--signal);
   position: absolute;
   top: 0.55rem;
   left: -0.31rem;

@@ -4,6 +4,12 @@ const { AppError } = require("./errors");
 const { notifyUser } = require("./notifications");
 const { canAccessTask, getProjectRole } = require("./projectAccess");
 const { assertManualTransition } = require("./projectStatusWorkflow");
+const {
+  assertProjectWorkspace,
+  currentWorkspace,
+  queryInWorkspace
+} = require("./workspaceContext");
+const { ensurePersonalWorkspace } = require("./personalWorkspace");
 
 const typeRank = {
   initiative: 5,
@@ -30,6 +36,7 @@ const assertPermission = async (db, userId, permissionKey) => {
 
 const verifyProjectAccess = async (db, projectId, userId, allowedRoles) => {
   if (!projectId) return { key: "INB", role: null };
+  await assertProjectWorkspace(db, projectId);
   const result = await db.query(
     `SELECT p.key, p.archived_at, pm.role
      FROM projects p
@@ -90,7 +97,7 @@ const verifyParentHierarchy = async ({ db, parentId, projectId, taskType, userId
 
   while (cursorId) {
     const result = await db.query(
-      `SELECT id, project_id, parent_task_id, task_type, user_id, archived_at
+      `SELECT id, project_id, parent_task_id, task_type, user_id, workspace_id, archived_at
        FROM tasks WHERE id = $1 FOR UPDATE`,
       [cursorId]
     );
@@ -174,9 +181,11 @@ const enforceTaskRules = async (db, { userId, fields, creating = false }) => {
   }
   if (creating && fields.status !== "completed") {
     const limit = Number(rules.max_open_tasks_per_user || 100);
-    const open = await db.query(
-      "SELECT COUNT(*)::int AS count FROM tasks WHERE user_id = $1 AND status <> 'completed'",
-      [userId]
+    const open = await queryInWorkspace(
+      db,
+      "SELECT COUNT(*)::int AS count FROM tasks t WHERE user_id = $1 AND status <> 'completed' AND archived_at IS NULL /* workspace */",
+      [userId],
+      "t"
     );
     if (Number(open.rows[0].count) >= limit) {
       throw new AppError(
@@ -220,8 +229,8 @@ const createTask = async (
   const inserted = await db.query(
     `INSERT INTO tasks
        (user_id, project_id, title, description, status, priority, start_date, due_date,
-        task_type, parent_task_id, assignee_id, sprint_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        task_type, parent_task_id, assignee_id, sprint_id, workspace_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING *`,
     [
       userId,
@@ -235,7 +244,15 @@ const createTask = async (
       normalized.taskType,
       normalized.parentId,
       normalized.assigneeId,
-      normalized.sprintId
+      normalized.sprintId,
+      currentWorkspace() ||
+        (normalized.projectId
+          ? (
+              await db.query("SELECT workspace_id FROM projects WHERE id = $1", [
+                normalized.projectId
+              ])
+            ).rows[0]?.workspace_id
+          : await ensurePersonalWorkspace(db, { id: userId }))
     ]
   );
   const task = inserted.rows[0];
@@ -292,6 +309,7 @@ const updateTask = async (
   };
   await enforceTaskRules(db, { userId, fields: normalized });
   const projectChanged = Number(existing.project_id || 0) !== Number(normalized.projectId || 0);
+  await verifyProjectAccess(db, normalized.projectId, userId, ["owner", "editor"]);
   if (!projectChanged) {
     await assertManualTransition(db, normalized.projectId, existing.status, normalized.status);
   }
@@ -302,7 +320,6 @@ const updateTask = async (
       "Only this ticket's creator can move it out of the project into their inbox."
     );
   }
-  await verifyProjectAccess(db, normalized.projectId, userId, ["owner", "editor"]);
   if (projectChanged) {
     await verifyProjectAccess(db, existing.project_id, userId, ["owner", "editor"]);
     const dependencies = await db.query(
@@ -344,7 +361,7 @@ const updateTask = async (
      SET project_id = $1, title = $2, description = $3, status = $4, priority = $5,
          start_date = $6, due_date = $7, task_type = $8, parent_task_id = $9,
          assignee_id = $10, sprint_id = $11, version = version + 1,
-         updated_at = CURRENT_TIMESTAMP
+         workspace_id = $13, updated_at = CURRENT_TIMESTAMP
      WHERE id = $12
      RETURNING *`,
     [
@@ -359,7 +376,15 @@ const updateTask = async (
       normalized.parentId,
       normalized.assigneeId,
       normalized.sprintId,
-      taskId
+      taskId,
+      currentWorkspace() ||
+        (normalized.projectId
+          ? (
+              await db.query("SELECT workspace_id FROM projects WHERE id = $1", [
+                normalized.projectId
+              ])
+            ).rows[0]?.workspace_id
+          : await ensurePersonalWorkspace(db, { id: userId }))
     ]
   );
   const task = result.rows[0];

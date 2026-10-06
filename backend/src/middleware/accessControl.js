@@ -1,11 +1,15 @@
 const { readCurrentAccess, readWorkspaceRules } = require("../lib/accessControl");
 const { AppError } = require("../lib/errors");
+const { queryInWorkspace } = require("../lib/workspaceContext");
 
 const requireAdmin = async (req, _res, next) => {
   try {
     const access = await readCurrentAccess(req.app.locals.db, req.user.id);
     req.user.role = access.role;
-    if (access.role !== "admin" && access.role !== "platform_owner") {
+    if (
+      (req.app.locals.config.workspacesEnabled && access.role !== "platform_owner") ||
+      (access.role !== "admin" && access.role !== "platform_owner")
+    ) {
       return next(new AppError(403, "ADMIN_REQUIRED", "Administrator access is required."));
     }
     return next();
@@ -33,6 +37,22 @@ const requirePermission = (permissionKey) => async (req, _res, next) => {
   try {
     const access = await readCurrentAccess(req.app.locals.db, req.user.id);
     req.user.role = access.role;
+    if (permissionKey === "github.manage" && req.user.workspaceId) {
+      const member = (
+        await req.app.locals.db.query(
+          "SELECT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+          [req.user.workspaceId, req.user.id]
+        )
+      ).rows[0];
+      if (!member || !["owner", "admin"].includes(member.role))
+        return next(
+          new AppError(
+            403,
+            "WORKSPACE_ADMIN_REQUIRED",
+            "Workspace administrator access is required to manage GitHub."
+          )
+        );
+    }
     if (
       access.role !== "admin" &&
       access.role !== "platform_owner" &&
@@ -82,9 +102,11 @@ const enforceTaskRules =
       }
       if (creating && req.body.status !== "completed") {
         const limit = Number(rules.max_open_tasks_per_user || 100);
-        const result = await req.app.locals.db.query(
-          "SELECT COUNT(*)::int AS count FROM tasks WHERE user_id = $1 AND status <> 'completed'",
-          [req.user.id]
+        const result = await queryInWorkspace(
+          req.app.locals.db,
+          "SELECT COUNT(*)::int AS count FROM tasks t WHERE user_id = $1 AND status <> 'completed' AND archived_at IS NULL /* workspace */",
+          [req.user.id],
+          "t"
         );
         if (Number(result.rows[0].count) >= limit) {
           return next(

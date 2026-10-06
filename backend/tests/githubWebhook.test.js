@@ -1,3 +1,5 @@
+const { ensurePersonalWorkspace } = require("../src/lib/personalWorkspace");
+const { ensureProjectStatusWorkflow } = require("../src/lib/projectStatusWorkflow");
 const { createHmac } = require("node:crypto");
 
 const express = require("express");
@@ -67,39 +69,41 @@ describe("GitHub webhook security and processing", () => {
          VALUES ('Webhook owner','webhook-owner@example.com','hash') RETURNING id`
       )
     ).rows[0];
+    await ensurePersonalWorkspace(db, user);
     project = (
       await db.query(
-        `INSERT INTO projects (user_id,key,name) VALUES ($1,'WHQ','WorkflowHQ') RETURNING id`,
+        `INSERT INTO projects (workspace_id, user_id,key,name) VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1,'WHQ','WorkflowHQ') RETURNING id`,
         [user.id]
       )
     ).rows[0];
+    await ensureProjectStatusWorkflow(db, project.id);
     task = (
       await db.query(
-        `INSERT INTO tasks (user_id,project_id,issue_key,title)
-         VALUES ($1,$2,'WHQ-1','Secure GitHub webhooks') RETURNING id`,
+        `INSERT INTO tasks (workspace_id, user_id,project_id,issue_key,title)
+         VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1,$2,'WHQ-1','Secure GitHub webhooks') RETURNING id`,
         [user.id, project.id]
       )
     ).rows[0];
     installation = (
       await db.query(
-        `INSERT INTO github_installations (user_id,github_installation_id,github_account_id,
+        `INSERT INTO github_installations (workspace_id, user_id,github_installation_id,github_account_id,
            account_login,account_type,repository_selection)
-         VALUES ($1,7001,8001,'workflowhq','Organization','selected') RETURNING id,user_id`,
+         VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1,7001,8001,'workflowhq','Organization','selected') RETURNING id,user_id`,
         [user.id]
       )
     ).rows[0];
     repository = (
       await db.query(
-        `INSERT INTO github_repositories (user_id,installation_id,github_repository_id,
+        `INSERT INTO github_repositories (workspace_id, user_id,installation_id,github_repository_id,
            github_node_id,owner_login,name,full_name,html_url,selected)
-         VALUES ($1,$2,9001,'R_9001','workflowhq','app','workflowhq/app',
+         VALUES ((SELECT workspace_id FROM github_installations WHERE id = $2), $1,$2,9001,'R_9001','workflowhq','app','workflowhq/app',
                  'https://github.com/workflowhq/app',TRUE) RETURNING id`,
         [user.id, installation.id]
       )
     ).rows[0];
     await db.query(
-      `INSERT INTO project_github_repositories (repository_id,project_id,linked_by)
-       VALUES ($1,$2,$3)`,
+      `INSERT INTO project_github_repositories (workspace_id, repository_id,project_id,linked_by)
+       VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1,$2,$3)`,
       [repository.id, project.id, user.id]
     );
   });
@@ -265,14 +269,15 @@ describe("GitHub webhook security and processing", () => {
   it("normalizes supported events and links only exact keys in linked projects", async () => {
     const otherProject = (
       await db.query(
-        `INSERT INTO projects (user_id,key,name) VALUES ($1,'OTH','Other') RETURNING id`,
+        `INSERT INTO projects (workspace_id, user_id,key,name) VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1,'OTH','Other') RETURNING id`,
         [installation.user_id]
       )
     ).rows[0];
+    await ensureProjectStatusWorkflow(db, otherProject.id);
     const otherTask = (
       await db.query(
-        `INSERT INTO tasks (user_id,project_id,issue_key,title)
-        VALUES ($1,$2,'OTH-1','Not linked') RETURNING id`,
+        `INSERT INTO tasks (workspace_id, user_id,project_id,issue_key,title)
+        VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1,$2,'OTH-1','Not linked') RETURNING id`,
         [installation.user_id, otherProject.id]
       )
     ).rows[0];
@@ -421,9 +426,7 @@ describe("GitHub webhook security and processing", () => {
       },
       "automation-push"
     );
-    const afterPush = (
-      await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])
-    ).rows[0];
+    const afterPush = (await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])).rows[0];
     const merged = await signedRequest(
       app,
       "pull_request",
@@ -445,9 +448,7 @@ describe("GitHub webhook security and processing", () => {
       },
       "automation-merge"
     );
-    const afterMerge = (
-      await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])
-    ).rows[0];
+    const afterMerge = (await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])).rows[0];
     const runs = await db.query(
       `SELECT trigger_name, outcome FROM task_workflow_automation_runs
        WHERE task_id=$1 ORDER BY id`,
@@ -488,7 +489,10 @@ describe("GitHub webhook security and processing", () => {
         completed_at: "2026-09-03T12:00:00Z"
       }
     };
-    await db.query("UPDATE tasks SET status='in_progress' WHERE id=$1", [task.id]);
+    await db.query(
+      "UPDATE tasks SET status='in_progress' WHERE id=$1",
+      [task.id]
+    );
     const disabled = await signedRequest(app, "check_run", checkPayload, "disabled-check");
     const historicalPayload = {
       installation: { id: 7001 },
@@ -521,9 +525,7 @@ describe("GitHub webhook security and processing", () => {
     };
     await signedRequest(app, "push", pushPayload, "same-delivery");
     await signedRequest(app, "push", pushPayload, "same-delivery");
-    const current = (
-      await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])
-    ).rows[0];
+    const current = (await db.query("SELECT status FROM tasks WHERE id=$1", [task.id])).rows[0];
     const runs = await db.query(
       "SELECT trigger_name, outcome FROM task_workflow_automation_runs WHERE task_id=$1",
       [task.id]

@@ -1,10 +1,11 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
-import type { ApiErrorPayload, Session } from "../types";
+import type { ApiErrorPayload } from "../types";
 import { requestActivity } from "./requestActivity";
 
 let accessToken: string | null = null;
-let refreshRequest: Promise<Session> | null = null;
+type RefreshPayload = { accessToken: string; user: Record<string, unknown> };
+let refreshRequest: Promise<RefreshPayload> | null = null;
 
 // Generation can use the server's 60-second provider limit plus context/database work.
 // Keep ordinary API calls short; never retry paid generation on a timeout.
@@ -38,11 +39,13 @@ const finishActivity = (config?: InternalAxiosRequestConfig) => {
   if (activityConfig) delete activityConfig._finishActivity;
 };
 
-const requestRefresh = async () => {
+// Session restoration and expired-token retries share one rotating-cookie request.
+// In particular, React StrictMode must not consume the same refresh token twice.
+export const refreshAccessSession = async () => {
   if (!refreshRequest) {
     const finish = requestActivity.begin();
     refreshRequest = axios
-      .post<{ data: Session }>(
+      .post<{ data: RefreshPayload }>(
         `${api.defaults.baseURL}/auth/refresh`,
         {},
         { withCredentials: true, timeout: 12_000 }
@@ -74,7 +77,7 @@ api.interceptors.response.use(
     const isAuthRoute = original?.url?.includes("/auth/");
     if (error.response?.status === 401 && original && !original._retry && !isAuthRoute) {
       original._retry = true;
-      await requestRefresh();
+      await refreshAccessSession();
       return api(original);
     }
     return Promise.reject(error);
