@@ -14,6 +14,7 @@ import type {
   ProjectMember,
   ProjectRole,
   ProjectWorkflowRule,
+  TaskDependency,
   Sprint,
   SprintInput,
   SprintStatus,
@@ -69,6 +70,8 @@ let projects: Project[] = [
     updatedAt: isoDaysAgo(3)
   }
 ];
+
+let taskDependencies: TaskDependency[] = [];
 
 let tasks: Task[] = [
   {
@@ -712,6 +715,9 @@ export const demoWorkspaceApi: WorkspaceClient = {
     delete invitationsByProject[id];
     delete workflowRulesByProject[id];
     delete workflowConfigurationsByProject[id];
+    taskDependencies = taskDependencies.filter((edge) =>
+      tasks.some((task) => task.id === edge.blockerTaskId && task.projectId !== id)
+    );
     const removedLabelIds = new Set(
       labels.filter((label) => label.projectId === id).map((label) => label.id)
     );
@@ -729,6 +735,68 @@ export const demoWorkspaceApi: WorkspaceClient = {
       entityTitle: project.name,
       details: {}
     });
+  },
+
+  async getProjectRoadmap(projectId: number) {
+    await delay();
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    const projectTasks = tasks.filter((task) => task.projectId === projectId && !task.archivedAt);
+    const ids = new Set(projectTasks.map((task) => task.id));
+    return {
+      project: { id: project.id, key: project.key, name: project.name, myRole: project.myRole },
+      tasks: projectTasks.map((task) => ({
+        id: task.id,
+        issueKey: task.issueKey,
+        title: task.title,
+        taskType: task.taskType,
+        status: task.status,
+        startDate: task.startDate,
+        dueDate: task.dueDate,
+        parentId: task.parentId
+      })),
+      dependencies: taskDependencies.filter(
+        (edge) => ids.has(edge.blockerTaskId) && ids.has(edge.blockedTaskId)
+      )
+    };
+  },
+
+  async createTaskDependency(projectId: number, blockerTaskId: number, blockedTaskId: number) {
+    await delay();
+    const projectTasks = tasks.filter((task) => task.projectId === projectId && !task.archivedAt);
+    if (
+      !projectTasks.some((task) => task.id === blockerTaskId) ||
+      !projectTasks.some((task) => task.id === blockedTaskId)
+    ) {
+      throw new Error("Both tickets must belong to this project.");
+    }
+    if (blockerTaskId === blockedTaskId) throw new Error("A ticket cannot block itself.");
+    if (
+      taskDependencies.some(
+        (edge) => edge.blockerTaskId === blockerTaskId && edge.blockedTaskId === blockedTaskId
+      )
+    ) {
+      throw new Error("This dependency already exists.");
+    }
+    const pending = [blockedTaskId];
+    const visited = new Set<number>();
+    while (pending.length) {
+      const current = pending.pop();
+      if (current === blockerTaskId) throw new Error("This dependency would create a cycle.");
+      if (current == null || visited.has(current)) continue;
+      visited.add(current);
+      for (const edge of taskDependencies) {
+        if (edge.blockerTaskId === current) pending.push(edge.blockedTaskId);
+      }
+    }
+    taskDependencies.push({ blockerTaskId, blockedTaskId, createdAt: new Date().toISOString() });
+  },
+
+  async deleteTaskDependency(_projectId: number, blockerTaskId: number, blockedTaskId: number) {
+    await delay();
+    taskDependencies = taskDependencies.filter(
+      (edge) => edge.blockerTaskId !== blockerTaskId || edge.blockedTaskId !== blockedTaskId
+    );
   },
 
   async listTasks(query: TaskQuery = {}) {
@@ -938,6 +1006,9 @@ export const demoWorkspaceApi: WorkspaceClient = {
       throw new Error("Move or delete this task's children first.");
     }
     tasks = tasks.filter((item) => item.id !== id);
+    taskDependencies = taskDependencies.filter(
+      (edge) => edge.blockerTaskId !== id && edge.blockedTaskId !== id
+    );
     acceptanceCriteria = acceptanceCriteria.filter((item) => item.taskId !== id);
     refreshProjectCounts();
     refreshHierarchyMetadata();

@@ -1,4 +1,13 @@
-import { ArrowUpRight, Bot, FileUp, FolderKanban, Github, PencilLine, Plus } from "lucide-react";
+import {
+  ArrowUpRight,
+  Bot,
+  FileUp,
+  FolderKanban,
+  Github,
+  Map,
+  PencilLine,
+  Plus
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useOutletContext } from "react-router-dom";
 
@@ -164,6 +173,14 @@ function Projects() {
                 <div className="project-register-name">
                   <strong>{project.name}</strong>
                   <span>{project.description || "Outcome not defined yet."}</span>
+                  <span className="project-register-tools">
+                    <Link
+                      className="project-register-development"
+                      to={`/projects/${project.id}/roadmap`}
+                    >
+                      <Map size={13} /> Roadmap
+                    </Link>
+                  </span>
                   {!isDemo ? (
                     <span className="project-register-tools">
                       <Link

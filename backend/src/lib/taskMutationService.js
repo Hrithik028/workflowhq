@@ -305,6 +305,18 @@ const updateTask = async (
   await verifyProjectAccess(db, normalized.projectId, userId, ["owner", "editor"]);
   if (projectChanged) {
     await verifyProjectAccess(db, existing.project_id, userId, ["owner", "editor"]);
+    const dependencies = await db.query(
+      `SELECT COUNT(*)::int AS count FROM task_dependencies
+       WHERE blocker_task_id = $1 OR blocked_task_id = $1`,
+      [taskId]
+    );
+    if (Number(dependencies.rows[0].count) > 0) {
+      throw new AppError(
+        409,
+        "TASK_HAS_DEPENDENCIES",
+        "Remove this ticket's blocking relationships before changing projects."
+      );
+    }
     const children = await db.query(
       "SELECT COUNT(*)::int AS count FROM tasks WHERE parent_task_id = $1",
       [taskId]

@@ -40,6 +40,11 @@ const {
 } = require("../controllers/projectWorkflowController");
 const { applyJiraImport, previewJiraImport } = require("../controllers/jiraImportController");
 const {
+  createTaskDependency,
+  deleteTaskDependency,
+  listProjectRoadmap
+} = require("../controllers/projectRoadmapController");
+const {
   createSprint,
   deleteSprint,
   listSprints,
@@ -51,6 +56,7 @@ const authMiddleware = require("../middleware/authMiddleware");
 const { validate } = require("../middleware/validate");
 const {
   labelSchemas,
+  dependencySchemas,
   invitationSchemas,
   projectMemberSchemas,
   projectSchemas,
@@ -71,6 +77,23 @@ router.post(
   asyncHandler(createProject)
 );
 router.get("/:id", validate({ params: projectSchemas.params }), asyncHandler(getProjectById));
+router.get(
+  "/:id/roadmap",
+  validate({ params: dependencySchemas.params }),
+  asyncHandler(listProjectRoadmap)
+);
+router.post(
+  "/:id/dependencies",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: dependencySchemas.params, body: dependencySchemas.create }),
+  asyncHandler(createTaskDependency)
+);
+router.delete(
+  "/:id/dependencies/:blockerTaskId/:blockedTaskId",
+  asyncHandler(requirePermission("tasks.edit")),
+  validate({ params: dependencySchemas.edgeParams }),
+  asyncHandler(deleteTaskDependency)
+);
 router.post(
   "/:id/jira-import/preview",
   asyncHandler(requirePermission("tasks.create")),

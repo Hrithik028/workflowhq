@@ -366,11 +366,24 @@ const sprintSchemas = {
   update: sprintUpdateSchema
 };
 
+const dependencySchemas = {
+  params: z.object({ id: idSchema }),
+  edgeParams: z.object({ id: idSchema, blockerTaskId: idSchema, blockedTaskId: idSchema }),
+  create: z
+    .object({ blockerTaskId: idSchema, blockedTaskId: idSchema })
+    .strict()
+    .refine((value) => value.blockerTaskId !== value.blockedTaskId, {
+      message: "A ticket cannot block itself.",
+      path: ["blockedTaskId"]
+    })
+};
+
 module.exports = {
   acceptanceCriteriaSchemas,
   activitySchemas,
   authSchemas,
   commentSchemas,
+  dependencySchemas,
   labelSchemas,
   invitationSchemas,
   projectMemberSchemas,

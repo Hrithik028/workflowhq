@@ -309,6 +309,29 @@ export interface ProjectWorkflow {
   transitions: ProjectWorkflowTransition[];
 }
 
+export interface RoadmapTask {
+  id: number;
+  issueKey: string;
+  title: string;
+  taskType: TaskType;
+  status: TaskStatus;
+  startDate: string | null;
+  dueDate: string | null;
+  parentId: number | null;
+}
+
+export interface TaskDependency {
+  blockerTaskId: number;
+  blockedTaskId: number;
+  createdAt: string;
+}
+
+export interface ProjectRoadmap {
+  project: { id: number; key: string; name: string; myRole: ProjectRole };
+  tasks: RoadmapTask[];
+  dependencies: TaskDependency[];
+}
+
 export interface GitHubInstallation {
   id: number;
   githubInstallationId: string;
@@ -645,6 +668,8 @@ export interface Activity {
     | "project_archived"
     | "project_restored"
     | "project_workflow_updated"
+    | "task_dependency_added"
+    | "task_dependency_removed"
     | "task_workflow_automated"
     | "github_identity_mapped"
     | "github_identity_unmapped"
@@ -799,6 +824,17 @@ export interface WorkspaceClient {
   archiveProject(id: number): Promise<Project>;
   restoreProject(id: number): Promise<Project>;
   deleteProject(id: number): Promise<void>;
+  getProjectRoadmap(projectId: number): Promise<ProjectRoadmap>;
+  createTaskDependency(
+    projectId: number,
+    blockerTaskId: number,
+    blockedTaskId: number
+  ): Promise<void>;
+  deleteTaskDependency(
+    projectId: number,
+    blockerTaskId: number,
+    blockedTaskId: number
+  ): Promise<void>;
   listTasks(query?: TaskQuery): Promise<{ data: Task[]; pagination: PaginationMetadata }>;
   createTask(input: TaskInput): Promise<Task>;
   updateTask(id: number, input: TaskInput): Promise<Task>;
