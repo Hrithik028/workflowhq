@@ -1,10 +1,13 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import { useLocation } from "react-router-dom";
 
 import { requestActivity } from "../api/requestActivity";
 import BrandMark from "./BrandMark";
 import PublicGlow from "./PublicGlow";
 import "./loading-experience.css";
+
+export const LOADING_DELAY_MS = 3000;
+const NAVIGATION_CAPTURE_MS = 500;
 
 const messageFor = (pathname: string) => {
   if (pathname.startsWith("/workflow")) return "Opening your workflow";
@@ -50,22 +53,31 @@ export function LoadingScreen({ message, overlay = false, inline = false }: Load
 export function DelayedLoadingScreen(props: LoadingScreenProps) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
-    const timer = window.setTimeout(() => setVisible(true), 1000);
+    const timer = window.setTimeout(() => setVisible(true), LOADING_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, []);
   return visible ? <LoadingScreen {...props} /> : null;
 }
 
-export function LoadingExperience({ disabled = false }: { disabled?: boolean }) {
-  const location = useLocation();
-  const isDisabled = disabled || location.pathname === "/";
+function NavigationLoadingScreen({ pathname }: { pathname: string }) {
+  useLayoutEffect(() => {
+    const scope = requestActivity.beginNavigation();
+    const timer = window.setTimeout(() => scope.seal(), NAVIGATION_CAPTURE_MS);
+    return () => {
+      window.clearTimeout(timer);
+      scope.dispose();
+    };
+  }, []);
   const pending = useSyncExternalStore(
     requestActivity.subscribe,
-    requestActivity.getSnapshot,
-    requestActivity.getSnapshot
+    requestActivity.getNavigationSnapshot,
+    requestActivity.getNavigationSnapshot
   );
-  if (pending === 0 || isDisabled) return null;
-  return (
-    <DelayedLoadingScreen key={location.key} message={messageFor(location.pathname)} overlay />
-  );
+  return pending > 0 ? <DelayedLoadingScreen message={messageFor(pathname)} overlay /> : null;
+}
+
+export function LoadingExperience({ disabled = false }: { disabled?: boolean }) {
+  const location = useLocation();
+  if (disabled || location.pathname === "/") return null;
+  return <NavigationLoadingScreen key={location.key} pathname={location.pathname} />;
 }

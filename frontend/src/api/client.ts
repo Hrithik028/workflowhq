@@ -21,7 +21,9 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  (config as ActivityConfig)._finishActivity = requestActivity.begin();
+  (config as ActivityConfig)._finishActivity = requestActivity.begin({
+    foreground: (config.method || "get").toLowerCase() === "get"
+  });
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
@@ -40,7 +42,7 @@ const finishActivity = (config?: InternalAxiosRequestConfig) => {
 
 const requestRefresh = async () => {
   if (!refreshRequest) {
-    const finish = requestActivity.begin();
+    const finish = requestActivity.begin({ foreground: false });
     refreshRequest = axios
       .post<{ data: Session }>(
         `${api.defaults.baseURL}/auth/refresh`,
