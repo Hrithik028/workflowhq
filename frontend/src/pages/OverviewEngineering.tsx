@@ -15,7 +15,7 @@ import { getErrorMessage } from "../api/client";
 import { githubApi } from "../api/github";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
-import TaskModal from "../components/TaskModal";
+import { DeferredTaskModal as TaskModal } from "../components/DeferredModals";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type {
   Activity,

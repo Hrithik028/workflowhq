@@ -10,6 +10,7 @@
     "dev": "vite",
     "dev:demo": "vite --mode demo",
     "build": "vite build",
+    "check:chunks": "node ../scripts/check-frontend-chunks.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
