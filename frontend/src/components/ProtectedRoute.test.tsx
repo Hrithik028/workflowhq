@@ -1,10 +1,32 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ProtectedRoute from "./ProtectedRoute";
 
+afterEach(() => vi.useRealTimers());
+
 describe("ProtectedRoute", () => {
+  it("delays auth loading without exposing protected content and hides it on completion", () => {
+    vi.useFakeTimers();
+    const view = (isChecking: boolean) => (
+      <MemoryRouter>
+        <ProtectedRoute isAuthenticated isChecking={isChecking}>
+          <p>Private workspace</p>
+        </ProtectedRoute>
+      </MemoryRouter>
+    );
+    const rendered = render(view(true));
+    act(() => vi.advanceTimersByTime(999));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Private workspace")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole("status")).toHaveTextContent("Restoring your workspace");
+    rendered.rerender(view(false));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByText("Private workspace")).toBeInTheDocument();
+  });
+
   it("redirects an unauthenticated visitor to sign in", () => {
     render(
       <MemoryRouter initialEntries={["/app"]}>
