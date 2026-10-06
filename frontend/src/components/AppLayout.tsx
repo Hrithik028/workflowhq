@@ -18,6 +18,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import type { User } from "../types";
 import { ThemeToggle } from "../theme";
 import BrandMark from "./BrandMark";
+import RouteContentBoundary from "./RouteContentBoundary";
 
 export interface LayoutContext {
   isDemo: boolean;
@@ -120,7 +121,9 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
             Changes stay in this browser session.
           </div>
         ) : null}
-        <Outlet context={{ isDemo, user } satisfies LayoutContext} />
+        <RouteContentBoundary>
+          <Outlet context={{ isDemo, user } satisfies LayoutContext} />
+        </RouteContentBoundary>
       </div>
     </div>
   );

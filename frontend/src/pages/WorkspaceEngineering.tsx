@@ -16,7 +16,7 @@ import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
 import PriorityIcon from "../components/PriorityIcon";
-import TaskModal from "../components/TaskModal";
+import { DeferredTaskModal as TaskModal } from "../components/DeferredModals";
 import { progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type {

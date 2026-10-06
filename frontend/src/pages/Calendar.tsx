@@ -5,7 +5,7 @@ import { useOutletContext } from "react-router-dom";
 import { getErrorMessage } from "../api/client";
 import { workspaceApi } from "../api/workspace";
 import type { LayoutContext } from "../components/AppLayout";
-import TaskModal from "../components/TaskModal";
+import { DeferredTaskModal as TaskModal } from "../components/DeferredModals";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Project, Task, TaskInput } from "../types";
 import { formatDate } from "../utils/format";

@@ -250,7 +250,7 @@ describe("Engineering board lanes", () => {
     renderBoard("/workflow?project=4&sprint=8&stage=released");
     await screen.findByRole("article", { name: "WHQ-4" });
     fireEvent.click(screen.getByRole("button", { name: "New issue" }));
-    const modal = screen.getByRole("dialog");
+    const modal = await screen.findByRole("dialog");
     expect(modal).toHaveTextContent('"initialStatus":"completed"');
     expect(modal).toHaveTextContent('"initialProjectId":4');
     expect(modal).toHaveTextContent('"initialSprintId":8');
