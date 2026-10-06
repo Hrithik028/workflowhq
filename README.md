@@ -4,17 +4,19 @@
 
 WorkflowHQ connects project planning with the engineering work that delivers it. Organize tickets and acceptance criteria, follow repository activity, and review AI proposals before anything changes.
 
-[Try the application](https://workflowhq-app.onrender.com/) · [Watch the walkthrough](docs/media/workflowhq-demo.mp4) · [Run locally](#run-locally) · [Architecture](#architecture)
+[Try the application](https://workflowhq-app.onrender.com/) · [Watch the product tour](https://github.com/user-attachments/assets/a29ef097-e21a-4230-aa2d-7c38e64ad659) · [Run locally](#run-locally) · [Architecture](#architecture)
 
 > **Developer beta.** Core planning, GitHub integration, governed AI planning and action review are merged into `master`. Optional integrations need backend configuration. The feature/release table below separates merged code from pending work; it does not certify the current production deployment.
 
 ## A quick product tour
 
-[![Play the WorkflowHQ captioned walkthrough: planning, workflow, development signals and architecture](docs/media/demo-poster.png)](docs/media/workflowhq-demo.mp4)
+https://github.com/user-attachments/assets/a29ef097-e21a-4230-aa2d-7c38e64ad659
 
-**72-second captioned walkthrough** · No audio required · [Transcript](docs/media/demo-transcript.md)
+**25-second product tour** · Planning, linked GitHub activity and human-approved AI · [Download MP4](docs/media/workflowhq-brag.mp4) · [Video credits and text overview](docs/media/workflowhq-brag-credits.md)
 
-The video is an edited walkthrough of actual browser captures, plus explanatory diagrams—not a live recording of production actions. Screens use the built-in, session-only demo. Ticket names, people, counts and GitHub signals are illustrative, not evidence of real repository events. Clicking the thumbnail opens the MP4; GitHub may offer a download rather than an inline player.
+The tour combines the actual demo interface with illustrative, animated ticket, development and AI-review sequences—not a live recording of production actions. Names, counts and GitHub signals are sample data, not evidence of real repository events. On-screen text carries the story without requiring audio.
+
+Music: [“Neon” by Scott Buckley](https://www.scottbuckley.com.au/library/neon/), released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). An edited excerpt is used with volume fades.
 
 ![Engineering command center with sample tickets, pull requests and delivery signals](screenshots/showcase/overview.png)
 
