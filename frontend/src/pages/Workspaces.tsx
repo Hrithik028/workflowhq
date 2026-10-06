@@ -10,7 +10,7 @@ import {
 import { getErrorMessage } from "../api/client";
 import type { LayoutContext } from "../components/AppLayout";
 import ConfirmationDialog from "../components/ConfirmationDialog";
-import { LoadingScreen } from "../components/LoadingExperience";
+import { DelayedLoadingScreen } from "../components/LoadingExperience";
 import "../components/workspace-management.css";
 
 export default function Workspaces() {
@@ -129,7 +129,7 @@ export default function Workspaces() {
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {enabled === null && !error ? (
-        <LoadingScreen message="Loading workspaces" inline />
+        <DelayedLoadingScreen message="Loading workspaces" inline />
       ) : (
         <>
           <section>
@@ -185,7 +185,7 @@ export default function Workspaces() {
               </p>
             )}
             {canManage && !currentDetails && !error && (
-              <LoadingScreen message="Loading workspace settings" inline />
+              <DelayedLoadingScreen key={selectedId} message="Loading workspace settings" inline />
             )}
             {currentDetails && canManage && (
               <>
