@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>WorkflowHQ — README showcase preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f5f2e9;
+        color: #14232d;
+        font:
+          16px/1.6 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1120px;
+        margin: auto;
+        padding: 44px 24px;
+      }
+      header {
+        margin-bottom: 28px;
+      }
+      .eyebrow {
+        font-size: 12px;
+        letter-spacing: 0.15em;
+        color: #786344;
+        font-weight: 700;
+      }
+      h1 {
+        font:
+          clamp(38px, 7vw, 66px)/1.1 Georgia,
+          serif;
+        margin: 16px 0;
+      }
+      h2 {
+        font:
+          32px Georgia,
+          serif;
+        margin-top: 44px;
+      }
+      a {
+        color: #245d78;
+      }
+      p {
+        max-width: 82ch;
+      }
+      .note {
+        background: #e7eff0;
+        padding: 16px 20px;
+        border-radius: 12px;
+      }
+      video {
+        display: block;
+        width: 100%;
+        background: #101f29;
+        border-radius: 14px;
+      }
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 1px solid #bfc8ca;
+        border-radius: 10px;
+      }
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 22px;
+      }
+      figure {
+        margin: 0;
+      }
+      figcaption {
+        margin: 8px 0 16px;
+        font-size: 14px;
+      }
+      footer {
+        margin: 40px 0;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">WORKFLOWHQ / LOCAL README PREVIEW</div>
+        <h1>Plan the work.<br />Follow the code. Approve the AI.</h1>
+        <p>
+          A project workspace that connects tickets, repository evidence and human-approved AI
+          changes.
+        </p>
+        <p>
+          <a href="../../README.md">README source</a> ·
+          <a href="demo-transcript.md">Video transcript</a> ·
+          <a href="../architecture.md">Architecture notes</a>
+        </p>
+      </header>
+      <p class="note">
+        Local preview — not published. Screens are actual captures of the session-only demo. All
+        people, metrics and GitHub signals are sample data. The video is a captioned screenshot
+        walkthrough, not a production screen recording.
+      </p>
+      <h2>Watch the 72-second walkthrough</h2>
+      <video
+        controls
+        preload="metadata"
+        poster="demo-poster.png"
+        aria-label="WorkflowHQ captioned product walkthrough"
+      >
+        <source src="workflowhq-demo.mp4" type="video/mp4" />
+        <track kind="captions" src="workflowhq-demo.vtt" srclang="en" label="English" />
+        <p><a href="workflowhq-demo.mp4">Download the MP4</a> or read the transcript.</p>
+      </video>
+      <h2>Architecture</h2>
+      <img
+        src="architecture.svg"
+        alt="React calls an authorized Express API backed by PostgreSQL. GitHub and AI have explicit server boundaries."
+      />
+      <h2>Human-approved AI</h2>
+      <img
+        src="ai-approval-flow.svg"
+        alt="Choose scope, generate, validate, review, approve, apply. Generation never writes tickets."
+      />
+      <h2>The actual interface</h2>
+      <div class="gallery">
+        <figure>
+          <img
+            src="../../screenshots/showcase/overview.png"
+            alt="Sample engineering command center"
+          />
+          <figcaption>Engineering overview</figcaption>
+        </figure>
+        <figure>
+          <img src="../../screenshots/showcase/workflow.png" alt="Sample board" />
+          <figcaption>Workflow</figcaption>
+        </figure>
+        <figure>
+          <img src="../../screenshots/showcase/projects.png" alt="Sample project register" />
+          <figcaption>Projects</figcaption>
+        </figure>
+        <figure>
+          <img src="../../screenshots/showcase/tasks.png" alt="Sample hierarchy" />
+          <figcaption>Ticket hierarchy</figcaption>
+        </figure>
+        <figure>
+          <img
+            src="../../screenshots/showcase/ticket.png"
+            alt="Sample ticket criteria and development"
+          />
+          <figcaption>Ticket detail</figcaption>
+        </figure>
+        <figure>
+          <img src="../../screenshots/showcase/calendar.png" alt="Sample August calendar" />
+          <figcaption>Delivery calendar</figcaption>
+        </figure>
+        <figure>
+          <img src="../../screenshots/showcase/analytics.png" alt="Current issue counts" />
+          <figcaption>Analytics</figcaption>
+        </figure>
+        <figure>
+          <img src="../../screenshots/showcase/landing.png" alt="WorkflowHQ ribbon landing" />
+          <figcaption>Landing page</figcaption>
+        </figure>
+      </div>
+      <footer>
+        Master baseline checked: 902e618 · 6 October 2026. Pending workspace/roadmap/stage releases
+        remain distinguished in the README.
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,368 +1,179 @@
 # WorkflowHQ
 
-**Plan the work. See what’s moving. Ship what matters.** WorkflowHQ brings projects, tasks, deadlines, and delivery progress into one clear workspace.
+### Plan the work. Follow the code. Approve the AI.
 
-> **Status:** The core project-management workflow, project invitations, GitHub integration, and
-> workflow automation are implemented. The repository includes backend integration tests,
-> frontend component tests, a release audit, Docker configuration, and a CI pipeline.
+WorkflowHQ connects project planning with the engineering work that delivers it. Organize tickets and acceptance criteria, follow repository activity, and review AI proposals before anything changes.
 
-## Live Demo
+[Try the application](https://workflowhq-app.onrender.com/) · [Watch the walkthrough](docs/media/workflowhq-demo.mp4) · [Run locally](#run-locally) · [Architecture](#architecture)
 
-[Open WorkflowHQ](https://workflowhq-app.onrender.com/login)
+> **Developer beta.** Core planning, GitHub integration, governed AI planning and action review are merged into `master`. Optional integrations need backend configuration. The feature/release table below separates merged code from pending work; it does not certify the current production deployment.
 
-Use the clearly labelled demo entry for sample data, or create an account to verify persisted projects and tickets. GitHub development signals remain unavailable until a repository is explicitly connected.
+## A quick product tour
 
-## Overview
+[![Play the WorkflowHQ captioned walkthrough: planning, workflow, development signals and architecture](docs/media/demo-poster.png)](docs/media/workflowhq-demo.mp4)
 
-The application combines a React TypeScript interface with an Express REST API and PostgreSQL. Users get a private editorial-style workspace with projects, a Kanban flow, a searchable task register, a deadline calendar, workflow statistics, and lightweight activity history.
+**72-second captioned walkthrough** · No audio required · [Transcript](docs/media/demo-transcript.md)
 
-## Product Preview
+The video is an edited walkthrough of actual browser captures, plus explanatory diagrams—not a live recording of production actions. Screens use the built-in, session-only demo. Ticket names, people, counts and GitHub signals are illustrative, not evidence of real repository events. Clicking the thumbnail opens the MP4; GitHub may offer a download rather than an inline player.
 
-![WorkflowHQ overview](screenshots/dashboard.png)
+![Engineering command center with sample tickets, pull requests and delivery signals](screenshots/showcase/overview.png)
+
+## What you can do
+
+| Workflow                           | What WorkflowHQ adds                                                                                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Plan with context**              | Projects, initiatives, epics, stories, tasks, bugs and subtasks; parent/child work; editable acceptance criteria, priorities, owners and dates.                                                    |
+| **Keep delivery visible**          | Board movement with accessible status controls, a searchable hierarchy, deadline calendar, archive/restore and project progress.                                                                   |
+| **Connect the repository**         | Install a GitHub App, grant repository access, then explicitly select and assign repositories to WorkflowHQ projects. Explore synchronized commits, pull requests, checks and deployment activity. |
+| **Link code to a ticket**          | Put an exact issue key such as `WHQ-42` in a branch, commit or PR. Verified future webhooks can apply owner-configured forward-only status rules. History imports do not move tickets.             |
+| **Plan with your own AI provider** | Personal encrypted credentials for OpenAI, Anthropic or Google Gemini. Budget defaults, selectable approved models, bounded ticket/GitHub context, evidence labels and duplicate-title warnings.   |
+| **Review before writing**          | Creation proposals and bounded ticket/criteria actions pass schema, permissions and version checks. Human approval, one-time approvals, transactions and idempotency protect application.          |
+| **Work with a team**               | Project roles and expiring invitations, contributor identity mapping, comments, activity and in-app notifications. Platform ownership is separate from project ownership.                          |
+| **Start from existing work**       | Preview and import a one-time Jira CSV export. Ongoing Jira synchronization is intentionally deferred.                                                                                             |
+
+Analytics describe **current issue counts and last-updated completion trends**, not measured cycle time, historical stage transitions or developer productivity scores.
 
 <details>
-<summary>Explore the full interface</summary>
-
-### Sign in
-
-![WorkflowHQ login](screenshots/login.png)
+<summary><strong>Explore the interface — real captures, sample data</strong></summary>
 
 ### Workflow board
 
-![WorkflowHQ workflow board](screenshots/workflow.png)
+![Sample WorkflowHQ board showing ready, in-motion and shipped tickets](screenshots/showcase/workflow.png)
 
-### Projects
+### Project register
 
-![WorkflowHQ projects](screenshots/projects.png)
+![Project register showing sample projects and progress](screenshots/showcase/projects.png)
 
-### Calendar
+### Ticket hierarchy
 
-![WorkflowHQ delivery calendar](screenshots/calendar.png)
+![Searchable ticket register and sample epic progress](screenshots/showcase/tasks.png)
 
-### Tasks
+### Acceptance criteria and development context
 
-![WorkflowHQ task register](screenshots/tasks.png)
+![Ticket detail with sample criteria, child work and GitHub development context](screenshots/showcase/ticket.png)
 
-### Task editor
+### Delivery calendar
 
-![WorkflowHQ task editor](screenshots/task-modal.png)
+![Sample August deadlines in the delivery calendar](screenshots/showcase/calendar.png)
 
-### Project invitations
+### Delivery analytics
 
-![WorkflowHQ project invitations](screenshots/project-invitations.jpg)
+![Analytics with current issue counts and clearly labelled metrics](screenshots/showcase/analytics.png)
 
-### GitHub workflow rules
+### Landing page
 
-![WorkflowHQ GitHub workflow rules](screenshots/workflow-rules.jpg)
-
-### GitHub identity and recovery operations
-
-![WorkflowHQ GitHub identity and recovery operations](screenshots/github-operations.jpg)
-
-![WorkflowHQ failed webhook recovery](screenshots/github-recovery.jpg)
-
-### Mobile overview
-
-![WorkflowHQ mobile workspace](screenshots/mobile-workspace.png)
+![WorkflowHQ landing page with its ribbon visual](screenshots/showcase/landing.png)
 
 </details>
 
-These committed captures document a reviewed product revision and may not reflect every later UI change.
-
-## Tech Stack
-
-| Layer    | Technologies                          |
-| -------- | ------------------------------------- |
-| Frontend | React, TypeScript, Vite, Axios, CSS   |
-| Backend  | Node.js, Express, Zod, JWT, bcrypt    |
-| Database | PostgreSQL, raw SQL migrations        |
-| Delivery | Docker Compose, Nginx, GitHub Actions |
-
-## Key Features
-
-- Short-lived access tokens with rotating refresh tokens in `HttpOnly` cookies
-- TOTP multi-factor authentication with single-use recovery codes and replay protection
-- Email verification, single-use password recovery, and user-controlled active sessions
-- Trusted-origin checks and tiered API rate limits for sensitive operations
-- Provider-neutral AI task planning with a read-only preview and explicit approval gate
-- User-owned projects and tasks with authorization enforced in every query
-- Expiring project invitations with exact-email acceptance, owner revocation, and copy-link fallback
-- Owner-configured GitHub rules that move exact-key tickets forward from verified webhook signals
-- Contributor identity mapping and bounded GitHub webhook recovery without retaining raw payloads
-- Kanban board with drag-and-drop and accessible status controls
-- Searchable all-task register with inline status editing
-- Month calendar with project filtering, upcoming work, and date-aware task creation
-- Bounded pagination, search, project/priority filters, and sorting
-- Dashboard counts for status, priority, and overdue work
-- Focused activity history for important task and project changes
-- Responsive loading, empty, success, and error states
-- Integration tests for authentication, authorization, validation, CRUD, and queries
-
 ## Architecture
 
-```mermaid
-flowchart LR
-  User["Browser user"] --> UI["React + TypeScript\nVite frontend"]
-  UI -->|"REST requests"| API["Express API\nauth, validation, workflows"]
-  API -->|"parameterised SQL"| DB[(PostgreSQL)]
-  API -.->|"rotating HttpOnly refresh cookie"| User
-  GitHub["GitHub App + signed webhooks"] --> Integration["Webhook verification, sync\nand workflow rules"]
-  Integration --> API
-  API -.->|"optional invitation email"| Mail["Resend provider"]
-  CI["GitHub Actions"] -->|"audit, lint, tests, type-check, build"| API
-  CI --> UI
+One React application, a modular Express API and PostgreSQL. Authorization and mutations stay on the server; external services enter through explicit integration boundaries.
+
+![WorkflowHQ architecture: browser, authorized API, PostgreSQL, signed GitHub webhooks and governed provider calls](docs/media/architecture.svg)
+
+[Architecture and editable Mermaid diagrams](docs/architecture.md)
+
+### AI assists; the user decides
+
+![AI flow: choose scope, generate a validated proposal, review, approve and apply atomically](docs/media/ai-approval-flow.svg)
+
+Generation is read-only. Approved actions use the same domain rules as manual edits. Existing-ticket versions are checked again at apply time; a stale or unauthorized plan fails rather than silently overwriting work. Permanent ticket deletion is not an AI action.
+
+The planner sends bounded, explicitly selected ticket and synchronized GitHub metadata—not repository source files, raw webhook bodies, environment variables or installation secrets. Credentials are decrypted only for the backend provider request and are never returned to the browser.
+
+## Engineering and security boundaries
+
+- Short-lived access tokens; hashed, rotating refresh tokens in `HttpOnly` cookies; active-session controls.
+- Optional email verification and password recovery. TOTP setup includes QR codes and single-use recovery codes; MFA protects password resets and MFA changes, **not every normal sign-in**.
+- Server-side project authorization, parameterized SQL, validated payloads, trusted-origin checks and tiered rate limits.
+- GitHub signature verification, repository/project scope checks, delivery deduplication and bounded redelivery.
+- AES-256-GCM credential vault, fixed provider endpoints, mandatory platform AI policy when planning is enabled, approved-model controls and usage limits.
+- Backend HTTP integration tests, frontend component tests, real-PostgreSQL migration/transaction checks, lint/type/build CI and a source release audit.
+
+These are implemented controls, not a claim of independent security certification. See [SECURITY.md](SECURITY.md), [credential rotation](docs/ai-credential-key-rotation.md) and the [release checklist](docs/developer-beta-release-checklist.md).
+
+## Feature and release state
+
+Checked against `origin/master` at `902e618` on **6 October 2026**. A feature branch existing or being merged into another feature branch is not the same as shipping it to `master`.
+
+| Area                                                                                  | State                                                                           |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Core projects/tickets/criteria, calendar, archive/restore, analytics                  | Merged                                                                          |
+| GitHub App connection, repository activity, identity/recovery and workflow automation | Merged; requires GitHub App configuration                                       |
+| AI provider vault, conversations, proposals, action executor and governance           | Merged; requires backend secrets and a user's provider credential               |
+| One-time Jira CSV import, in-app notifications, custom labels/manual transitions      | Merged                                                                          |
+| Sustained-navigation-only loading indicator                                           | Merged in PR #75                                                                |
+| Roadmaps and cycle-safe dependencies; additional ordered stages                       | Present in local/feature-branch work; not in the checked `master` revision      |
+| Multi-workspace management, isolation hardening and related UI fixes                  | Local/feature-branch release work; rollout review and migrations still required |
+| Jira live synchronization                                                             | Deferred                                                                        |
+
+Workspace isolation, roadmaps and additional stages are separate release work. Review [the release checklist](docs/developer-beta-release-checklist.md) before enabling new capabilities; local tests do not certify a production deployment.
+
+## Run locally
+
+### Explore without a database
+
+```bash
+cd frontend
+npm ci
+npm run dev:demo
 ```
 
-## Running Locally
+Open the URL Vite prints and use the demo entry. This mode uses sample data and browser-session changes; it does not test persistence, real webhooks or paid AI calls.
 
-The simplest path starts the frontend, API, and PostgreSQL together:
+### Run the full stack
 
 ```bash
 docker compose up --build
 ```
 
-Open `http://localhost:4173`. The API health route is `http://localhost:5000/api/health`.
+Open [localhost:4173](http://localhost:4173). API health: [localhost:5000/api/health](http://localhost:5000/api/health).
 
-To load a presentation-ready workspace with four projects, eighteen tasks, and recent activity:
+Node.js **22.13+** and PostgreSQL **16+** are required for development without Docker. The [developer guide](docs/developer-guide.md) covers separate frontend/backend startup, local demo seeding, environment variables, invitations, MFA, AI credentials, GitHub automation and platform-owner recovery.
 
-```bash
-docker compose run --rm backend npm run seed:demo
-```
+**Never put GitHub private keys, provider vault keys, mail credentials or database credentials in frontend environment variables.**
 
-Sign in with `demo@workflowhq.app` and `WorkflowHQ!2026`. The command resets only this local
-demo account, so it is safe to rerun when you want a clean showcase workspace. Override the
-`DEMO_USER_*` environment variables if you need different local credentials.
+## Verify a change
 
-For development without Docker, use Node.js 22.13+ and PostgreSQL 16+:
-
-```bash
-# backend
-cd backend
-copy .env.example .env
-npm ci
-npm run migrate
-npm run dev
-
-# frontend, in a second terminal
-cd frontend
-copy .env.example .env
-npm ci
-npm run dev
-```
-
-The frontend development server runs at `http://localhost:5173`.
-
-### Project invitation email
-
-Project invitations work without an email provider: the project owner receives a secure link to
-copy and send manually. To deliver that same link by email, configure these variables on the
-**backend only**:
-
-```env
-APP_BASE_URL=https://your-frontend.example
-INVITATION_EMAIL_PROVIDER=resend
-INVITATION_FROM_EMAIL=WorkflowHQ <invites@your-verified-domain.example>
-INVITATION_TTL_HOURS=168
-RESEND_API_KEY=re_server_only_secret
-```
-
-Leave `INVITATION_EMAIL_PROVIDER=disabled` until the sending domain is verified. Raw invitation
-tokens are never stored in PostgreSQL; only SHA-256 hashes are retained. A recipient must sign in
-or register with the exact invited email before accepting, and project membership is created only
-after acceptance.
-
-### Account security
-
-Account email and authenticator MFA are optional backend capabilities. Authenticator MFA protects
-password resets and MFA changes; normal sign-in continues to use email and password. Enable these
-capabilities only after the server-side secrets and a verified email sender are ready:
-
-```env
-MFA_ENABLED=true
-ACCOUNT_ENCRYPTION_KEY_BASE64=<base64-encoded 32-byte random key>
-ACCOUNT_EMAIL_PROVIDER=resend
-ACCOUNT_FROM_EMAIL=WorkflowHQ Security <security@your-verified-domain.example>
-RESEND_API_KEY=<server-only key>
-```
-
-The encryption key must remain stable after MFA is enabled; changing it makes existing
-authenticator secrets unreadable. Never place these values in the frontend service.
-
-### AI task planning
-
-WorkHQ can turn a delivery goal into a proposed hierarchy of initiatives, epics, stories, tasks,
-bugs, or subtasks. It is provider-neutral: the first adapters support OpenAI, Anthropic, and Google
-Gemini, while the planner boundary can accept additional operators without changing the task-write
-workflow.
-
-Enable the capability on the **backend only**:
-
-```env
-AI_PLANNER_ENABLED=true
-AI_PLANNER_TIMEOUT_MS=30000
-AI_CONVERSATION_RETENTION_DAYS=15
-AI_CREDENTIAL_VAULT_ENABLED=true
-AI_CREDENTIAL_MASTER_KEYS_JSON={"1":"<base64-encoded 32-byte key>"}
-AI_CREDENTIAL_ACTIVE_KEY_VERSION=1
-```
-
-Each user saves their own OpenAI, Anthropic, or Google Gemini credential in **Settings → AI
-providers**. WorkHQ encrypts it with AES-256-GCM before PostgreSQL receives it and returns only a
-masked suffix to the browser. Ciphertext is bound to the owning user, provider, encryption format,
-and key version. The server calls only fixed official provider endpoints; users cannot supply an
-arbitrary provider URL. The separate **Validate only** action calls the provider without saving the
-submitted credential.
-
-The master-key ring belongs only in the backend secret store. AI planning fails closed when the
-vault or active key is missing, and a credential that fails authentication cannot be used. Follow
-[the credential key rotation and recovery runbook](docs/ai-credential-key-rotation.md) before
-changing or retiring a key. The decrypted credential exists only inside the backend provider
-request and is never returned by the API.
-
-Users decide whether a preview may use existing WorkHQ tickets and explicitly choose which linked
-repositories may contribute synchronized GitHub activity. WorkHQ sends bounded metadata only: up
-to 50 current tickets and 75 recent development events. It does not read or transmit repository
-source files, raw webhook payloads, environment variables, provider credentials, or GitHub
-installation secrets. Repository titles and descriptions are treated as untrusted data and
-delimited from planner instructions.
-
-Generating a preview never creates tickets. Provider output must pass a strict schema and hierarchy
-validation before it reaches the browser. The user can deselect proposed work, and only an explicit
-**Create issues** action writes the approved plan. The apply operation runs in one database
-transaction, rechecks project edit access and workspace rules, creates acceptance criteria, and
-records auditable activity without provider credentials.
-Evidence labels show which ticket or GitHub event supports each proposal, while normalized exact
-title matches are flagged before approval to reduce accidental duplicate tickets.
-
-Each preview also receives a short-lived, one-time server approval. WorkHQ stores only hashes of the
-reviewed summary and proposed tasks, never the provider key or full prompt. Applying a plan accepts
-an exact reviewed subset, rejects altered tasks, and prevents accidental or malicious replay.
-
-Approved action plans can also execute a bounded set of ticket mutations through the same domain
-rules as the manual API. The explicit action types are `task.create`, `task.update`, `task.archive`,
-`task.restore`, `criterion.add`, `criterion.update`, `criterion.complete`, `criterion.reorder`, and
-`criterion.remove`. Updates can change ticket fields, hierarchy, assignee, status, and sprint.
-Permanent ticket deletion is deliberately not part of the AI action contract.
-
-In **Project → AI conversations**, the default proposal mode creates new tickets
-only. Select **Propose ticket and criteria changes** to request a bounded action
-proposal instead. The review shows target ticket IDs, reviewed versions, explicit
-field values and criterion IDs; it also links to current tickets for inspection.
-Approve the entire proposal only after checking **I reviewed all actions and approve
-these changes**. Generation itself does not mutate tickets. Retries reuse a key
-derived from the approval ID to avoid duplicate execution.
-
-Generated actions use the project's supplied ticket/version and criterion catalog,
-not invented database IDs. Action context can include archived tickets for restore;
-ordinary creation-only context still excludes them. Generation currently emits one
-field per update action and does not propose assignment or sprint changes. Such
-requests require manual editing until their membership context is integrated.
-
-Existing-ticket actions carry the ticket `version` shown by the API. WorkflowHQ locks and rechecks
-every reviewed version and the caller's current permissions before making any change. Temporary
-references such as `new:epic-1` let one transaction create a hierarchy and then update its new
-tickets. The apply request must include an `idempotencyKey`; a successful retry returns the recorded
-result rather than duplicating work. Every action, audit record, approval consumption, and
-idempotency record commits together, or the entire plan is rolled back.
-
-Project AI workspaces retain provider/model-pinned conversations, run status, proposal revisions,
-human-readable diffs, and evidence summaries. Only the latest pending revision can be approved;
-generating a replacement immediately supersedes prior approvals. Detailed prompts, messages,
-proposals, diffs, and evidence labels are scrubbed after 15 days by a background retention pass,
-while minimal non-secret run metadata remains for audit. Provider credentials are never written to
-conversation history.
-
-### GitHub workflow automation
-
-Project owners can open **Project register → Edit → Workflow rules** to control five repository
-signals: commit pushed, pull request opened, pull request merged, checks succeeded, and deployment
-succeeded. The safe defaults move Ready tickets to In motion on a linked commit or opened pull
-request, and move In motion tickets to Shipped after a linked pull request is merged. Check and
-deployment completion rules are disabled until an owner explicitly enables them.
-
-Automation is intentionally constrained:
-
-- Only future, signature-verified GitHub webhooks can move tickets; history imports are read-only.
-- The repository must be assigned to the same WorkflowHQ project as the ticket.
-- A branch, commit, or pull request must contain the ticket's exact issue key, such as `WHQ-42`.
-- Rules can move a ticket forward only, and every run is idempotent and retained in the activity log.
-- Project editors can still move tickets manually, but only project owners can change automation rules.
-
-### Contributor identity and webhook recovery
-
-The GitHub connection page lets an installation owner map an observed GitHub login to a member of
-a project linked to that installation. A login cannot be mapped until it appears in verified
-repository activity, the selected WorkflowHQ user must already belong to a linked project, and bot
-accounts remain automation identities. The mapping is applied dynamically, so both existing and
-future development history can show the member name without rewriting the imported GitHub record.
-
-Failed webhook receipts are listed without raw request bodies or payload hashes. The installation
-owner can ask GitHub to redeliver the original signed event during GitHub's three-day recovery
-window. WorkflowHQ enforces a one-minute cooldown and a five-request cap for each delivery; normal
-signature checks, deduplication, repository scope, and automation rules run again when GitHub sends
-the event back.
-
-### Assign the initial platform owner
-
-After migrations have run and the owner has registered an account, assign the single platform
-owner from a trusted backend shell:
-
-```bash
-cd backend
-npm run owner:assign -- owner@example.com
-```
-
-The command demotes any previous owner to administrator, revokes affected sessions, and records the
-recovery action. Future ownership transfers use the protected Settings screen and require the
-current owner's password.
-
-## Testing
+Run each section from the repository root or the named subdirectory:
 
 ```bash
 node scripts/release-audit.mjs
-cd backend && npm test
-cd frontend && npm run typecheck && npm test && npm run build
-```
 
-Backend tests use an isolated PostgreSQL-compatible database and exercise the HTTP API. The frontend tests cover protected routing and core task interactions.
-
-The complete developer-beta release procedure is documented in
-[docs/developer-beta-release-checklist.md](docs/developer-beta-release-checklist.md). Security
-boundaries and private reporting guidance are in [SECURITY.md](SECURITY.md).
-
-To audit a configured database without changing it, run:
-
-```bash
 cd backend
+npm run lint
+npm test
 npm run migrate:status
+
+cd ../frontend
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
-The command compares the checked-in SQL files with `schema_migrations`, reports every applied,
-pending, or unknown migration, and exits unsuccessfully when the database and repository differ.
-It never prints the configured database URL. CI runs this check after applying migrations, and the
-backend container runs it before starting the API.
+Migration status requires a configured database. Fast backend tests use PostgreSQL-compatible test infrastructure; they do not replace the real PostgreSQL and integration checks in the release procedure. Optional external integrations need their own controlled end-to-end test.
 
-## Deployment
+## Stack and repository
 
-Both applications are containerised. Production requires a managed PostgreSQL database, HTTPS, a long random `JWT_SECRET`, the deployed frontend origin in `CORS_ORIGIN`, and `Secure` cross-site cookies when the frontend and API use different sites. Database TLS is controlled explicitly with `DATABASE_SSL`, and certificate verification remains enabled by default.
+| Layer                          | Technology / location                                                             |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| Interface                      | React, TypeScript, Vite, Axios — `frontend/src`                                   |
+| API and integration boundaries | Node.js, Express, Zod, JWT, bcrypt — `backend/src`                                |
+| Persistence                    | PostgreSQL, explicit SQL migrations — `backend/migrations`                        |
+| Delivery                       | Docker Compose, Nginx, GitHub Actions — `docker-compose.yml`, `.github/workflows` |
+| Operations and QA              | `docs`, `backend/tests`, frontend colocated tests, `scripts`                      |
 
-## Engineering Decisions
+## Documentation
 
-- Raw SQL keeps ownership rules and indexing decisions visible and interview-friendly.
-- Refresh tokens are hashed in PostgreSQL and rotated instead of being exposed to JavaScript.
-- Native drag-and-drop is paired with a status selector so task movement stays reliable on touch and keyboard workflows.
-- A 100-item maximum page size prevents unbounded task responses.
-- One CI workflow verifies both applications and runs migrations against PostgreSQL.
+- [Setup and integration configuration](docs/developer-guide.md)
+- [Architecture and trust boundaries](docs/architecture.md)
+- [GitHub App implementation guide](docs/github-app-implementation-plan.md)
+- [Jira CSV import](docs/jira-import.md)
+- [AI action review testing](docs/phase-07-action-review-testing.md)
+- [Backup and restore](docs/database-backup-restore-runbook.md)
+- [Developer-beta release gates](docs/developer-beta-release-checklist.md)
+- [Showcase provenance and rebuild instructions](docs/media/README.md)
 
-## Future Improvements
-
-- Replace the product screenshots whenever the production interface changes materially.
-- Add richer repository-health alerts and an operator-facing integration audit dashboard.
-- Add approval-based, provider-neutral AI task planning with encrypted user-owned credentials.
-- Add a one-time Jira importer before considering bidirectional synchronization.
-- Add in-app and email notifications for assignments, mentions, reviews, checks, and deployments.
-- Add custom project statuses, transition rules, roadmaps, and dependency tracking.
-- Add isolated organizations and workspace switching before offering multi-tenant access.
-
-The ordered delivery plan and acceptance criteria for these milestones are in
-[docs/product-roadmap.md](docs/product-roadmap.md).
+Built to keep planning, repository evidence and human-approved AI changes in one understandable workflow.
