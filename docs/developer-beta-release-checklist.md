@@ -85,7 +85,7 @@ npm run lint
 npm test
 npm run migrate
 npm run migrate:status
-npm audit --omit=dev --audit-level=high
+npm audit --audit-level=low
 
 cd ../frontend
 npm ci
@@ -93,7 +93,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
-npm audit --omit=dev --audit-level=high
+npm audit --audit-level=low
 ```
 
 CI also builds both production containers after the application checks succeed.
