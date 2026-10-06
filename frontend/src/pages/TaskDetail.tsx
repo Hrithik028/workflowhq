@@ -21,7 +21,7 @@ import type { LayoutContext } from "../components/AppLayout";
 import AcceptanceCriteria from "../components/AcceptanceCriteria";
 import LabelPill from "../components/LabelPill";
 import PriorityIcon from "../components/PriorityIcon";
-import TaskModal from "../components/TaskModal";
+import { DeferredTaskModal as TaskModal } from "../components/DeferredModals";
 import { engineeringMetaFor, issueTypeLabel } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
 import type { Comment, DevelopmentLink, Project, Task, TaskInput } from "../types";

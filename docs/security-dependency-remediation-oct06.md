@@ -90,6 +90,22 @@ container builds have not been rerun as part of this local verification.
 4. Confirm the 11 Dependabot alerts close after GitHub sees the fixed lockfiles on
    the default branch. Local remediation does not close remote alerts by itself.
 
+## Publication and integration follow-up
+
+The approved dependency fix was published as PR #78, initially at `db9d34a`.
+Its CI file conflicted with performance PR #77, already merged into master as
+`2d50cce`. Synchronizing master into this feature branch resolves that conflict
+without merging either pending PR. The resolved frontend job preserves both
+`npm run check:chunks` and the stricter full `npm audit --audit-level=low`.
+
+After synchronization, both full dependency audits remain at zero findings.
+Frontend lint, type checking, production build and the bundle-size guard pass;
+the updated frontend also passes all 107 tests across 34 files. The release audit
+passes with 346 source files inspected after including master's performance work.
+the entry bundle is about 200 kB and 25 page modules remain deferred. The original
+>500 kB warning above describes the pre-synchronization baseline, not this updated
+branch. No new security-patch files were added beyond the six reviewed paths.
+
 ## Primary references
 
 - [source-map-js advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
