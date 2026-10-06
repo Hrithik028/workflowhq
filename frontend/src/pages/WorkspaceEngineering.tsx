@@ -31,9 +31,9 @@ import type {
 import { formatDate, initialsFor } from "../utils/format";
 import { persistedProgressFor } from "../utils/taskProgress";
 
-type BoardStage = "backlog" | "progress" | "released";
+type BoardStage = string;
 
-const stageFor = (task: Task): BoardStage => {
+const canonicalStageFor = (task: Task): BoardStage => {
   if (task.status === "completed") return "released";
   if (task.status === "todo") return "backlog";
   return "progress";
@@ -72,7 +72,7 @@ function EngineeringCard({
   onMove: (task: Task, stage: BoardStage) => void;
   onDragStart: (event: DragEvent, task: Task) => void;
   onDragEnd: () => void;
-  stages: typeof stageMeta;
+  stages: { key: string; label: string; icon: typeof ListFilter }[];
   allowedTransitions: ProjectWorkflow["transitions"] | null;
 }) {
   const progress = visibleProgressFor(task, isDemo);
@@ -110,7 +110,11 @@ function EngineeringCard({
         <span>{busy ? "Saving…" : "Move to"}</span>
         <select
           aria-label={`Move ${task.issueKey} to`}
-          value={stageFor(task)}
+          value={
+            task.workflowStage && stages.some((stage) => stage.key === task.workflowStage)
+              ? task.workflowStage
+              : canonicalStageFor(task)
+          }
           disabled={!canMove || busy}
           onChange={(event) => onMove(task, event.target.value as BoardStage)}
         >
@@ -118,9 +122,11 @@ function EngineeringCard({
             <option
               disabled={
                 allowedTransitions !== null &&
-                statusForStage[key] !== task.status &&
+                (statusForStage[key] || key) !== (task.workflowStage || task.status) &&
                 !allowedTransitions.some(
-                  (item) => item.fromStatus === task.status && item.toStatus === statusForStage[key]
+                  (item) =>
+                    item.fromStatus === (task.workflowStage || task.status) &&
+                    item.toStatus === (statusForStage[key] || key)
                 )
               }
               key={key}
@@ -141,11 +147,33 @@ function WorkspaceEngineering() {
   const projectId = searchParams.get("project") || "";
   const sprintId = searchParams.get("sprint") || "";
   const stageParam = searchParams.get("stage");
-  const selectedStage = stageMeta.find((stage) => stage.key === stageParam)?.key || null;
   const client = useMemo(() => (isDemo ? demoWorkspaceApi : workspaceApi), [isDemo]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [workflow, setWorkflow] = useState<ProjectWorkflow | null>(null);
+  const selectedStage =
+    stageParam &&
+    (stageMeta.some((stage) => stage.key === stageParam) ||
+      workflow?.statuses.some((stage) => stage.status === stageParam))
+      ? stageParam
+      : null;
+  const stageFor = useCallback(
+    (task: Task): BoardStage =>
+      workflow &&
+      task.workflowStage &&
+      !["todo", "in_progress", "completed"].includes(task.workflowStage)
+        ? task.workflowStage
+        : canonicalStageFor(task),
+    [workflow]
+  );
+  const statusForStage: Record<string, TaskStatus> = Object.fromEntries([
+    ["backlog", "todo"],
+    ["progress", "in_progress"],
+    ["released", "completed"],
+    ...(workflow?.statuses.map((item) => [item.status, item.category || item.status]) || [])
+  ]);
+  const stageKeyFor = (stage: string) =>
+    ({ backlog: "todo", progress: "in_progress", released: "completed" })[stage] || stage;
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -157,7 +185,8 @@ function WorkspaceEngineering() {
   const [dropStage, setDropStage] = useState<BoardStage | null>(null);
   const [notice, setNotice] = useState("");
   const [initialStatus, setInitialStatus] = useState<TaskStatus>("todo");
-  const moving = useRef(new Map<number, TaskStatus>());
+  const [initialWorkflowStage, setInitialWorkflowStage] = useState<string>();
+  const moving = useRef(new Map<number, Pick<Task, "status" | "workflowStage">>());
   const loadVersion = useRef(0);
   const dragId = useRef<number | null>(null);
   const invalidateLoad = useCallback(() => {
@@ -210,7 +239,7 @@ function WorkspaceEngineering() {
           const refreshed = Array.from(
             new Map(allTasks.map((task) => [task.id, task])).values()
           ).map((task) =>
-            moving.current.has(task.id) ? { ...task, status: moving.current.get(task.id)! } : task
+            moving.current.has(task.id) ? { ...task, ...moving.current.get(task.id)! } : task
           );
           // Keep the visual order stable during reconciliation, not updated_at order.
           return background
@@ -319,12 +348,20 @@ function WorkspaceEngineering() {
 
   const boardStages = useMemo(
     () =>
-      stageMeta.map((stage) => ({
-        ...stage,
-        label:
-          workflow?.statuses.find((item) => item.status === statusForStage[stage.key])?.label ||
-          stage.label
-      })),
+      workflow?.statuses.length
+        ? workflow.statuses.map((item) => ({
+            key:
+              { todo: "backlog", in_progress: "progress", completed: "released" }[item.status] ||
+              item.status,
+            label: item.label,
+            icon:
+              item.category === "completed" || item.status === "completed"
+                ? Rocket
+                : item.category === "todo" || item.status === "todo"
+                  ? ListFilter
+                  : CalendarDays
+          }))
+        : stageMeta,
     [workflow]
   );
 
@@ -333,7 +370,7 @@ function WorkspaceEngineering() {
       selectedStage
         ? visibleTasks.filter((task) => stageFor(task) === selectedStage)
         : visibleTasks,
-    [visibleTasks, selectedStage]
+    [visibleTasks, selectedStage, stageFor]
   );
 
   const canMove = (task: Task) => {
@@ -351,19 +388,26 @@ function WorkspaceEngineering() {
       workflow &&
       task.projectId === Number(projectId) &&
       !workflow.transitions.some(
-        (item) => item.fromStatus === task.status && item.toStatus === statusForStage[stage]
+        (item) =>
+          item.fromStatus === (task.workflowStage || task.status) &&
+          item.toStatus === stageKeyFor(stage)
       )
     ) {
       setError("This project does not allow that manual status change.");
       return;
     }
-    moving.current.set(task.id, statusForStage[stage]);
+    moving.current.set(task.id, {
+      status: statusForStage[stage],
+      workflowStage: stageKeyFor(stage)
+    });
     setMovingIds(new Set(moving.current.keys()));
     setError("");
     setNotice(`Moving ${task.issueKey}…`);
     setTasks((current) =>
       current.map((item) =>
-        item.id === task.id ? { ...item, status: statusForStage[stage] } : item
+        item.id === task.id
+          ? { ...item, status: statusForStage[stage], workflowStage: stageKeyFor(stage) }
+          : item
       )
     );
     // Only presentation is optimistic; the server still enforces permissions/rules.
@@ -373,6 +417,7 @@ function WorkspaceEngineering() {
         title: task.title,
         description: task.description,
         status: statusForStage[stage],
+        workflowStage: stageKeyFor(stage),
         priority: task.priority,
         startDate: task.startDate,
         dueDate: task.dueDate,
@@ -486,6 +531,17 @@ function WorkspaceEngineering() {
           <button className="button primary" type="button">
             <SlidersHorizontal size={16} /> Group by epic <ChevronDown size={15} />
           </button>
+          <button
+            className="button primary"
+            type="button"
+            onClick={() => {
+              setInitialStatus(selectedStage ? statusForStage[selectedStage] : "todo");
+              setInitialWorkflowStage(selectedStage ? stageKeyFor(selectedStage) : undefined);
+              setIsModalOpen(true);
+            }}
+          >
+            <Plus size={17} /> New issue
+          </button>
         </div>
       </header>
 
@@ -547,7 +603,7 @@ function WorkspaceEngineering() {
           aria-label="Select project"
           disabled={movingIds.size > 0}
           onChange={(event) => {
-            updateFilters({ project: event.target.value, sprint: null });
+            updateFilters({ project: event.target.value, sprint: null, stage: null });
           }}
           value={projectId}
         >
@@ -601,7 +657,10 @@ function WorkspaceEngineering() {
       </p>
 
       <section className="engineering-swimlanes">
-        <header className="engineering-stage-head">
+        <header
+          className="engineering-stage-head"
+          style={{ gridTemplateColumns: `repeat(${boardStages.length}, minmax(180px, 1fr))` }}
+        >
           {boardStages.map(({ key, label, icon: Icon }) => (
             <button
               type="button"
@@ -636,7 +695,14 @@ function WorkspaceEngineering() {
               </i>
               <MoreHorizontal size={17} />
             </header>
-            <div className={`engineering-epic-grid${selectedStage ? " focused-lane" : ""}`}>
+            <div
+              className={`engineering-epic-grid${selectedStage ? " focused-lane" : ""}`}
+              style={{
+                gridTemplateColumns: selectedStage
+                  ? "minmax(0, 1fr)"
+                  : `repeat(${boardStages.length}, minmax(180px, 1fr))`
+              }}
+            >
               {boardStages
                 .filter(({ key }) => !selectedStage || key === selectedStage)
                 .map(({ key, label }) => {
@@ -673,6 +739,7 @@ function WorkspaceEngineering() {
                           type="button"
                           onClick={() => {
                             setInitialStatus(statusForStage[key]);
+                            setInitialWorkflowStage(stageKeyFor(key));
                             setIsModalOpen(true);
                           }}
                         >
@@ -708,20 +775,11 @@ function WorkspaceEngineering() {
         </span>
       </footer>
 
-      <button
-        className="engineering-floating-new"
-        type="button"
-        onClick={() => {
-          setInitialStatus(selectedStage ? statusForStage[selectedStage] : "todo");
-          setIsModalOpen(true);
-        }}
-      >
-        <Plus size={17} /> New issue
-      </button>
       {isModalOpen ? (
         <TaskModal
           client={client}
           initialStatus={initialStatus}
+          initialWorkflowStage={initialWorkflowStage}
           initialProjectId={projectId ? Number(projectId) : null}
           initialSprintId={sprintId ? Number(sprintId) : null}
           isSaving={isSaving}

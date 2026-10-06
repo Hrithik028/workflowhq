@@ -142,7 +142,7 @@ function ProjectRoadmapPage() {
                         <b>{task.issueKey}</b> {task.title}
                       </Link>
                       <span>
-                        {labels[task.status]} · {task.taskType}
+                        {labels[task.workflowStage || task.status]} · {task.taskType}
                         {blockerCount(task)
                           ? ` · ${blockerCount(task)} open blocker${blockerCount(task) === 1 ? "" : "s"}`
                           : ""}

@@ -6,16 +6,16 @@ the release gate before the next phase is merged.
 
 ## Delivery order
 
-| Phase | Milestone | Exit condition |
-| --- | --- | --- |
-| 1 | Release baseline | Current master is verified, stale documentation is corrected, and remaining production smoke checks are explicit. |
-| 2 | AI task planner | A user can choose an approved LLM provider, preview a structured hierarchy generated from a project goal, and approve selected records before anything is written. |
-| 3 | Jira one-time import | An authorized project owner can preview and import a bounded Jira project with stable source identifiers and an auditable result. |
-| 4 | Notifications | Users receive durable, permission-scoped in-app notifications with optional server-side email delivery. |
-| 5 | Custom workflows | Project owners can configure statuses and valid transitions without breaking GitHub automation or archived history. |
-| 6 | Roadmaps and dependencies | Tickets can express blocking relationships and appear on a project roadmap with cycle-safe dependency validation. |
-| 7 | Multiple workspaces | Data, roles, integrations, and administration are isolated by workspace, with explicit workspace switching. |
-| 8 | Jira synchronization | Approved Jira connections can reconcile incremental changes with conflict records, checkpoints, and a safe disconnect path. |
+| Phase | Milestone                 | Exit condition                                                                                                                                                     |
+| ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | Release baseline          | Current master is verified, stale documentation is corrected, and remaining production smoke checks are explicit.                                                  |
+| 2     | AI task planner           | A user can choose an approved LLM provider, preview a structured hierarchy generated from a project goal, and approve selected records before anything is written. |
+| 3     | Jira one-time import      | An authorized project owner can preview and import a bounded Jira project with stable source identifiers and an auditable result.                                  |
+| 4     | Notifications             | Users receive durable, permission-scoped in-app notifications with optional server-side email delivery.                                                            |
+| 5     | Custom workflows          | Project owners can configure statuses and valid transitions without breaking GitHub automation or archived history.                                                |
+| 6     | Roadmaps and dependencies | Tickets can express blocking relationships and appear on a project roadmap with cycle-safe dependency validation.                                                  |
+| 7     | Multiple workspaces       | Data, roles, integrations, and administration are isolated by workspace, with explicit workspace switching.                                                        |
+| 8     | Jira synchronization      | Approved Jira connections can reconcile incremental changes with conflict records, checkpoints, and a safe disconnect path.                                        |
 
 ## Shared implementation rules
 
@@ -56,7 +56,16 @@ Provider rules:
 
 ## Current status
 
-Phase 1 is in progress. The automated baseline is green on master commit `2e67241`: CI and CodeQL
-passed, the public backend and frontend are healthy, the source audit inspected 229 files, and the
-local suites passed 147 backend and 48 frontend tests. Authenticated production smoke checks remain
-manual because they require the platform-owner session and controlled test records.
+As of 6 October 2026, the local integration includes notifications (phase 4), configurable labels
+and manual transitions for up to twelve categorized stages (phase 5), a dated roadmap and
+cycle-safe blocking dependencies (phase 6), and membership-scoped workspaces with session and
+data isolation (phase 7). The existing AI planner and one-time Jira CSV import remain in place.
+Additional stages and database-root hardening are now included locally; notification email
+delivery is not. Ongoing Jira synchronization (phase 8) is deferred at the user's request.
+
+The expanded backend regression passed 269 tests; the frontend and follow-up evidence is in
+[the follow-up journal](workspace-hardening-custom-stages.md). Lint, type checking and
+the frontend production build passed. Browser MCP tests used disposable local PostgreSQL records,
+including isolation, invitations, custom transitions, dependency-cycle rejection, archive/restore,
+AI policy persistence and ownership transfer. This is local verification, not confirmation of
+production deployment or real-provider webhooks. See [workspace-release-qa.md](workspace-release-qa.md).

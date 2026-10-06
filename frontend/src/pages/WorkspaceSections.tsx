@@ -485,7 +485,7 @@ export function Inbox() {
                 <strong>{task.title}</strong>
                 <p>{task.description || "No context added yet."}</p>
               </div>
-              <b>{statusLabel[task.status]}</b>
+              <b>{task.statusLabel || statusLabel[task.status]}</b>
               <small>{formatDate(task.dueDate)}</small>
             </article>
           ))}

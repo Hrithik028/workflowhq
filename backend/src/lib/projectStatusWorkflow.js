@@ -20,9 +20,9 @@ const ensureProjectStatusWorkflow = async (db, projectId) => {
   if (Number(existing.rows[0].count) > 0) return;
   for (const { status, label } of DEFAULT_STATUS_LABELS) {
     await db.query(
-      `INSERT INTO project_status_labels (project_id, status, label)
-       VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-      [projectId, status, label]
+      `INSERT INTO project_status_labels (project_id, status, label, category, position)
+       VALUES ($1, $2, $3, $2, $4) ON CONFLICT DO NOTHING`,
+      [projectId, status, label, DEFAULT_STATUS_LABELS.findIndex((item) => item.status === status)]
     );
   }
   // New projects receive all the moves that were previously available.
@@ -38,8 +38,8 @@ const ensureProjectStatusWorkflow = async (db, projectId) => {
 const selectProjectStatusWorkflow = async (db, projectId) => {
   const [statusResult, transitionResult] = await Promise.all([
     db.query(
-      `SELECT status, label FROM project_status_labels WHERE project_id = $1
-       ORDER BY CASE status WHEN 'todo' THEN 1 WHEN 'in_progress' THEN 2 ELSE 3 END`,
+      `SELECT status, label, category, position FROM project_status_labels WHERE project_id = $1
+       ORDER BY position, status`,
       [projectId]
     ),
     db.query(
@@ -55,6 +55,28 @@ const selectProjectStatusWorkflow = async (db, projectId) => {
       toStatus: row.to_status
     }))
   };
+};
+
+const resolveWorkflowStage = async (db, projectId, stage, status) => {
+  if (!projectId) {
+    if (stage && stage !== status)
+      throw new AppError(400, "INVALID_WORKFLOW_STAGE", "Inbox tickets use the standard statuses.");
+    return { stage: status, status };
+  }
+  await ensureProjectStatusWorkflow(db, projectId);
+  const result = await db.query(
+    "SELECT status, category FROM project_status_labels WHERE project_id=$1 AND status=$2",
+    [projectId, stage || status]
+  );
+  if (!result.rows[0])
+    throw new AppError(400, "INVALID_WORKFLOW_STAGE", "Choose a stage in this project.");
+  if (stage && status !== result.rows[0].category)
+    throw new AppError(
+      400,
+      "WORKFLOW_CATEGORY_MISMATCH",
+      "The ticket status must match its stage category."
+    );
+  return { stage: result.rows[0].status, status: result.rows[0].category };
 };
 
 const assertManualTransition = async (db, projectId, fromStatus, toStatus) => {
@@ -77,6 +99,7 @@ module.exports = {
   DEFAULT_STATUS_LABELS,
   DEFAULT_TRANSITIONS,
   assertManualTransition,
+  resolveWorkflowStage,
   ensureProjectStatusWorkflow,
   selectProjectStatusWorkflow
 };

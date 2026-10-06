@@ -86,4 +86,17 @@ describe("project roadmap", () => {
     expect(await screen.findByText("WHQ-1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add dependency" })).not.toBeInTheDocument();
   });
+
+  it("shows a custom stage instead of its shared reporting category", async () => {
+    api.getProjectRoadmap.mockResolvedValue({
+      ...data,
+      tasks: [{ ...data.tasks[1], status: "in_progress", workflowStage: "qa" }]
+    });
+    api.getProjectWorkflow.mockResolvedValue({
+      statuses: [{ status: "in_progress", label: "Building" }, { status: "qa", label: "QA" }]
+    });
+    renderPage();
+    expect(await screen.findByText("QA · task")).toBeInTheDocument();
+    expect(screen.queryByText("Building · task")).not.toBeInTheDocument();
+  });
 });

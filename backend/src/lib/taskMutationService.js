@@ -3,7 +3,7 @@ const { logActivity } = require("./activity");
 const { AppError } = require("./errors");
 const { notifyUser } = require("./notifications");
 const { canAccessTask, getProjectRole } = require("./projectAccess");
-const { assertManualTransition } = require("./projectStatusWorkflow");
+const { assertManualTransition, resolveWorkflowStage } = require("./projectStatusWorkflow");
 const {
   assertProjectWorkspace,
   currentWorkspace,
@@ -217,6 +217,14 @@ const createTask = async (
   };
   await enforceTaskRules(db, { userId, fields: normalized, creating: true });
   const project = await verifyProjectAccess(db, normalized.projectId, userId, ["owner", "editor"]);
+  if (normalized.projectId)
+    await db.query("SELECT id FROM projects WHERE id=$1 FOR UPDATE", [normalized.projectId]);
+  const stage = await resolveWorkflowStage(
+    db,
+    normalized.projectId,
+    fields.workflowStage,
+    normalized.status
+  );
   await verifyParentHierarchy({
     db,
     parentId: normalized.parentId,
@@ -229,8 +237,8 @@ const createTask = async (
   const inserted = await db.query(
     `INSERT INTO tasks
        (user_id, project_id, title, description, status, priority, start_date, due_date,
-        task_type, parent_task_id, assignee_id, sprint_id, workspace_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        task_type, parent_task_id, assignee_id, sprint_id, workspace_id, workflow_stage)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
       userId,
@@ -252,7 +260,8 @@ const createTask = async (
                 normalized.projectId
               ])
             ).rows[0]?.workspace_id
-          : await ensurePersonalWorkspace(db, { id: userId }))
+          : await ensurePersonalWorkspace(db, { id: userId })),
+      stage.stage
     ]
   );
   const task = inserted.rows[0];
@@ -310,8 +319,19 @@ const updateTask = async (
   await enforceTaskRules(db, { userId, fields: normalized });
   const projectChanged = Number(existing.project_id || 0) !== Number(normalized.projectId || 0);
   await verifyProjectAccess(db, normalized.projectId, userId, ["owner", "editor"]);
+  if (normalized.projectId)
+    await db.query("SELECT id FROM projects WHERE id=$1 FOR UPDATE", [normalized.projectId]);
+  const stage = await resolveWorkflowStage(
+    db,
+    normalized.projectId,
+    fields.workflowStage ||
+      (!projectChanged && normalized.status === existing.status
+        ? existing.workflow_stage
+        : undefined),
+    normalized.status
+  );
   if (!projectChanged) {
-    await assertManualTransition(db, normalized.projectId, existing.status, normalized.status);
+    await assertManualTransition(db, normalized.projectId, existing.workflow_stage, stage.stage);
   }
   if (projectChanged && !normalized.projectId && Number(existing.user_id) !== Number(userId)) {
     throw new AppError(
@@ -361,7 +381,7 @@ const updateTask = async (
      SET project_id = $1, title = $2, description = $3, status = $4, priority = $5,
          start_date = $6, due_date = $7, task_type = $8, parent_task_id = $9,
          assignee_id = $10, sprint_id = $11, version = version + 1,
-         workspace_id = $13, updated_at = CURRENT_TIMESTAMP
+         workspace_id = $13, workflow_stage = $14, updated_at = CURRENT_TIMESTAMP
      WHERE id = $12
      RETURNING *`,
     [
@@ -384,15 +404,21 @@ const updateTask = async (
                 normalized.projectId
               ])
             ).rows[0]?.workspace_id
-          : await ensurePersonalWorkspace(db, { id: userId }))
+          : await ensurePersonalWorkspace(db, { id: userId })),
+      stage.stage
     ]
   );
   const task = result.rows[0];
   const activities = [];
-  if (existing.status !== task.status) {
+  if (existing.status !== task.status || existing.workflow_stage !== task.workflow_stage) {
     activities.push({
       action: task.status === "completed" ? "task_completed" : "task_status_changed",
-      details: { from: existing.status, to: task.status }
+      details: {
+        from: existing.status,
+        to: task.status,
+        fromStage: existing.workflow_stage,
+        toStage: task.workflow_stage
+      }
     });
   }
   if (existing.priority !== task.priority) {

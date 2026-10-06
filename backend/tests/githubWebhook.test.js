@@ -490,7 +490,7 @@ describe("GitHub webhook security and processing", () => {
       }
     };
     await db.query(
-      "UPDATE tasks SET status='in_progress' WHERE id=$1",
+      "UPDATE tasks SET status='in_progress', workflow_stage='in_progress' WHERE id=$1",
       [task.id]
     );
     const disabled = await signedRequest(app, "check_run", checkPayload, "disabled-check");
@@ -506,7 +506,7 @@ describe("GitHub webhook security and processing", () => {
         }
       ]
     };
-    await db.query("UPDATE tasks SET status='todo' WHERE id=$1", [task.id]);
+    await db.query("UPDATE tasks SET status='todo', workflow_stage='todo' WHERE id=$1", [task.id]);
     await importGithubDevelopmentPayload({
       db,
       installation,

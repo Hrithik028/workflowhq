@@ -80,6 +80,8 @@ const mapProjectWorkflow = (workflow: Raw): ProjectWorkflow => {
     },
     statuses: ((workflow.statuses || []) as Raw[]).map((item) => ({
       status: item.status as ProjectWorkflow["statuses"][number]["status"],
+      category: item.category as Task["status"],
+      position: Number(item.position),
       label: String(item.label)
     })),
     transitions: ((workflow.transitions || []) as Raw[]).map((item) => ({
@@ -153,6 +155,8 @@ const mapTask = (task: Raw): Task => ({
   title: String(task.title),
   description: String(task.description || ""),
   status: task.status as Task["status"],
+  statusLabel: task.status_label == null ? null : String(task.status_label),
+  workflowStage: String(task.workflow_stage || task.status),
   priority: task.priority as Task["priority"],
   startDate: task.start_date == null ? null : String(task.start_date).slice(0, 10),
   dueDate: task.due_date == null ? null : String(task.due_date).slice(0, 10),
@@ -236,6 +240,7 @@ export const workspaceApi: WorkspaceClient = {
         title: String(task.title),
         taskType: task.task_type as ProjectRoadmap["tasks"][number]["taskType"],
         status: task.status as ProjectRoadmap["tasks"][number]["status"],
+        workflowStage: String(task.workflow_stage || task.status),
         startDate: task.start_date == null ? null : String(task.start_date).slice(0, 10),
         dueDate: task.due_date == null ? null : String(task.due_date).slice(0, 10),
         parentId: task.parent_task_id == null ? null : Number(task.parent_task_id)

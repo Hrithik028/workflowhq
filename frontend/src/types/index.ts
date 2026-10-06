@@ -294,13 +294,15 @@ export interface ProjectWorkflowRule {
 }
 
 export interface ProjectWorkflowStatus {
-  status: TaskStatus;
+  status: string;
+  category?: TaskStatus;
+  position?: number;
   label: string;
 }
 
 export interface ProjectWorkflowTransition {
-  fromStatus: TaskStatus;
-  toStatus: TaskStatus;
+  fromStatus: string;
+  toStatus: string;
 }
 
 export interface ProjectWorkflow {
@@ -311,6 +313,7 @@ export interface ProjectWorkflow {
 }
 
 export interface RoadmapTask {
+  workflowStage?: string;
   id: number;
   issueKey: string;
   title: string;
@@ -598,6 +601,8 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   startDate: string | null;
+  statusLabel?: string | null;
+  workflowStage?: string;
   dueDate: string | null;
   assigneeId: number | null;
   assigneeName: string | null;
@@ -614,6 +619,7 @@ export interface Task {
 }
 
 export interface TaskInput {
+  workflowStage?: string;
   projectId: number | null;
   title: string;
   description: string;

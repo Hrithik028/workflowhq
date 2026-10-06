@@ -106,7 +106,7 @@ const applyProjectWorkflowAutomation = async ({ client, repository, eventId, ite
     const updated = (
       await client.query(
         `UPDATE tasks
-         SET status = $1, version = version + 1, updated_at = CURRENT_TIMESTAMP
+         SET status = $1, workflow_stage = $1, version = version + 1, updated_at = CURRENT_TIMESTAMP
          WHERE id = $2 AND project_id = $3 AND status = $4 AND archived_at IS NULL
          RETURNING id, title`,
         [rule.to_status, task.id, task.project_id, rule.from_status]

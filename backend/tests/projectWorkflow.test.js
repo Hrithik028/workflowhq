@@ -69,7 +69,7 @@ describe("project GitHub workflow rules", () => {
     expect(response.status).toBe(200);
     expect(response.body.data.project).toMatchObject({ id: projectId, key: "WHQ" });
     expect(response.body.data.rules).toHaveLength(5);
-    expect(response.body.data.statuses).toEqual([
+    expect(response.body.data.statuses).toMatchObject([
       { status: "todo", label: "Backlog" },
       { status: "in_progress", label: "In progress" },
       { status: "completed", label: "Released" }

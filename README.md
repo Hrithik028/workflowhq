@@ -358,11 +358,27 @@ Both applications are containerised. Production requires a managed PostgreSQL da
 
 - Replace the product screenshots whenever the production interface changes materially.
 - Add richer repository-health alerts and an operator-facing integration audit dashboard.
-- Add approval-based, provider-neutral AI task planning with encrypted user-owned credentials.
-- Add a one-time Jira importer before considering bidirectional synchronization.
-- Add in-app and email notifications for assignments, mentions, reviews, checks, and deployments.
-- Add custom project statuses, transition rules, roadmaps, and dependency tracking.
-- Add isolated organizations and workspace switching before offering multi-tenant access.
+- Expand in-app notification coverage and add optional email delivery.
+- Consider ongoing Jira synchronization later; the existing CSV importer is one-time only.
+- Review production isolation and integration smoke checks before enabling multi-workspace access.
+
+## Local workspace release
+
+The local workspace release adds **Manage workspaces**, workspace switching, existing-account
+membership management, team ownership transfer, stricter rules/AI limits and scoped project data.
+Set `WORKSPACES_ENABLED=true` on the **backend** only after applying and reviewing migrations
+033–037. It defaults to false so an existing deployment is not silently changed into a
+multi-workspace product. Workspace membership does not grant access to every project; invite
+members to the projects they should see. Global platform ownership remains separate.
+
+Notifications, up to twelve ordered project stages with configurable transitions,
+roadmaps/dependencies and the transparent loading experience are included locally. Jira live
+synchronization is excluded. These changes are not automatically deployed by running local tests.
+Read [the validation and rollout journal](docs/workspace-release-qa.md) before publishing.
+Additional stages map to `todo`, `in_progress` or `completed` for reporting. Saved stage
+categories are immutable; a stage containing tickets (including archived tickets) cannot be
+removed. GitHub automation still targets the three canonical stages. Inbox tickets use those
+canonical statuses. Migration 036 also requires scoped roots for direct-SQL writers.
 
 The ordered delivery plan and acceptance criteria for these milestones are in
 [docs/product-roadmap.md](docs/product-roadmap.md).
