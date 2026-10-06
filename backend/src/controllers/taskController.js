@@ -23,6 +23,8 @@ const taskFields = `
   t.title,
   t.description,
   t.status,
+  t.workflow_stage,
+  status_labels.label AS status_label,
   t.priority,
   t.start_date,
   t.due_date,
@@ -46,6 +48,7 @@ const taskFields = `
 // which breaks as soon as a project has more than one member.
 const taskJoins = `
   LEFT JOIN projects p ON p.id = t.project_id
+  LEFT JOIN project_status_labels status_labels ON status_labels.project_id = t.project_id AND status_labels.status = t.workflow_stage
   LEFT JOIN tasks parent ON parent.id = t.parent_task_id
   LEFT JOIN users assignee ON assignee.id = t.assignee_id
   LEFT JOIN sprints sprint ON sprint.id = t.sprint_id

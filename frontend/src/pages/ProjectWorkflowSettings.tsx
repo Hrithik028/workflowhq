@@ -68,6 +68,7 @@ function ProjectWorkflowSettings() {
   const [project, setProject] = useState<{ id: number; key: string; name: string } | null>(null);
   const [rules, setRules] = useState<ProjectWorkflowRule[]>([]);
   const [statusNames, setStatusNames] = useState<ProjectWorkflowStatus[]>([]);
+  const [newStageCategory, setNewStageCategory] = useState<TaskStatus>("in_progress");
   const [transitions, setTransitions] = useState<ProjectWorkflowTransition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -126,7 +127,14 @@ function ProjectWorkflowSettings() {
           fromStatus,
           toStatus
         })),
-        { statuses: statusNames, transitions }
+        {
+          statuses: statusNames.map(({ status, label, category }) => ({
+            status,
+            label,
+            ...(category ? { category } : {})
+          })),
+          transitions
+        }
       );
       setRules(workflow.rules);
       setStatusNames(workflow.statuses);
@@ -143,12 +151,12 @@ function ProjectWorkflowSettings() {
     }
   };
 
-  const labelFor = (status: TaskStatus) =>
+  const labelFor = (status: string) =>
     statusNames.find((item) => item.status === status)?.label ||
     statuses.find((item) => item.value === status)?.label ||
     status;
 
-  const toggleTransition = (fromStatus: TaskStatus, toStatus: TaskStatus) => {
+  const toggleTransition = (fromStatus: string, toStatus: string) => {
     setTransitions((current) => {
       const exists = current.some(
         (item) => item.fromStatus === fromStatus && item.toStatus === toStatus
@@ -203,12 +211,13 @@ function ProjectWorkflowSettings() {
           <div>
             <h2>Project stages</h2>
             <p>
-              Rename the three existing stages. Ticket history and GitHub automation keep their
-              stable underlying statuses.
+              Add up to twelve stages, reorder them, and choose allowed moves. Each stage maps to a
+              stable reporting category. Saved categories cannot change; stages containing tickets
+              (including archived tickets) cannot be removed.
             </p>
           </div>
           <div className="workflow-status-names">
-            {statusNames.map((item) => (
+            {statusNames.map((item, index) => (
               <label key={item.status}>
                 <span>{item.status.replace("_", " ")}</span>
                 <input
@@ -226,24 +235,97 @@ function ProjectWorkflowSettings() {
                   }}
                   value={item.label}
                 />
+                <small>Category: {(item.category || item.status).replace("_", " ")}</small>
+                <button
+                  type="button"
+                  disabled={index === 0}
+                  aria-label={`Move ${item.label} earlier`}
+                  onClick={() =>
+                    setStatusNames((current) => {
+                      const next = [...current];
+                      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                      return next;
+                    })
+                  }
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  disabled={index === statusNames.length - 1}
+                  aria-label={`Move ${item.label} later`}
+                  onClick={() =>
+                    setStatusNames((current) => {
+                      const next = [...current];
+                      [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                      return next;
+                    })
+                  }
+                >
+                  ↓
+                </button>
+                {!["todo", "in_progress", "completed"].includes(item.status) ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${item.label}`}
+                    onClick={() => {
+                      setStatusNames((current) =>
+                        current.filter((stage) => stage.status !== item.status)
+                      );
+                      setTransitions((current) =>
+                        current.filter(
+                          (move) => move.fromStatus !== item.status && move.toStatus !== item.status
+                        )
+                      );
+                    }}
+                  >
+                    Remove
+                  </button>
+                ) : null}
               </label>
             ))}
           </div>
+          <label>
+            New stage category
+            <select
+              aria-label="New stage category"
+              value={newStageCategory}
+              onChange={(event) => setNewStageCategory(event.target.value as TaskStatus)}
+            >
+              <option value="todo">Not started</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={statusNames.length >= 12}
+            onClick={() => {
+              let number = 1;
+              while (statusNames.some((stage) => stage.status === `stage_${number}`)) number++;
+              setStatusNames((current) => [
+                ...current,
+                { status: `stage_${number}`, label: `Stage ${number}`, category: newStageCategory }
+              ]);
+            }}
+          >
+            Add stage
+          </button>
           <h3>Allowed manual moves</h3>
           <div className="workflow-transition-list">
-            {statuses.flatMap((from) =>
-              statuses
-                .filter((to) => to.value !== from.value)
+            {statusNames.flatMap((from) =>
+              statusNames
+                .filter((to) => to.status !== from.status)
                 .map((to) => (
-                  <label key={`${from.value}-${to.value}`}>
+                  <label key={`${from.status}-${to.status}`}>
                     <input
                       checked={transitions.some(
-                        (item) => item.fromStatus === from.value && item.toStatus === to.value
+                        (item) => item.fromStatus === from.status && item.toStatus === to.status
                       )}
-                      onChange={() => toggleTransition(from.value, to.value)}
+                      onChange={() => toggleTransition(from.status, to.status)}
                       type="checkbox"
                     />
-                    {labelFor(from.value)} → {labelFor(to.value)}
+                    {labelFor(from.status)} → {labelFor(to.status)}
                   </label>
                 ))
             )}

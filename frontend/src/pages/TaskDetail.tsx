@@ -253,7 +253,7 @@ function TaskDetail() {
               <h1>{task.title}</h1>
               <span className="task-kind">{issueTypeLabel(task)}</span>
               <span className={`task-detail-status ${task.status}`}>
-                {statusLabel[task.status]}
+                {task.statusLabel || statusLabel[task.status]}
               </span>
             </div>
             <div className="task-detail-meta">
@@ -300,7 +300,7 @@ function TaskDetail() {
                   <span>▧</span>
                   <b>{parent.issueKey}</b>
                   {parent.title}
-                  <em>{statusLabel[parent.status]}</em>
+                  <em>{parent.statusLabel || statusLabel[parent.status]}</em>
                 </Link>
               ) : (
                 <p>No parent issue.</p>
@@ -314,7 +314,7 @@ function TaskDetail() {
                     <span>▧</span>
                     <b>{child.issueKey}</b>
                     {child.title}
-                    <em>{statusLabel[child.status]}</em>
+                    <em>{child.statusLabel || statusLabel[child.status]}</em>
                   </Link>
                 ))
               ) : (

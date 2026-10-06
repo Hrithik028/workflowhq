@@ -6,6 +6,7 @@ import type {
   Label,
   Project,
   ProjectMember,
+  ProjectWorkflow,
   Sprint,
   Task,
   TaskInput,
@@ -22,6 +23,7 @@ interface TaskModalProps {
   initialDueDate?: string | null;
   initialParentTask?: Task | null;
   initialStatus?: TaskStatus;
+  initialWorkflowStage?: string;
   initialProjectId?: number | null;
   initialSprintId?: number | null;
   isSaving: boolean;
@@ -81,6 +83,7 @@ const taskToInput = (task: Task): TaskInput => ({
   description: task.description,
   projectId: task.projectId,
   status: task.status,
+  workflowStage: task.workflowStage || task.status,
   priority: task.priority,
   startDate: task.startDate,
   dueDate: task.dueDate,
@@ -95,6 +98,7 @@ function TaskModal({
   initialDueDate = null,
   initialParentTask = null,
   initialStatus = "todo",
+  initialWorkflowStage,
   initialProjectId = null,
   initialSprintId = null,
   isSaving,
@@ -111,6 +115,7 @@ function TaskModal({
       ? taskToInput(task)
       : {
           ...emptyTask(initialStatus, initialDueDate, initialParentTask),
+          workflowStage: initialWorkflowStage,
           projectId: initialParentTask?.projectId ?? initialProjectId,
           sprintId: initialSprintId
         }
@@ -124,6 +129,30 @@ function TaskModal({
   const [newLabelName, setNewLabelName] = useState("");
   const [newLabelColor, setNewLabelColor] = useState("#4c6ef5");
   const [isLabelBusy, setIsLabelBusy] = useState(false);
+  const [workflow, setWorkflow] = useState<ProjectWorkflow | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const projectId = form.projectId;
+    const timer = window.setTimeout(() => {
+      if (!projectId) {
+        setWorkflow(null);
+        return;
+      }
+      client
+        .getProjectWorkflow(projectId)
+        .then((data) => {
+          if (active) setWorkflow(data);
+        })
+        .catch(() => {
+          if (active) setWorkflow(null);
+        });
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [client, form.projectId]);
 
   useEffect(() => {
     let active = true;
@@ -381,6 +410,7 @@ function TaskModal({
                   setForm({
                     ...form,
                     projectId,
+                    workflowStage: undefined,
                     parentId: parent?.projectId === projectId ? form.parentId : null
                   });
                 }}
@@ -420,12 +450,43 @@ function TaskModal({
             <label>
               <span>Status</span>
               <select
-                onChange={(event) => setForm({ ...form, status: event.target.value as TaskStatus })}
-                value={form.status}
+                onChange={(event) => {
+                  const stage = workflow?.statuses.find(
+                    (item) => item.status === event.target.value
+                  );
+                  setForm({
+                    ...form,
+                    workflowStage: event.target.value,
+                    status: stage?.category || (event.target.value as TaskStatus)
+                  });
+                }}
+                value={form.workflowStage || form.status}
               >
-                <option value="todo">Ready</option>
-                <option value="in_progress">In motion</option>
-                <option value="completed">Shipped</option>
+                {(
+                  workflow?.statuses || [
+                    { status: "todo", label: "Ready" },
+                    { status: "in_progress", label: "In motion" },
+                    { status: "completed", label: "Shipped" }
+                  ]
+                ).map(({ status, label }) => (
+                  <option
+                    key={status}
+                    value={status}
+                    disabled={Boolean(
+                      task &&
+                      task.projectId === form.projectId &&
+                      (task.workflowStage || task.status) !== status &&
+                      workflow &&
+                      !workflow.transitions.some(
+                        (move) =>
+                          move.fromStatus === (task.workflowStage || task.status) &&
+                          move.toStatus === status
+                      )
+                    )}
+                  >
+                    {label}
+                  </option>
+                ))}
               </select>
             </label>
             <label>

@@ -142,4 +142,26 @@ describe("ProjectWorkflowSettings", () => {
       })
     );
   });
+  it("adds a categorized stage, reorders it, and saves its manual move", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole("heading", { name: "Workflow rules." });
+    await user.click(screen.getByRole("button", { name: "Add stage" }));
+    const name = screen.getByRole("textbox", { name: "Name for stage 1" });
+    await user.clear(name);
+    await user.type(name, "Review");
+    await user.click(screen.getByRole("button", { name: "Move Review earlier" }));
+    await user.click(screen.getByRole("checkbox", { name: "In progress → Review" }));
+    await user.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(workspaceMocks.updateProjectWorkflow).toHaveBeenCalledWith(
+      4,
+      expect.any(Array),
+      expect.objectContaining({
+        statuses: expect.arrayContaining([
+          { status: "stage_1", label: "Review", category: "in_progress" }
+        ]),
+        transitions: expect.arrayContaining([{ fromStatus: "in_progress", toStatus: "stage_1" }])
+      })
+    );
+  });
 });

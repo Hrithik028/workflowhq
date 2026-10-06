@@ -148,6 +148,7 @@ describe("Engineering board lanes", () => {
         parentId: 1,
         taskType: "task",
         status: "completed",
+        workflowStage: "completed",
         priority: "high",
         startDate: "2026-09-01",
         dueDate: "2026-09-30",
@@ -254,5 +255,34 @@ describe("Engineering board lanes", () => {
     expect(modal).toHaveTextContent('"initialStatus":"completed"');
     expect(modal).toHaveTextContent('"initialProjectId":4');
     expect(modal).toHaveTextContent('"initialSprintId":8');
+  });
+  it("renders additional lanes and moves between stages sharing one category", async () => {
+    api.listTasks.mockResolvedValue({
+      data: [{ ...tasks[1], status: "in_progress", workflowStage: "review" }],
+      pagination: { pages: 1 }
+    });
+    api.getProjectWorkflow.mockResolvedValue({
+      statuses: [
+        { status: "todo", label: "Backlog", category: "todo" },
+        { status: "in_progress", label: "Building", category: "in_progress" },
+        { status: "review", label: "Review", category: "in_progress" },
+        { status: "qa", label: "QA", category: "in_progress" },
+        { status: "completed", label: "Released", category: "completed" }
+      ],
+      transitions: [{ fromStatus: "review", toStatus: "qa" }]
+    });
+    renderBoard();
+    expect(await screen.findByRole("button", { name: "Review lane" })).toBeInTheDocument();
+    const menu = screen.getByRole("combobox", { name: "Move WHQ-2 to" });
+    expect(menu).toHaveValue("review");
+    expect(within(menu).getByRole("option", { name: "Released" })).toBeDisabled();
+    fireEvent.change(menu, { target: { value: "qa" } });
+    await waitFor(() =>
+      expect(api.updateTask).toHaveBeenCalledWith(
+        2,
+        expect.objectContaining({ status: "in_progress", workflowStage: "qa" })
+      )
+    );
+    await screen.findByText("WHQ-2 moved to QA.");
   });
 });

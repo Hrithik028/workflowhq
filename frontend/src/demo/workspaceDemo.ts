@@ -14,6 +14,8 @@ import type {
   ProjectMember,
   ProjectRole,
   ProjectWorkflowRule,
+  ProjectWorkflowStatus,
+  ProjectWorkflowTransition,
   TaskDependency,
   Sprint,
   SprintInput,
@@ -452,15 +454,16 @@ const createDefaultWorkflowRules = (): ProjectWorkflowRule[] => [
 const workflowRulesByProject: Record<number, ProjectWorkflowRule[]> = Object.fromEntries(
   projects.map((project) => [project.id, createDefaultWorkflowRules()])
 );
-const defaultWorkflowStatuses = [
+const defaultWorkflowStatuses: ProjectWorkflowStatus[] = [
   { status: "todo" as const, label: "Backlog" },
   { status: "in_progress" as const, label: "In progress" },
   { status: "completed" as const, label: "Released" }
 ];
-const defaultWorkflowTransitions = defaultWorkflowStatuses.flatMap((from) =>
-  defaultWorkflowStatuses
-    .filter((to) => to.status !== from.status)
-    .map((to) => ({ fromStatus: from.status, toStatus: to.status }))
+const defaultWorkflowTransitions: ProjectWorkflowTransition[] = defaultWorkflowStatuses.flatMap(
+  (from) =>
+    defaultWorkflowStatuses
+      .filter((to) => to.status !== from.status)
+      .map((to) => ({ fromStatus: from.status, toStatus: to.status }))
 );
 const workflowConfigurationsByProject = Object.fromEntries(
   projects.map((project) => [
@@ -471,6 +474,31 @@ const workflowConfigurationsByProject = Object.fromEntries(
     }
   ])
 );
+
+const resolveDemoStage = (input: TaskInput, existing?: Task) => {
+  const key =
+    input.workflowStage ||
+    (existing?.projectId === input.projectId && existing.status === input.status
+      ? existing.workflowStage
+      : undefined) ||
+    input.status;
+  if (!input.projectId) {
+    if (key !== input.status) throw new Error("Inbox tickets use the standard statuses.");
+    return key;
+  }
+  const workflow = workflowConfigurationsByProject[input.projectId];
+  const stage = workflow?.statuses.find((item) => item.status === key);
+  if (!stage || (stage.category || stage.status) !== input.status)
+    throw new Error("Choose a valid project stage and category.");
+  const previous = existing?.workflowStage || existing?.status;
+  if (
+    existing?.projectId === input.projectId &&
+    previous !== key &&
+    !workflow.transitions.some((move) => move.fromStatus === previous && move.toStatus === key)
+  )
+    throw new Error("This project does not allow that manual status change.");
+  return key;
+};
 
 let labels: Label[] = [
   { id: 1, projectId: 1, name: "Launch blocker", color: "#cb5a43", createdAt: isoDaysAgo(17) },
@@ -751,6 +779,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
         title: task.title,
         taskType: task.taskType,
         status: task.status,
+        workflowStage: task.workflowStage || task.status,
         startDate: task.startDate,
         dueDate: task.dueDate,
         parentId: task.parentId
@@ -854,7 +883,15 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const limit = query.limit || 100;
     const total = result.length;
     return {
-      data: result.slice((page - 1) * limit, page * limit).map((task) => ({ ...task })),
+      data: result
+        .slice((page - 1) * limit, page * limit)
+        .map((task) => ({
+          ...task,
+          statusLabel:
+            workflowConfigurationsByProject[task.projectId || 0]?.statuses.find(
+              (stage) => stage.status === (task.workflowStage || task.status)
+            )?.label || task.statusLabel
+        })),
       pagination: { page, limit, total, pages: total ? Math.ceil(total / limit) : 0 }
     };
   },
@@ -862,6 +899,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
   async createTask(input: TaskInput) {
     await delay();
     const timestamp = new Date().toISOString();
+    const workflowStage = resolveDemoStage(input);
     const project = projects.find((item) => item.id === input.projectId);
     if (project?.archivedAt) throw new Error("Restore this project before changing its work.");
     const assignee = findMember(input.projectId, input.assigneeId);
@@ -873,6 +911,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
       id,
       userId: 1,
       ...input,
+      workflowStage,
       assigneeId: assignee?.userId ?? null,
       assigneeName: assignee?.name ?? null,
       assigneeEmail: assignee?.email ?? null,
@@ -908,6 +947,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
     if (!task) throw new Error("Task not found.");
     const previousStatus = task.status;
     const previousPriority = task.priority;
+    const workflowStage = resolveDemoStage(input, task);
     const project = projects.find((item) => item.id === input.projectId);
     if (task.archivedAt) throw new Error("Restore this task before editing it.");
     if (project?.archivedAt) throw new Error("Restore this project before changing its work.");
@@ -916,6 +956,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
       (item) => item.id === input.sprintId && item.projectId === input.projectId
     );
     Object.assign(task, input, {
+      workflowStage,
       assigneeId: assignee?.userId ?? null,
       assigneeName: assignee?.name ?? null,
       assigneeEmail: assignee?.email ?? null,

@@ -97,6 +97,10 @@ const taskBodySchema = z
     title: z.string().trim().min(1).max(200),
     description: z.string().trim().max(5000).default(""),
     status: statusSchema.default("todo"),
+    workflowStage: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{0,29}$/)
+      .optional(),
     priority: prioritySchema.default("medium"),
     startDate: optionalDate.optional().default(null),
     dueDate: optionalDate.optional().default(null),
@@ -217,12 +221,31 @@ const workflowSchemas = {
     .object({
       rules: z.array(workflowRuleSchema).length(5),
       statuses: z
-        .array(z.object({ status: statusSchema, label: z.string().trim().min(1).max(40) }).strict())
-        .length(3)
+        .array(
+          z
+            .object({
+              status: z
+                .string()
+                .regex(/^[a-z][a-z0-9_]{0,29}$/)
+                .refine(
+                  (key) => !["backlog", "progress", "released"].includes(key),
+                  "This key is reserved for board navigation."
+                ),
+              label: z.string().trim().min(1).max(40),
+              category: statusSchema.optional()
+            })
+            .strict()
+        )
+        .min(3)
+        .max(12)
         .optional(),
       transitions: z
-        .array(z.object({ fromStatus: statusSchema, toStatus: statusSchema }).strict())
-        .max(6)
+        .array(
+          z
+            .object({ fromStatus: z.string().min(1).max(30), toStatus: z.string().min(1).max(30) })
+            .strict()
+        )
+        .max(132)
         .optional()
     })
     .strict()
@@ -242,14 +265,28 @@ const workflowSchemas = {
         });
       }
       if (value.statuses) {
-        if (new Set(value.statuses.map((item) => item.status)).size !== 3) {
+        if (
+          new Set(value.statuses.map((item) => item.status)).size !== value.statuses.length ||
+          !["todo", "in_progress", "completed"].every((key) =>
+            value.statuses.some(
+              (item) => item.status === key && (!item.category || item.category === key)
+            )
+          ) ||
+          value.statuses.some(
+            (item) => !["todo", "in_progress", "completed"].includes(item.status) && !item.category
+          )
+        ) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Provide each status exactly once.",
+            message:
+              "Keep the three standard stages and give each additional stage a unique key and category.",
             path: ["statuses"]
           });
         }
-        if (new Set(value.statuses.map((item) => item.label.toLowerCase())).size !== 3) {
+        if (
+          new Set(value.statuses.map((item) => item.label.toLowerCase())).size !==
+          value.statuses.length
+        ) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
             message: "Status names must be distinct.",
@@ -261,7 +298,12 @@ const workflowSchemas = {
         const keys = value.transitions.map((item) => `${item.fromStatus}:${item.toStatus}`);
         if (
           new Set(keys).size !== keys.length ||
-          value.transitions.some((item) => item.fromStatus === item.toStatus)
+          value.transitions.some(
+            (item) =>
+              item.fromStatus === item.toStatus ||
+              !value.statuses?.some((stage) => stage.status === item.fromStatus) ||
+              !value.statuses?.some((stage) => stage.status === item.toStatus)
+          )
         ) {
           context.addIssue({
             code: z.ZodIssueCode.custom,

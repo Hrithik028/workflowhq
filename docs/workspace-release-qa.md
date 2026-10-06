@@ -81,7 +81,7 @@ WebGL2 cannot render the animated ribbon; basic pages and loading text remain us
    installation/webhook and approved-provider AI flow after deployment; this local run did
    not claim those external integrations were exercised end to end.
 6. Migration **036** reconciles legacy roots and requires non-null ownership. It aborts on
-   unresolved or conflicting project/repository mappings. Migration **037 (next additional-stage phase)** adds stage identity
+   unresolved or conflicting project/repository mappings. Migration **037** adds stage identity
    and category consistency constraints. Update out-of-band writers before rollout; direct SQL
    must supply valid roots and stages. There is no RLS or exhaustive proof of every export/job:
    these database consistency checks complement, not replace, application authorization.

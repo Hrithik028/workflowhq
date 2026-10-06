@@ -44,7 +44,7 @@ const listProjectRoadmap = async (req, res) => {
   const db = req.app.locals.db;
   const project = await requireProject(db, req.params.id, req.user.id);
   const result = await db.query(
-    `SELECT id, issue_key, title, task_type, status, start_date, due_date, parent_task_id
+    `SELECT id, issue_key, title, task_type, status, workflow_stage, start_date, due_date, parent_task_id
      FROM tasks WHERE project_id = $1 AND archived_at IS NULL
      ORDER BY due_date ASC NULLS LAST, id ASC`,
     [project.id]

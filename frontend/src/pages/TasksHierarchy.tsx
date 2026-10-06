@@ -450,7 +450,7 @@ function TasksHierarchy() {
                     </span>
                     <span className={`hierarchy-status ${statusClass(task.status)}`}>
                       <i />
-                      {statusLabel[task.status]}
+                      {task.statusLabel || statusLabel[task.status]}
                     </span>
                     <span className="hierarchy-children">{task.childCount || "—"}</span>
                   </article>
@@ -494,7 +494,7 @@ function TasksHierarchy() {
                 <h3>Status</h3>
                 <span className={`hierarchy-status ${statusClass(selected.status)}`}>
                   <i />
-                  {statusLabel[selected.status]}
+                  {selected.statusLabel || statusLabel[selected.status]}
                 </span>
                 <h3>Assignee</h3>
                 <span className="hierarchy-assignee">

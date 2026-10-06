@@ -68,6 +68,8 @@ const updateProjectWorkflow = async (req, res) => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT id FROM projects WHERE id=$1 FOR UPDATE", [project.id]);
+    await getProject(client, project.id, req.user.id, true);
     await ensureProjectWorkflowRules(client, project.id, req.user.id);
     for (const rule of req.body.rules) {
       await client.query(
@@ -79,16 +81,47 @@ const updateProjectWorkflow = async (req, res) => {
       );
     }
     if (req.body.statuses) {
-      for (const status of req.body.statuses) {
-        await client.query(
-          `UPDATE project_status_labels SET label = $1
-           WHERE project_id = $2 AND status = $3`,
-          [status.label, project.id, status.status]
-        );
+      const previous = await selectProjectStatusWorkflow(client, project.id);
+      const removed = previous.statuses.filter(
+        (stage) => !req.body.statuses.some((item) => item.status === stage.status)
+      );
+      for (const stage of previous.statuses) {
+        const next = req.body.statuses.find((item) => item.status === stage.status);
+        if (next && (next.category || next.status) !== stage.category) {
+          throw new AppError(
+            409,
+            "WORKFLOW_CATEGORY_IMMUTABLE",
+            "A saved stage's category cannot change. Create a new stage instead."
+          );
+        }
       }
-      await client.query("DELETE FROM project_status_transitions WHERE project_id = $1", [
+      for (const stage of removed) {
+        const used = await client.query(
+          "SELECT id FROM tasks WHERE project_id=$1 AND workflow_stage=$2 LIMIT 1",
+          [project.id, stage.status]
+        );
+        if (used.rows.length)
+          throw new AppError(
+            409,
+            "WORKFLOW_STAGE_IN_USE",
+            "Move all tickets, including archived tickets, before removing this stage."
+          );
+      }
+      await client.query("DELETE FROM project_status_transitions WHERE project_id=$1", [
         project.id
       ]);
+      for (const stage of removed)
+        await client.query("DELETE FROM project_status_labels WHERE project_id=$1 AND status=$2", [
+          project.id,
+          stage.status
+        ]);
+      for (const [position, status] of req.body.statuses.entries()) {
+        await client.query(
+          `INSERT INTO project_status_labels(project_id,status,label,category,position)
+           VALUES($1,$2,$3,$4,$5) ON CONFLICT(project_id,status) DO UPDATE SET label=EXCLUDED.label, position=EXCLUDED.position`,
+          [project.id, status.status, status.label, status.category || status.status, position]
+        );
+      }
       for (const transition of req.body.transitions) {
         await client.query(
           `INSERT INTO project_status_transitions (project_id, from_status, to_status)
@@ -109,12 +142,14 @@ const updateProjectWorkflow = async (req, res) => {
         ...(req.body.statuses ? { statusConfigurationChanged: true } : {})
       }
     });
+    const configuration = await selectProjectStatusWorkflow(client, project.id);
+    const rules = await selectRules(client, project.id);
     await client.query("COMMIT");
     return res.status(200).json({
       data: {
         project: { id: Number(project.id), key: project.key, name: project.name },
-        rules: await selectRules(db, project.id),
-        ...(await selectProjectStatusWorkflow(db, project.id))
+        rules,
+        ...configuration
       }
     });
   } catch (error) {
