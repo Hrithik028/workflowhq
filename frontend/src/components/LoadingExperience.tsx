@@ -17,18 +17,20 @@ const messageFor = (pathname: string) => {
 
 export function LoadingScreen({
   message,
-  overlay = false
+  overlay = false,
+  inline = false
 }: {
   message: string;
   overlay?: boolean;
+  inline?: boolean;
 }) {
   return (
     <div
-      className={`work-loading-screen${overlay ? " work-loading-overlay" : ""}`}
+      className={`work-loading-screen${overlay ? " work-loading-overlay" : inline ? " work-loading-inline" : ""}`}
       role="status"
       aria-live="polite"
     >
-      {!overlay && <PublicGlow className="work-loading-ribbon" size={125} />}
+      {!overlay && !inline && <PublicGlow className="work-loading-ribbon" size={125} />}
       <div className="work-loading-card">
         <div className="work-loading-identity">
           <span className="work-loading-mark" aria-hidden="true">

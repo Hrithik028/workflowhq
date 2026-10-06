@@ -65,17 +65,61 @@ const buildTestApp = async ({
     .sort();
 
   for (const file of migrationFiles) {
-    const sql = fs
+    // PostgreSQL safely replays this historical compatibility migration. pg-mem
+    // cannot plan CREATE TABLE IF NOT EXISTS for an already-present table.
+    // Skip only the exact duplicate, never an altered/new migration body.
+    if (file === "034_notifications.sql" && migrationFiles.includes("031_notifications.sql")) {
+      const normalize = (name) =>
+        fs.readFileSync(path.join(migrationsDirectory, name), "utf8").replaceAll("\r\n", "\n").trim();
+      if (normalize(file) !== normalize("031_notifications.sql")) {
+        throw new Error("Notification compatibility migration differs from its historical schema");
+      }
+      continue;
+    }
+    let sql = fs
       .readFileSync(path.join(migrationsDirectory, file), "utf8")
       .replaceAll("TIMESTAMPTZ", "TIMESTAMP");
+    if (file === "031_project_custom_workflows.sql") {
+      sql = sql
+        .replace(
+          "status VARCHAR(30) NOT NULL CHECK",
+          "status VARCHAR(30) NOT NULL CONSTRAINT project_status_labels_status_check CHECK"
+        )
+        .replace(
+          "from_status VARCHAR(30) NOT NULL CHECK",
+          "from_status VARCHAR(30) NOT NULL CONSTRAINT project_status_transitions_from_status_check CHECK"
+        )
+        .replace(
+          "to_status VARCHAR(30) NOT NULL CHECK",
+          "to_status VARCHAR(30) NOT NULL CONSTRAINT project_status_transitions_to_status_check CHECK"
+        );
+    }
+    // pg-mem gives anonymous constraints different names from PostgreSQL.
+    // Supply PostgreSQL's names so additive migrations can replace them.
+    if (file === "026_ai_provider_credentials.sql") {
+      sql = sql
+        .replace(
+          "UNIQUE (user_id, provider)",
+          "CONSTRAINT ai_provider_credentials_user_id_provider_key UNIQUE (user_id, provider)"
+        )
+        .replace(
+          "CHECK (encryption_version = 1)",
+          "CONSTRAINT ai_provider_credentials_encryption_version_check CHECK (encryption_version = 1)"
+        );
+    }
     await db.query(sql);
   }
 
   // Test-only allowlists keep mock models subject to the same mandatory boundary.
   await db.query("UPDATE ai_governance_settings SET provider_policies = $1::jsonb", [
-    JSON.stringify(["openai", "anthropic", "google"].map((provider) => ({
-      provider, enabled: true, allowedModels: ["test-model"], defaultModel: "test-model"
-    })))
+    JSON.stringify(
+      ["openai", "anthropic", "google"].map((provider) => ({
+        provider,
+        enabled: true,
+        allowedModels: ["test-model"],
+        defaultModel: "test-model"
+      }))
+    )
   ]);
 
   return {

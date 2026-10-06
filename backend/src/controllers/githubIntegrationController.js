@@ -4,6 +4,8 @@ const { AppError } = require("../lib/errors");
 const { syncRepositoryHistory } = require("../lib/githubHistorySync");
 const { syncInstallationRepositories } = require("../lib/githubRepositorySync");
 const { canAccessTask, getProjectRole } = require("../lib/projectAccess");
+const { currentWorkspace, queryInWorkspace } = require("../lib/workspaceContext");
+const { ensurePersonalWorkspace } = require("../lib/personalWorkspace");
 
 const stateHash = (state) => createHash("sha256").update(state).digest("hex");
 
@@ -15,7 +17,8 @@ const requireGithub = (req) => {
 };
 
 const getIntegrationStatus = async (req, res) => {
-  const result = await req.app.locals.db.query(
+  const result = await queryInWorkspace(
+    req.app.locals.db,
     `SELECT gi.id, gi.github_installation_id, gi.github_account_id,
             gi.account_login, gi.account_type, gi.repository_selection,
             gi.permissions, gi.suspended_at, gi.connection_status,
@@ -28,10 +31,11 @@ const getIntegrationStatus = async (req, res) => {
      FROM github_installations gi
      LEFT JOIN github_repositories gr
        ON gr.installation_id = gi.id AND gr.user_id = gi.user_id
-     WHERE gi.user_id = $1
+     WHERE gi.user_id = $1 /* workspace */
      GROUP BY gi.id
      ORDER BY gi.updated_at DESC, gi.id DESC`,
-    [req.user.id]
+    [req.user.id],
+    "gi"
   );
   return res.status(200).json({
     data: { connected: result.rows.length > 0, installations: result.rows }
@@ -45,9 +49,14 @@ const startConnection = async (req, res) => {
     Date.now() + req.app.locals.config.githubConnectStateTtlMinutes * 60 * 1000
   );
   await req.app.locals.db.query(
-    `INSERT INTO github_connection_states (user_id, state_hash, expires_at)
-     VALUES ($1, $2, $3)`,
-    [req.user.id, stateHash(state), expiresAt]
+    `INSERT INTO github_connection_states (user_id, state_hash, expires_at, workspace_id)
+     VALUES ($1, $2, $3, $4)`,
+    [
+      req.user.id,
+      stateHash(state),
+      expiresAt,
+      currentWorkspace() || (await ensurePersonalWorkspace(req.app.locals.db, req.user))
+    ]
   );
   const installUrl = new URL(
     `/apps/${req.app.locals.config.githubAppSlug}/installations/new`,
@@ -62,7 +71,7 @@ const consumeConnectionState = async (db, state) => {
     `UPDATE github_connection_states
      SET consumed_at = CURRENT_TIMESTAMP
      WHERE state_hash = $1 AND consumed_at IS NULL AND expires_at > CURRENT_TIMESTAMP
-     RETURNING user_id`,
+     RETURNING user_id, workspace_id`,
     [stateHash(state)]
   );
   if (result.rows.length === 0) {
@@ -72,10 +81,10 @@ const consumeConnectionState = async (db, state) => {
       "The GitHub connection request is invalid or has expired."
     );
   }
-  return result.rows[0].user_id;
+  return result.rows[0];
 };
 
-const upsertInstallation = async (db, userId, githubInstallation) => {
+const upsertInstallation = async (db, userId, githubInstallation, workspaceId) => {
   const externalId = Number(githubInstallation.id);
   const accountId = Number(githubInstallation.account?.id);
   if (!Number.isSafeInteger(externalId) || !Number.isSafeInteger(accountId)) {
@@ -87,7 +96,7 @@ const upsertInstallation = async (db, userId, githubInstallation) => {
   }
 
   const existing = await db.query(
-    "SELECT id, user_id FROM github_installations WHERE github_installation_id = $1",
+    "SELECT id, user_id, workspace_id FROM github_installations WHERE github_installation_id = $1",
     [externalId]
   );
   if (existing.rows.length > 0 && Number(existing.rows[0].user_id) !== Number(userId)) {
@@ -97,13 +106,22 @@ const upsertInstallation = async (db, userId, githubInstallation) => {
       "This GitHub installation is already connected."
     );
   }
+  if (
+    existing.rows[0]?.workspace_id &&
+    Number(existing.rows[0].workspace_id) !== Number(workspaceId)
+  )
+    throw new AppError(
+      409,
+      "GITHUB_INSTALLATION_WORKSPACE_CONFLICT",
+      "This installation belongs to another workspace."
+    );
 
   const result = await db.query(
     `INSERT INTO github_installations (
        user_id, github_installation_id, github_account_id, account_login,
        account_type, repository_selection, permissions, suspended_at,
-       connection_status, last_verified_at, sync_status, last_sync_error
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, 'queued', NULL)
+       connection_status, last_verified_at, sync_status, last_sync_error, workspace_id
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, 'queued', NULL, $10)
      ON CONFLICT (github_installation_id) DO UPDATE SET
        github_account_id = EXCLUDED.github_account_id,
        account_login = EXCLUDED.account_login,
@@ -128,7 +146,8 @@ const upsertInstallation = async (db, userId, githubInstallation) => {
       githubInstallation.repository_selection === "all" ? "all" : "selected",
       githubInstallation.permissions || {},
       githubInstallation.suspended_at || null,
-      githubInstallation.suspended_at ? "suspended" : "active"
+      githubInstallation.suspended_at ? "suspended" : "active",
+      workspaceId
     ]
   );
   return result.rows[0];
@@ -137,12 +156,26 @@ const upsertInstallation = async (db, userId, githubInstallation) => {
 const finishConnection = async (req, res) => {
   try {
     const github = requireGithub(req);
-    const userId = await consumeConnectionState(req.app.locals.db, req.query.state);
+    const selection = await consumeConnectionState(req.app.locals.db, req.query.state);
+    const userId = selection.user_id;
+    const workspaceId =
+      selection.workspace_id || (await ensurePersonalWorkspace(req.app.locals.db, { id: userId }));
+    const member = await req.app.locals.db.query(
+      "SELECT 1 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+      [workspaceId, userId]
+    );
+    if (!member.rows[0]) throw new AppError(404, "WORKSPACE_NOT_FOUND", "Workspace not found.");
     const githubInstallation = await github.verifyInstallationForUser({
       installationId: req.query.installation_id,
       code: req.query.code
     });
-    const installation = await upsertInstallation(req.app.locals.db, userId, githubInstallation);
+    const installation = await upsertInstallation(
+      req.app.locals.db,
+      userId,
+      githubInstallation,
+      workspaceId
+    );
+    installation.workspace_id = workspaceId;
     await syncInstallationRepositories({
       db: req.app.locals.db,
       github,
@@ -171,9 +204,11 @@ const finishConnection = async (req, res) => {
 
 const syncInstallation = async (req, res, next) => {
   const github = requireGithub(req);
-  const result = await req.app.locals.db.query(
-    "SELECT * FROM github_installations WHERE id = $1 AND user_id = $2",
-    [req.params.installationId, req.user.id]
+  const result = await queryInWorkspace(
+    req.app.locals.db,
+    "SELECT * FROM github_installations gi WHERE id = $1 AND user_id = $2 /* workspace */",
+    [req.params.installationId, req.user.id],
+    "gi"
   );
   if (result.rows.length === 0) {
     return next(new AppError(404, "GITHUB_INSTALLATION_NOT_FOUND", "Installation not found."));
@@ -254,6 +289,10 @@ const syncInstallation = async (req, res, next) => {
 const listRepositories = async (req, res) => {
   const values = [req.user.id];
   const conditions = ["(gr.user_id = $1 OR pm_access.user_id = $1)"];
+  if (currentWorkspace()) {
+    values.push(currentWorkspace());
+    conditions.push(`gr.workspace_id = $${values.length}`);
+  }
   if (req.query.installationId !== undefined) {
     values.push(req.query.installationId);
     conditions.push(`gr.installation_id = $${values.length}`);
@@ -302,10 +341,12 @@ const setRepositorySelection = async (req, res, next) => {
       return next(new AppError(404, "PROJECT_NOT_FOUND", "Project not found."));
     }
 
-    const repository = await client.query(
-      `SELECT id FROM github_repositories
-       WHERE id = $1 AND user_id = $2`,
-      [req.params.repositoryId, req.user.id]
+    const repository = await queryInWorkspace(
+      client,
+      `SELECT id, workspace_id FROM github_repositories gr
+       WHERE id = $1 AND user_id = $2 /* workspace */`,
+      [req.params.repositoryId, req.user.id],
+      "gr"
     );
     if (repository.rows.length === 0) {
       await client.query("ROLLBACK");
@@ -314,13 +355,13 @@ const setRepositorySelection = async (req, res, next) => {
 
     if (selected) {
       await client.query(
-        `INSERT INTO project_github_repositories (repository_id, linked_by, project_id)
-         VALUES ($1, $2, $3)
+        `INSERT INTO project_github_repositories (repository_id, linked_by, project_id, workspace_id)
+         VALUES ($1, $2, $3, $4)
          ON CONFLICT (repository_id) DO UPDATE SET
            linked_by = EXCLUDED.linked_by,
            project_id = EXCLUDED.project_id,
            updated_at = CURRENT_TIMESTAMP`,
-        [req.params.repositoryId, req.user.id, projectId]
+        [req.params.repositoryId, req.user.id, projectId, repository.rows[0].workspace_id]
       );
     } else {
       await client.query(
@@ -365,7 +406,7 @@ const setRepositorySelection = async (req, res, next) => {
 const getTaskDevelopmentLinks = async (req, res, next) => {
   const db = req.app.locals.db;
   const task = await db.query(
-    "SELECT id, user_id, project_id, issue_key, title FROM tasks WHERE id = $1",
+    "SELECT id, user_id, project_id, workspace_id, issue_key, title FROM tasks WHERE id = $1",
     [req.params.taskId]
   );
   if (task.rows.length === 0 || !(await canAccessTask(db, task.rows[0], req.user.id))) {
@@ -429,55 +470,68 @@ const getCommandSummary = async (req, res) => {
   const accessibleRepositories = `FROM github_repositories gr
     JOIN project_github_repositories pgr ON pgr.repository_id = gr.id
     JOIN project_members pm ON pm.project_id = pgr.project_id
-    WHERE pm.user_id = $1 AND gr.removed_at IS NULL`;
+    WHERE pm.user_id = $1 AND gr.removed_at IS NULL /* workspace */`;
   const accessibleEvents = `FROM github_development_events gde
     JOIN github_repositories gr ON gr.id = gde.repository_id
     JOIN project_github_repositories pgr ON pgr.repository_id = gr.id
     JOIN project_members pm ON pm.project_id = pgr.project_id
-    WHERE pm.user_id = $1 AND gr.removed_at IS NULL`;
+    WHERE pm.user_id = $1 AND gr.removed_at IS NULL /* workspace */`;
   const [installations, repositories, openPullRequests, failingChecks, deployments, contributors] =
     await Promise.all([
-      db.query(
+      queryInWorkspace(
+        db,
         `SELECT COUNT(*)::int AS count
-         FROM github_installations
-         WHERE user_id = $1 AND connection_status = 'active'`,
-        [req.user.id]
+         FROM github_installations gi
+         WHERE user_id = $1 AND connection_status = 'active' /* workspace */`,
+        [req.user.id],
+        "gi"
       ),
-      db.query(
+      queryInWorkspace(
+        db,
         `SELECT COUNT(DISTINCT gr.id)::int AS count,
                 MAX(gr.last_synced_at) AS last_synced_at
          ${accessibleRepositories}`,
-        [req.user.id]
+        [req.user.id],
+        "gr"
       ),
-      db.query(
+      queryInWorkspace(
+        db,
         `SELECT COUNT(DISTINCT gde.id)::int AS count
          ${accessibleEvents}
            AND gde.event_type = 'pull_request' AND LOWER(COALESCE(gde.state, '')) = 'open'`,
-        [req.user.id]
+        [req.user.id],
+        "gr"
       ),
-      db.query(
+      queryInWorkspace(
+        db,
         `SELECT COUNT(DISTINCT gde.id)::int AS count
          ${accessibleEvents}
            AND gde.event_type = 'check_run'
            AND LOWER(COALESCE(gde.state, '')) IN
              ('failure', 'failed', 'timed_out', 'cancelled', 'action_required', 'startup_failure')`,
-        [req.user.id]
+        [req.user.id],
+        "gr"
       ),
-      db.query(
+      queryInWorkspace(
+        db,
         `SELECT COUNT(DISTINCT gde.id)::int AS count
          ${accessibleEvents}
            AND gde.event_type = 'deployment'
            AND LOWER(COALESCE(gde.state, '')) IN ('success', 'succeeded')
            AND gde.occurred_at >= $2`,
-        [req.user.id, weekAgo]
+        [req.user.id, weekAgo],
+        "gr"
       ),
-      db.query(
+      queryInWorkspace(
+        db,
         `SELECT COUNT(DISTINCT gde.actor_login)::int AS count
          ${accessibleEvents} AND gde.actor_login IS NOT NULL`,
-        [req.user.id]
+        [req.user.id],
+        "gr"
       )
     ]);
-  const recent = await db.query(
+  const recent = await queryInWorkspace(
+    db,
     `SELECT gde.id, gde.event_type, gde.external_id, gde.github_number,
             gde.title, gde.url, gde.state, gde.actor_login, gde.occurred_at,
             identity.mapped_user_id AS actor_user_id,
@@ -493,10 +547,11 @@ const getCommandSummary = async (req, res) => {
        ON identity.installation_id = gr.installation_id
       AND identity.github_login_normalized = LOWER(gde.actor_login)
      LEFT JOIN users actor ON actor.id = identity.mapped_user_id
-     WHERE pm.user_id = $1 AND gr.removed_at IS NULL
+     WHERE pm.user_id = $1 AND gr.removed_at IS NULL /* workspace */
      ORDER BY gde.occurred_at DESC, gde.id DESC
      LIMIT 12`,
-    [req.user.id]
+    [req.user.id],
+    "gr"
   );
   const repositoryCount = Number(repositories.rows[0].count || 0);
   return res.status(200).json({

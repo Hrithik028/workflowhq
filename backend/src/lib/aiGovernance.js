@@ -1,4 +1,5 @@
 const { AppError } = require("./errors");
+const { applyWorkspaceAiPolicy } = require("./workspaceAiPolicy");
 
 const supportedProviders = ["openai", "anthropic", "google"];
 
@@ -126,7 +127,7 @@ const reserveAiPreview = async (
   db,
   { config, userId, provider, model, promptCharacters, maxItems }
 ) => {
-  const policy = await readAiGovernance(db, config);
+  const policy = await applyWorkspaceAiPolicy(db, await readAiGovernance(db, config));
   const providerPolicy = policy.providerPolicies.find((item) => item.provider === provider);
   if (!providerPolicy?.enabled) {
     throw new AppError(403, "AI_PROVIDER_DISABLED", "That AI provider is disabled by policy.");

@@ -4,6 +4,7 @@ const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().positive().max(65535).default(5000),
+    WORKSPACES_ENABLED: z.enum(["true", "false"]).default("false"),
     DATABASE_URL: z.string().min(1, "DATABASE_URL is required."),
     JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters."),
     ACCESS_TOKEN_TTL: z.string().default("15m"),
@@ -188,6 +189,7 @@ const loadConfig = (overrides = {}) => {
   return {
     nodeEnv: values.NODE_ENV,
     port: values.PORT,
+    workspacesEnabled: values.WORKSPACES_ENABLED === "true",
     databaseUrl: values.DATABASE_URL,
     jwtSecret: values.JWT_SECRET,
     accessTokenTtl: values.ACCESS_TOKEN_TTL,

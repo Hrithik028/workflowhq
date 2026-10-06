@@ -2,6 +2,10 @@ const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
 const { notifyUser } = require("../lib/notifications");
 const { getProjectRole } = require("../lib/projectAccess");
+const {
+  addProjectCollaboratorToWorkspace,
+  releaseProjectCollaboratorFromWorkspace
+} = require("../lib/workspaceMembership");
 
 const countOwners = async (db, projectId) => {
   const result = await db.query(
@@ -81,6 +85,7 @@ const addMember = async (req, res, next) => {
          VALUES ($1, $2, $3, $4)`,
         [req.params.id, target.id, req.body.role, req.user.id]
       );
+      await addProjectCollaboratorToWorkspace(client, req.params.id, target.id);
       await logActivity(client, {
         userId: req.user.id,
         action: "project_member_added",
@@ -188,11 +193,22 @@ const removeMember = async (req, res, next) => {
     }
   }
 
-  await db.query("DELETE FROM project_members WHERE project_id = $1 AND user_id = $2", [
-    req.params.id,
-    targetUserId
-  ]);
-  return res.status(204).send();
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM project_members WHERE project_id = $1 AND user_id = $2", [
+      req.params.id,
+      targetUserId
+    ]);
+    await releaseProjectCollaboratorFromWorkspace(client, req.params.id, targetUserId);
+    await client.query("COMMIT");
+    return res.status(204).send();
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 module.exports = { addMember, listMembers, removeMember, updateMemberRole };

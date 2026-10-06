@@ -18,6 +18,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import type { User } from "../types";
 import { ThemeToggle } from "../theme";
 import BrandMark from "./BrandMark";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 
 export interface LayoutContext {
   isDemo: boolean;
@@ -46,6 +47,7 @@ function AppLayout({ isDemo, onLogout, user }: AppLayoutProps) {
           </div>
         </div>
 
+        <WorkspaceSwitcher isDemo={isDemo} />
         <nav className="sidebar-nav" aria-label="Main navigation">
           <Link aria-label="Back to landing page" to="/">
             <ArrowUpRight size={18} strokeWidth={2} />

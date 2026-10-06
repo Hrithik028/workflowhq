@@ -1,5 +1,6 @@
 const { logActivity } = require("../lib/activity");
 const { AppError } = require("../lib/errors");
+const { queryInWorkspace } = require("../lib/workspaceContext");
 
 const REDELIVERY_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const REDELIVERY_COOLDOWN_MS = 60 * 1000;
@@ -15,29 +16,34 @@ const requireGithub = (req) => {
 const listGithubIdentities = async (req, res) => {
   const db = req.app.locals.db;
   const [actors, mappings, members] = await Promise.all([
-    db.query(
+    queryInWorkspace(
+      db,
       `SELECT gr.installation_id, gi.account_login, gde.actor_login,
               COUNT(gde.id)::int AS event_count, MAX(gde.occurred_at) AS last_seen_at
        FROM github_installations gi
        JOIN github_repositories gr ON gr.installation_id = gi.id
        JOIN github_development_events gde ON gde.repository_id = gr.id
-       WHERE gi.user_id = $1 AND gde.actor_login IS NOT NULL
+       WHERE gi.user_id = $1 AND gde.actor_login IS NOT NULL /* workspace */
          AND gr.removed_at IS NULL
        GROUP BY gr.installation_id, gi.account_login, gde.actor_login
        ORDER BY MAX(gde.occurred_at) DESC, gde.actor_login ASC`,
-      [req.user.id]
+      [req.user.id],
+      "gi"
     ),
-    db.query(
+    queryInWorkspace(
+      db,
       `SELECT mapping.id, mapping.installation_id, mapping.github_login,
               mapping.mapped_user_id, mapping.updated_at,
               member.name AS mapped_user_name, member.email AS mapped_user_email
        FROM github_identity_mappings mapping
        JOIN github_installations installation ON installation.id = mapping.installation_id
        JOIN users member ON member.id = mapping.mapped_user_id
-       WHERE installation.user_id = $1`,
-      [req.user.id]
+       WHERE installation.user_id = $1 /* workspace */`,
+      [req.user.id],
+      "installation"
     ),
-    db.query(
+    queryInWorkspace(
+      db,
       `SELECT DISTINCT installation.id AS installation_id,
               member.id AS user_id, member.name, member.email
        FROM github_installations installation
@@ -46,10 +52,11 @@ const listGithubIdentities = async (req, res) => {
        JOIN projects project ON project.id = link.project_id
        JOIN project_members membership ON membership.project_id = project.id
        JOIN users member ON member.id = membership.user_id
-       WHERE installation.user_id = $1 AND repository.selected = TRUE
+       WHERE installation.user_id = $1 AND repository.selected = TRUE /* workspace */
          AND repository.removed_at IS NULL AND project.archived_at IS NULL
        ORDER BY installation.id, member.name, member.id`,
-      [req.user.id]
+      [req.user.id],
+      "installation"
     )
   ]);
   const mappingByActor = new Map(
@@ -77,10 +84,12 @@ const setGithubIdentity = async (req, res) => {
   const { installationId, githubLogin, userId } = req.body;
   const normalizedLogin = githubLogin.toLowerCase();
   const installation = (
-    await db.query(
+    await queryInWorkspace(
+      db,
       `SELECT id, account_login FROM github_installations
-       WHERE id = $1 AND user_id = $2 AND connection_status = 'active'`,
-      [installationId, req.user.id]
+       WHERE id = $1 AND user_id = $2 AND connection_status = 'active' /* workspace */`,
+      [installationId, req.user.id],
+      "github_installations"
     )
   ).rows[0];
   if (!installation) {
@@ -176,12 +185,14 @@ const setGithubIdentity = async (req, res) => {
 const deleteGithubIdentity = async (req, res) => {
   const db = req.app.locals.db;
   const mapping = (
-    await db.query(
+    await queryInWorkspace(
+      db,
       `SELECT mapping.id, mapping.github_login
        FROM github_identity_mappings mapping
        JOIN github_installations installation ON installation.id = mapping.installation_id
-       WHERE mapping.id = $1 AND installation.user_id = $2`,
-      [req.params.mappingId, req.user.id]
+       WHERE mapping.id = $1 AND installation.user_id = $2 /* workspace */`,
+      [req.params.mappingId, req.user.id],
+      "installation"
     )
   ).rows[0];
   if (!mapping) {
@@ -199,7 +210,8 @@ const deleteGithubIdentity = async (req, res) => {
 };
 
 const listWebhookFailures = async (req, res) => {
-  const result = await req.app.locals.db.query(
+  const result = await queryInWorkspace(
+    req.app.locals.db,
     `SELECT delivery.id, delivery.github_delivery_id, delivery.event_name,
             delivery.event_action, delivery.status, delivery.attempt_count,
             delivery.error_message, delivery.received_at, delivery.processed_at,
@@ -207,21 +219,20 @@ const listWebhookFailures = async (req, res) => {
             installation.account_login
      FROM github_webhook_deliveries delivery
      JOIN github_installations installation ON installation.id = delivery.installation_id
-     WHERE delivery.user_id = $1 AND installation.user_id = $1
+     WHERE delivery.user_id = $1 AND installation.user_id = $1 /* workspace */
        AND delivery.status = 'failed'
      ORDER BY delivery.received_at DESC, delivery.id DESC
      LIMIT 50`,
-    [req.user.id]
+    [req.user.id],
+    "installation"
   );
   const currentTime = Date.now();
   const failures = result.rows.map((delivery) => {
-    const expired =
-      currentTime - new Date(delivery.received_at).getTime() > REDELIVERY_WINDOW_MS;
+    const expired = currentTime - new Date(delivery.received_at).getTime() > REDELIVERY_WINDOW_MS;
     const limitReached = Number(delivery.redelivery_request_count) >= MAX_REDELIVERY_REQUESTS;
     const coolingDown = Boolean(
       delivery.redelivery_requested_at &&
-        currentTime - new Date(delivery.redelivery_requested_at).getTime() <
-          REDELIVERY_COOLDOWN_MS
+      currentTime - new Date(delivery.redelivery_requested_at).getTime() < REDELIVERY_COOLDOWN_MS
     );
     return {
       ...delivery,
@@ -242,14 +253,16 @@ const redeliverWebhookFailure = async (req, res) => {
   const github = requireGithub(req);
   const db = req.app.locals.db;
   const delivery = (
-    await db.query(
+    await queryInWorkspace(
+      db,
       `SELECT delivery.*, installation.github_installation_id,
               installation.account_login
        FROM github_webhook_deliveries delivery
        JOIN github_installations installation ON installation.id = delivery.installation_id
        WHERE delivery.id = $1 AND delivery.user_id = $2
-         AND installation.user_id = $2 AND delivery.status = 'failed'`,
-      [req.params.deliveryId, req.user.id]
+         AND installation.user_id = $2 AND delivery.status = 'failed' /* workspace */`,
+      [req.params.deliveryId, req.user.id],
+      "installation"
     )
   ).rows[0];
   if (!delivery) {

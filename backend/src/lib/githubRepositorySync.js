@@ -16,6 +16,14 @@ const syncInstallationRepositories = async ({ db, github, installation, trigger 
   if (!github) {
     throw new AppError(503, "GITHUB_INTEGRATION_DISABLED", "GitHub integration is disabled.");
   }
+  const stored = await db.query(
+    "SELECT * FROM github_installations WHERE id = $1 AND user_id = $2",
+    [installation.id, installation.user_id]
+  );
+  if (!stored.rows[0]?.workspace_id) {
+    throw new AppError(404, "GITHUB_INSTALLATION_NOT_FOUND", "Installation not found.");
+  }
+  installation = stored.rows[0];
 
   const run = await db.query(
     `INSERT INTO github_sync_runs (user_id, installation_id, trigger, status)
@@ -49,13 +57,14 @@ const syncInstallationRepositories = async ({ db, github, installation, trigger 
              user_id, installation_id, github_repository_id, github_node_id,
              owner_login, name, full_name, html_url, default_branch,
              is_private, is_archived, github_updated_at, pushed_at,
-             removed_at, sync_status, last_synced_at, last_sync_error
+             removed_at, sync_status, last_synced_at, last_sync_error, workspace_id
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7, $8, $9,
-             $10, $11, $12, $13, NULL, 'succeeded', CURRENT_TIMESTAMP, NULL
+             $10, $11, $12, $13, NULL, 'succeeded', CURRENT_TIMESTAMP, NULL, $14
            )
            ON CONFLICT (github_repository_id) DO UPDATE SET
              installation_id = EXCLUDED.installation_id,
+             workspace_id = EXCLUDED.workspace_id,
              github_node_id = EXCLUDED.github_node_id,
              owner_login = EXCLUDED.owner_login,
              name = EXCLUDED.name,
@@ -72,6 +81,8 @@ const syncInstallationRepositories = async ({ db, github, installation, trigger 
              last_sync_error = NULL,
              updated_at = CURRENT_TIMESTAMP
            WHERE github_repositories.user_id = EXCLUDED.user_id
+             AND github_repositories.workspace_id = EXCLUDED.workspace_id
+             AND github_repositories.installation_id = EXCLUDED.installation_id
            RETURNING id`,
           [
             installation.user_id,
@@ -89,7 +100,8 @@ const syncInstallationRepositories = async ({ db, github, installation, trigger 
             repository.private === true,
             repository.archived === true,
             repository.updated_at || null,
-            repository.pushed_at || null
+            repository.pushed_at || null,
+            installation.workspace_id || null
           ]
         );
         if (upserted.rows.length === 0) {

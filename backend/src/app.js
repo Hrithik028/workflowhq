@@ -24,6 +24,7 @@ const invitationRoutes = require("./routes/invitationRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const taskRoutes = require("./routes/taskRoutes");
+const workspaceRoutes = require("./routes/workspaceRoutes");
 
 const createCorsOptions = (allowedOrigins) => ({
   credentials: true,
@@ -135,6 +136,7 @@ const createApp = ({
   app.use("/api/auth/email-verification", authLimiter);
   app.use("/api/auth/password-reset", authLimiter);
   app.use("/api/admin/platform-owner/transfer", ownershipTransferLimiter);
+  app.use("/api/workspaces/:id/ownership", ownershipTransferLimiter);
   app.use("/api/github/installations", expensiveActionLimiter);
   app.use("/api/github/webhook-deliveries", expensiveActionLimiter);
   app.use("/api/ai/credentials/validate", expensiveActionLimiter);
@@ -149,6 +151,7 @@ const createApp = ({
   app.use("/api/invitations", invitationRoutes);
   app.use("/api/notifications", notificationRoutes);
   app.use("/api/projects", projectRoutes);
+  app.use("/api/workspaces", workspaceRoutes);
   app.use("/api/tasks", taskRoutes);
   app.use("/api/activity", activityRoutes);
 

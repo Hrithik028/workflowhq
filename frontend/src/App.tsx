@@ -29,6 +29,7 @@ import ProjectDevelopment from "./pages/ProjectDevelopment";
 import ProjectAiConversations from "./pages/ProjectAiConversations";
 import ProjectWorkflowSettings from "./pages/ProjectWorkflowSettings";
 import ProjectRoadmap from "./pages/ProjectRoadmap";
+import Workspaces from "./pages/Workspaces";
 import TaskDetail from "./pages/TaskDetail";
 import Tasks from "./pages/TasksHierarchy";
 import Workspace from "./pages/WorkspaceEngineering";
@@ -114,6 +115,7 @@ function App() {
           <Route path="/app" element={<Overview />} />
           <Route path="/workflow" element={<Workspace />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/workspaces" element={<Workspaces />} />
           <Route path="/projects/:id/development" element={<ProjectDevelopment />} />
           <Route path="/projects/:id/jira-import" element={<JiraImport />} />
           <Route path="/projects/:id/ai-conversations" element={<ProjectAiConversations />} />

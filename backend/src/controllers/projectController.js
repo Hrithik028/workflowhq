@@ -3,11 +3,20 @@ const { AppError } = require("../lib/errors");
 const { getProjectRole } = require("../lib/projectAccess");
 const { ensureProjectWorkflowRules } = require("../lib/projectWorkflow");
 const { ensureProjectStatusWorkflow } = require("../lib/projectStatusWorkflow");
+const { ensurePersonalWorkspace } = require("../lib/personalWorkspace");
+const { releaseOrphanedWorkspaceMembers } = require("../lib/workspaceMembership");
+const { requireWorkspaceMembership } = require("./workspaceController");
+const { currentWorkspace } = require("../lib/workspaceContext");
 
 const getProjects = async (req, res) => {
+  if (currentWorkspace()) req.query.workspaceId = currentWorkspace();
+  if (req.query.workspaceId) {
+    await requireWorkspaceMembership(req.app.locals.db, req.query.workspaceId, req.user.id);
+  }
   const archivedCondition = req.query.archived ? "IS NOT NULL" : "IS NULL";
+  const workspaceCondition = req.query.workspaceId ? "AND p.workspace_id = $2" : "";
   const result = await req.app.locals.db.query(
-    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+    `SELECT p.id, p.user_id, p.workspace_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
             p.created_at, p.updated_at,
             pm.role AS my_role,
             COUNT(t.id)::int AS task_count,
@@ -21,18 +30,18 @@ const getProjects = async (req, res) => {
        FROM tasks
        GROUP BY project_id
      ) all_task_counts ON all_task_counts.project_id = p.id
-     WHERE p.archived_at ${archivedCondition}
-     GROUP BY p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+     WHERE p.archived_at ${archivedCondition} ${workspaceCondition}
+     GROUP BY p.id, p.user_id, p.workspace_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
               p.created_at, p.updated_at, pm.role, all_task_counts.total_task_count
      ORDER BY p.updated_at DESC, p.id DESC`,
-    [req.user.id]
+    req.query.workspaceId ? [req.user.id, req.query.workspaceId] : [req.user.id]
   );
   return res.status(200).json({ data: result.rows });
 };
 
 const getProjectById = async (req, res, next) => {
   const result = await req.app.locals.db.query(
-    `SELECT p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+    `SELECT p.id, p.user_id, p.workspace_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
             p.created_at, p.updated_at,
             pm.role AS my_role,
             COUNT(t.id)::int AS task_count,
@@ -47,7 +56,7 @@ const getProjectById = async (req, res, next) => {
        GROUP BY project_id
      ) all_task_counts ON all_task_counts.project_id = p.id
      WHERE p.id = $1
-     GROUP BY p.id, p.user_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
+     GROUP BY p.id, p.user_id, p.workspace_id, p.key, p.name, p.description, p.archived_at, p.archived_by,
               p.created_at, p.updated_at, pm.role, all_task_counts.total_task_count`,
     [req.params.id, req.user.id]
   );
@@ -62,11 +71,12 @@ const createProject = async (req, res) => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
+    const workspaceId = currentWorkspace() || (await ensurePersonalWorkspace(client, req.user));
     const result = await client.query(
-      `INSERT INTO projects (user_id, key, name, description)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, user_id, key, name, description, archived_at, archived_by, created_at, updated_at`,
-      [req.user.id, req.body.key, req.body.name, req.body.description]
+      `INSERT INTO projects (user_id, workspace_id, key, name, description)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, user_id, workspace_id, key, name, description, archived_at, archived_by, created_at, updated_at`,
+      [req.user.id, workspaceId, req.body.key, req.body.name, req.body.description]
     );
     const project = result.rows[0];
     // The creator always becomes the project's first owner. projects.user_id
@@ -165,7 +175,7 @@ const deleteProject = async (req, res, next) => {
   try {
     await client.query("BEGIN");
     const projectResult = await client.query(
-      "SELECT id, name FROM projects WHERE id = $1 FOR UPDATE",
+      "SELECT id, name, workspace_id FROM projects WHERE id = $1 FOR UPDATE",
       [req.params.id]
     );
     if (projectResult.rows.length === 0) {
@@ -189,6 +199,7 @@ const deleteProject = async (req, res, next) => {
     const result = await client.query("DELETE FROM projects WHERE id = $1 RETURNING id, name", [
       req.params.id
     ]);
+    await releaseOrphanedWorkspaceMembers(client, projectResult.rows[0].workspace_id);
     await logActivity(client, {
       userId: req.user.id,
       action: "project_deleted",

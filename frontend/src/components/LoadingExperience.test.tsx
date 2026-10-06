@@ -8,6 +8,11 @@ import { LoadingExperience, LoadingScreen } from "./LoadingExperience";
 afterEach(() => vi.useRealTimers());
 
 describe("loading experience", () => {
+  it("keeps section loading compact without a full-page ribbon", () => {
+    render(<LoadingScreen message="Loading workspace settings" inline />);
+    expect(screen.getByRole("status")).toHaveClass("work-loading-inline");
+    expect(document.querySelector(".work-loading-ribbon")).not.toBeInTheDocument();
+  });
   it("shows the branded restoration screen", () => {
     render(<LoadingScreen message="Restoring your workspace" />);
     expect(screen.getByRole("status")).toHaveTextContent("Restoring your workspace");

@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 
 const { AppError } = require("../lib/errors");
 const { issueAccountToken } = require("../lib/accountTokens");
+const { ensurePersonalWorkspace } = require("../lib/personalWorkspace");
 
 const hashRefreshToken = (token) => createHash("sha256").update(token).digest("hex");
 
@@ -23,13 +24,14 @@ const readCookie = (req, name) => {
   return null;
 };
 
-const createAccessToken = (user, config, sessionId) =>
+const createAccessToken = (user, config, sessionId, workspaceVersion = 0) =>
   jwt.sign(
     {
       email: user.email,
       role: user.role,
       authVersion: Number(user.auth_version || 0),
       sessionId: Number(sessionId),
+      workspaceVersion: Number(workspaceVersion),
       type: "access"
     },
     config.jwtSecret,
@@ -50,35 +52,40 @@ const clearRefreshCookie = (res, config) => {
   res.clearCookie(config.refreshCookieName, options);
 };
 
-const createRefreshSession = async (db, userId, req, sessionId = null) => {
+const createRefreshSession = async (db, userId, req, sessionId = null, selection = null) => {
   const config = req.app.locals.config;
   const token = randomBytes(48).toString("base64url");
   const expiresAt = new Date(Date.now() + config.refreshTokenDays * 24 * 60 * 60 * 1000);
 
+  const workspaceId =
+    selection?.workspace_id || (await ensurePersonalWorkspace(db, { id: userId }));
+  const workspaceVersion = Number(selection?.workspace_version || 0);
   const values = [
     userId,
     hashRefreshToken(token),
     req.get("user-agent")?.slice(0, 500) || null,
     req.ip?.slice(0, 45) || null,
-    expiresAt
+    expiresAt,
+    workspaceId,
+    workspaceVersion
   ];
   const result = sessionId
     ? await db.query(
         `INSERT INTO refresh_sessions
-           (id, user_id, token_hash, user_agent, ip_address, expires_at, last_used_at)
-         VALUES ($6, $1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+           (id, user_id, token_hash, user_agent, ip_address, expires_at, workspace_id, workspace_version, last_used_at)
+         VALUES ($8, $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
          RETURNING id`,
         [...values, sessionId]
       )
     : await db.query(
         `INSERT INTO refresh_sessions
-           (user_id, token_hash, user_agent, ip_address, expires_at, last_used_at)
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+           (user_id, token_hash, user_agent, ip_address, expires_at, workspace_id, workspace_version, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
          RETURNING id`,
         values
       );
 
-  return { token, sessionId: Number(result.rows[0].id) };
+  return { token, sessionId: Number(result.rows[0].id), workspaceId, workspaceVersion };
 };
 
 const sendSession = (res, req, status, user, refreshSession) => {
@@ -86,7 +93,14 @@ const sendSession = (res, req, status, user, refreshSession) => {
   res.cookie(config.refreshCookieName, refreshSession.token, refreshCookieOptions(config));
   return res.status(status).json({
     data: {
-      accessToken: createAccessToken(user, config, refreshSession.sessionId),
+      accessToken: createAccessToken(
+        user,
+        config,
+        refreshSession.sessionId,
+        refreshSession.workspaceVersion
+      ),
+      activeWorkspaceId: config.workspacesEnabled ? Number(refreshSession.workspaceId) : null,
+      workspacesEnabled: Boolean(config.workspacesEnabled),
       user
     }
   });
@@ -107,6 +121,7 @@ const register = async (req, res, next) => {
       [req.body.name, req.body.email, passwordHash, requiresVerification ? null : new Date()]
     );
     const user = result.rows[0];
+    await ensurePersonalWorkspace(client, user);
     const verificationToken = requiresVerification
       ? await issueAccountToken(client, {
           userId: user.id,
@@ -188,7 +203,7 @@ const refresh = async (req, res, next) => {
     const sessionResult = await client.query(
       `DELETE FROM refresh_sessions
        WHERE token_hash = $1 AND expires_at > CURRENT_TIMESTAMP
-       RETURNING id, user_id`,
+       RETURNING id, user_id, workspace_id, workspace_version`,
       [hashRefreshToken(token)]
     );
 
@@ -214,7 +229,8 @@ const refresh = async (req, res, next) => {
       client,
       user.id,
       req,
-      sessionResult.rows[0].id
+      sessionResult.rows[0].id,
+      sessionResult.rows[0]
     );
     await client.query("COMMIT");
 
@@ -313,6 +329,7 @@ const revokeAllSessions = async (req, res) => {
 };
 
 module.exports = {
+  createAccessToken,
   createRefreshSession,
   getCurrentUser,
   listSessions,

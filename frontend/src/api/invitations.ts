@@ -18,7 +18,8 @@ export const invitationApi = {
       projectKey: String(data.projectKey),
       projectName: String(data.projectName),
       role: data.role as InvitationAcceptance["role"],
-      alreadyAccepted: Boolean(data.alreadyAccepted)
+      alreadyAccepted: Boolean(data.alreadyAccepted),
+      workspaceId: data.workspaceId == null ? undefined : Number(data.workspaceId)
     };
   },
 

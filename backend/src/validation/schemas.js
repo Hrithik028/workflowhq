@@ -73,7 +73,8 @@ const projectSchemas = {
     archived: z
       .enum(["true", "false"])
       .default("false")
-      .transform((value) => value === "true")
+      .transform((value) => value === "true"),
+    workspaceId: idSchema.optional()
   }),
   create: z
     .object({

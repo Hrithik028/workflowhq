@@ -1,4 +1,4 @@
-import { api, setAccessToken } from "./client";
+import { api, refreshAccessSession, setAccessToken } from "./client";
 import type { AccountSession, MfaStatus, Session, WorkspaceRole } from "../types";
 
 const mapUser = (user: Record<string, unknown>) => ({
@@ -63,10 +63,7 @@ export const authApi = {
   },
 
   async restore() {
-    const response = await api.post<{
-      data: { accessToken: string; user: Record<string, unknown> };
-    }>("/auth/refresh");
-    const session = mapSession(response.data.data);
+    const session = mapSession(await refreshAccessSession());
     setAccessToken(session.accessToken);
     return session;
   },

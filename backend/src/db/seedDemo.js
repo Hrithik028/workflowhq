@@ -3,6 +3,11 @@ require("dotenv").config();
 const bcrypt = require("bcrypt");
 
 const pool = require("../config/db");
+const { ensurePersonalWorkspace } = require("../lib/personalWorkspace");
+const {
+  addProjectCollaboratorToWorkspace,
+  releaseOrphanedWorkspaceMembers
+} = require("../lib/workspaceMembership");
 
 const resolveDemoUser = (environment = process.env) => {
   const isProduction = environment.NODE_ENV === "production";
@@ -38,7 +43,9 @@ const resolveCollaborator = (environment = process.env) => {
   }
   return {
     name: environment.DEMO_COLLABORATOR_NAME || "WorkflowHQ Collaborator",
-    email: (environment.DEMO_COLLABORATOR_EMAIL || "demo-collaborator@workflowhq.app").toLowerCase(),
+    email: (
+      environment.DEMO_COLLABORATOR_EMAIL || "demo-collaborator@workflowhq.app"
+    ).toLowerCase(),
     password: environment.DEMO_COLLABORATOR_PASSWORD || "WorkflowHQ!2026"
   };
 };
@@ -318,18 +325,27 @@ const seedDemo = async (db = pool) => {
       [demoUser.name, demoUser.email, passwordHash]
     );
     const userId = userResult.rows[0].id;
+    const workspaceId = await ensurePersonalWorkspace(client, { id: userId, name: demoUser.name });
 
     await client.query("DELETE FROM activities WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM tasks WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM projects WHERE user_id = $1", [userId]);
+    await releaseOrphanedWorkspaceMembers(client, workspaceId);
 
     const projectIds = new Map();
     for (const fixture of projectFixtures) {
       const result = await client.query(
-        `INSERT INTO projects (user_id, key, name, description, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $5)
+        `INSERT INTO projects (user_id, workspace_id, key, name, description, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $6)
          RETURNING id`,
-        [userId, fixture.projectKey, fixture.name, fixture.description, isoHoursAgo(96)]
+        [
+          userId,
+          workspaceId,
+          fixture.projectKey,
+          fixture.name,
+          fixture.description,
+          isoHoursAgo(96)
+        ]
       );
       projectIds.set(fixture.key, result.rows[0].id);
       // The demo user's projects are re-inserted (not just updated) on every
@@ -357,12 +373,14 @@ const seedDemo = async (db = pool) => {
         [collaborator.name, collaborator.email, collaboratorPasswordHash]
       );
       const collaboratorId = collaboratorResult.rows[0].id;
+      await ensurePersonalWorkspace(client, { id: collaboratorId, name: collaborator.name });
       await client.query(
         `INSERT INTO project_members (project_id, user_id, role, invited_by, created_at)
          VALUES ($1, $2, 'editor', $3, $4)
          ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
         [projectIds.get("portfolio"), collaboratorId, userId, isoHoursAgo(90)]
       );
+      await addProjectCollaboratorToWorkspace(client, projectIds.get("portfolio"), collaboratorId);
     }
 
     const entityIds = new Map();

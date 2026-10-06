@@ -1,4 +1,5 @@
 const { AppError } = require("../lib/errors");
+const { queryInWorkspace } = require("../lib/workspaceContext");
 
 const visibleToRecipient = "n.user_id = $1 AND (n.project_id IS NULL OR pm.user_id IS NOT NULL)";
 const membershipJoin =
@@ -8,21 +9,25 @@ const listNotifications = async (req, res) => {
   const db = req.app.locals.db;
   const unreadClause = req.query.unreadOnly === "true" ? "AND n.read_at IS NULL" : "";
   const [listed, unread] = await Promise.all([
-    db.query(
+    queryInWorkspace(
+      db,
       `SELECT n.id, n.actor_id, n.project_id, n.task_id, n.kind, n.title, n.body,
               n.read_at, n.created_at
        FROM notifications n
        ${membershipJoin}
-       WHERE ${visibleToRecipient} ${unreadClause}
+       WHERE ${visibleToRecipient} ${unreadClause} /* workspace */
        ORDER BY n.created_at DESC, n.id DESC
        LIMIT $2 OFFSET $3`,
-      [req.user.id, req.query.limit + 1, req.query.offset]
+      [req.user.id, req.query.limit + 1, req.query.offset],
+      "n"
     ),
-    db.query(
+    queryInWorkspace(
+      db,
       `SELECT COUNT(*)::int AS count FROM notifications n
        ${membershipJoin}
-       WHERE ${visibleToRecipient} AND n.read_at IS NULL`,
-      [req.user.id]
+       WHERE ${visibleToRecipient} AND n.read_at IS NULL /* workspace */`,
+      [req.user.id],
+      "n"
     )
   ]);
   return res.status(200).json({
@@ -36,10 +41,12 @@ const listNotifications = async (req, res) => {
 
 const markNotificationRead = async (req, res) => {
   const db = req.app.locals.db;
-  const visible = await db.query(
+  const visible = await queryInWorkspace(
+    db,
     `SELECT n.id FROM notifications n ${membershipJoin}
-     WHERE ${visibleToRecipient} AND n.id = $2`,
-    [req.user.id, req.params.id]
+     WHERE ${visibleToRecipient} AND n.id = $2 /* workspace */`,
+    [req.user.id, req.params.id],
+    "n"
   );
   if (!visible.rows[0]) {
     throw new AppError(404, "NOTIFICATION_NOT_FOUND", "Notification not found.");
@@ -54,10 +61,12 @@ const markNotificationRead = async (req, res) => {
 
 const markAllNotificationsRead = async (req, res) => {
   const db = req.app.locals.db;
-  const visible = await db.query(
+  const visible = await queryInWorkspace(
+    db,
     `SELECT n.id FROM notifications n ${membershipJoin}
-     WHERE ${visibleToRecipient} AND n.read_at IS NULL`,
-    [req.user.id]
+     WHERE ${visibleToRecipient} AND n.read_at IS NULL /* workspace */`,
+    [req.user.id],
+    "n"
   );
   if (visible.rows.length === 0) {
     return res.status(200).json({ data: { updatedCount: 0 } });

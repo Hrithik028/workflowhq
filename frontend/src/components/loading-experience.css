@@ -18,6 +18,11 @@
   background: transparent;
 }
 
+.work-loading-inline {
+  min-height: 180px;
+  padding: 20px 0;
+}
+
 .work-loading-ribbon {
   position: absolute;
   z-index: -1;

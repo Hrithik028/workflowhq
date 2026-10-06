@@ -15,6 +15,8 @@
   --line: var(--rule);
   --accent: var(--signal);
   --accent-dark: var(--signal-dark);
+  --feedback-error: #a12424;
+  --on-signal: #fff;
 }
 
 :root[data-theme="dark"] {
@@ -28,6 +30,8 @@
   --signal-dark: #dbc6a5;
   --blueprint: #9bc1c7;
   color-scheme: dark;
+  --feedback-error: #ffb4a8;
+  --on-signal: #101922;
 }
 
 html, body, #root { background: var(--paper); color: var(--carbon); }
@@ -85,7 +89,7 @@ button, input, textarea, select { accent-color: var(--signal); }
 .editorial-auth .auth-form input { border-color: var(--rule); border-radius: 8px; background: var(--paper); color: var(--carbon); }
 .editorial-auth .auth-form input::placeholder { color: var(--editorial-muted); opacity: .75; }
 .editorial-auth .auth-form input:focus { border-color: var(--signal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 16%, transparent); }
-.editorial-auth .button.primary { border-color: var(--signal); border-radius: 8px; background: var(--signal); color: #101922; font-family: Inter, ui-sans-serif, sans-serif; font-size: .82rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
+.editorial-auth .button.primary { border-color: var(--signal); border-radius: 8px; background: var(--signal); color: var(--on-signal); font-family: Inter, ui-sans-serif, sans-serif; font-size: .82rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
 .editorial-auth .button.primary:hover:not(:disabled) { border-color: var(--signal-dark); background: var(--signal-dark); box-shadow: none; }
 .editorial-auth .auth-switch { font-family: Inter, ui-sans-serif, sans-serif; font-size: .78rem; }
 .editorial-auth .auth-switch a { color: var(--signal-dark); }
@@ -96,7 +100,7 @@ button, input, textarea, select { accent-color: var(--signal); }
 
 /* A consistent workspace frame follows the selection onto every route. */
 .product-shell { grid-template-columns: 224px minmax(0, 1fr); background: var(--paper); }
-.sidebar { border-right: 1px solid #2e3b47; padding: 25px 14px 18px; background: #111d28; }
+.sidebar { display: flex; flex-direction: column; align-items: stretch; border-right: 1px solid #2e3b47; padding: 25px 14px 18px; background: #111d28; }
 .sidebar-brand { justify-content: flex-start; gap: 11px; border-bottom: 1px solid rgb(255 255 255 / 11%); padding: 0 9px 22px; }
 .sidebar-brand > div { display: grid; }
 .sidebar-wordmark { width: 35px; height: 35px; border: 1px solid rgb(199 177 141 / 45%); border-radius: 9px; background: transparent; color: #c7b18d; box-shadow: none; }
@@ -113,14 +117,16 @@ button, input, textarea, select { accent-color: var(--signal); }
 .sidebar-account { margin-top: 0; border-top-color: rgb(255 255 255 / 11%); }
 .sidebar-account .avatar { border-radius: 50%; background: #6f604d; }
 .product-main { background: var(--paper); color: var(--carbon); }
+.project-register-head { border-color: var(--rule); background: var(--panel); color: var(--carbon); }
+.project-register-development { color: var(--blueprint); }
 .demo-banner { border-bottom: 1px solid var(--rule); background: var(--paper-deep); color: var(--editorial-muted); font-family: Inter, ui-sans-serif, sans-serif; font-size: .68rem; text-transform: none; }
-.demo-banner span { border-radius: 4px; background: var(--signal); color: #101922; }
+.demo-banner span { border-radius: 4px; background: var(--signal); color: var(--on-signal); }
 .workspace-page { padding: 38px clamp(20px, 3.5vw, 56px) 60px; }
 .workspace-header { border-bottom: 1px solid var(--rule); }
 .workspace-header h1, .editorial-page-header h1, .overview-command-header h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; letter-spacing: -.055em; }
 .workspace-header p, .overline { font-family: Inter, ui-sans-serif, sans-serif; }
 .product-main .button { border-radius: 7px; font-family: Inter, ui-sans-serif, sans-serif; font-size: .75rem; font-weight: 650; letter-spacing: 0; text-transform: none; }
-.product-main .button.primary { border-color: var(--signal); background: var(--signal); color: #101922; }
+.product-main .button.primary { border-color: var(--signal); background: var(--signal); color: var(--on-signal); }
 .product-main .button.primary:hover:not(:disabled) { border-color: var(--signal-dark); background: var(--signal-dark); box-shadow: none; }
 .product-main .button.secondary { border-color: var(--rule); background: var(--panel); color: var(--carbon); }
 .product-main .button.secondary:hover:not(:disabled) { background: var(--paper-deep); color: var(--carbon); }
@@ -164,6 +170,14 @@ button, input, textarea, select { accent-color: var(--signal); }
 .modal { border-color: var(--rule); border-top: 3px solid var(--signal); border-radius: 12px; background: var(--panel); box-shadow: 0 24px 70px rgb(0 0 0 / 20%); }
 .modal-header { border-color: var(--rule); background: var(--panel); color: var(--carbon); }
 .modal-header h2, .modal-header .icon-button { color: var(--carbon); }
+.modal-form label { min-width: 0; color: var(--carbon); font-family: Inter, ui-sans-serif, sans-serif; font-size: .8rem; font-weight: 600; text-transform: none; }
+.modal-form label span small, .modal-form .field-help { color: var(--editorial-muted); }
+.modal-form :where(input, textarea, select) { width: 100%; min-width: 0; border-color: var(--rule); border-radius: 6px; background: var(--paper); color: var(--carbon); font-family: Inter, ui-sans-serif, sans-serif; font-size: .875rem; }
+.modal-form input::placeholder, .modal-form textarea::placeholder { color: var(--editorial-muted); opacity: 1; }
+.modal-actions { border-color: var(--rule); background: var(--panel); color: var(--carbon); }
+.date-input svg { color: var(--editorial-muted); }
+.priority-pill.medium, .engineering-priority.medium { color: var(--signal); border-color: var(--signal); }
+.engineering-card footer em.medium { color: var(--signal); border-color: var(--signal); }
 
 .workspace-page :where(p, span, small, label, button, select, input, textarea) { font-weight: 500; }
 .admin-security-mark, .member-register > div, .permission-list, .workspace-rules > div, .admin-console-grid { border-color: var(--rule); }
@@ -192,7 +206,7 @@ button, input, textarea, select { accent-color: var(--signal); }
 .engineering-stage-head > button[aria-pressed="true"] { border-color: var(--signal); background: var(--paper-deep); }
 .engineering-board-instructions { color: var(--editorial-muted); font-weight: 500; }
 .engineering-board-instructions button { border-color: var(--rule); border-radius: 6px; background: var(--panel); color: var(--carbon); font-weight: 650; }
-.engineering-board-instructions button[aria-pressed="true"] { background: var(--signal); color: #101922; }
+.engineering-board-instructions button[aria-pressed="true"] { background: var(--signal); color: var(--on-signal); }
 
 :root[data-theme="dark"] .product-main :where(input, textarea, select) { border-color: var(--rule); background: var(--panel); color: var(--carbon); }
 :root[data-theme="dark"] .product-main :where(.modal, .modal-card, .dialog, .popover, .dropdown-menu) { border-color: var(--rule); background: var(--panel); color: var(--carbon); }
@@ -205,17 +219,18 @@ button, input, textarea, select { accent-color: var(--signal); }
   .auth-story-message { padding: 58px 0 40px; }
   .editorial-auth .auth-form-side { min-height: 0; padding: 62px 24px; }
 }
-@media (max-width: 700px) {
+@media (max-width: 760px) {
   .product-shell { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { position: relative; height: auto; padding: 14px; }
+  .sidebar { position: relative; display: flex; flex-direction: column; align-items: stretch; height: auto; gap: 0; padding: 14px; }
   .sidebar-brand { padding-bottom: 12px; }
-  .sidebar-nav { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; }
+  .sidebar-nav { display: flex; width: 100%; min-width: 0; gap: 4px; margin-top: 10px; overflow-x: auto; }
   .sidebar-nav a { flex: 0 0 auto; }
   .sidebar-theme-row { position: absolute; top: 17px; right: 14px; margin: 0; border: 0; padding: 0; }
   .sidebar-theme-row > span { display: none; }
   .sidebar-account { display: none; }
 }
 @media (max-width: 560px) {
+  .modal-form-grid, .modal-form-grid.three { grid-template-columns: minmax(0, 1fr); }
   .editorial-auth .auth-story { min-height: 300px; padding: 22px; }
   .auth-story-message { padding: 45px 0 25px; }
   .auth-story-message h2 { margin: 14px 0; font-size: clamp(2.5rem, 10vw, 3.3rem); }

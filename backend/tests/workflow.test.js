@@ -258,8 +258,8 @@ describe("projects, tasks, and activity API", () => {
     for (const [index, taskType] of ["initiative", "epic", "story", "bug", "task"].entries()) {
       const inserted = await db.query(
         `INSERT INTO tasks
-           (user_id, project_id, issue_key, task_type, parent_task_id, title, description, status, priority)
-         VALUES ($1, $2, $3, $4, $5, $6, '', 'todo', 'medium')
+           (workspace_id, user_id, project_id, issue_key, task_type, parent_task_id, title, description, status, priority)
+         VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1, $2, $3, $4, $5, $6, '', 'todo', 'medium')
          RETURNING id`,
         [
           first.user.id,

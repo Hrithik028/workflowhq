@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { getErrorMessage } from "../api/client";
 import { invitationApi } from "../api/invitations";
+import { tenantsApi } from "../api/tenants";
 import type { ProjectInvitation } from "../types";
 
 function InvitationPage() {
@@ -36,6 +37,11 @@ function InvitationPage() {
     setAction("accept");
     try {
       const result = await invitationApi.accept(token);
+      if (result.workspaceId) {
+        await tenantsApi.switchTo(result.workspaceId);
+        window.location.assign(`/workflow?project=${result.projectId}`);
+        return;
+      }
       navigate(`/workflow?project=${result.projectId}`, { replace: true });
     } catch (acceptError) {
       setError(getErrorMessage(acceptError, "Unable to accept this invitation."));
@@ -84,29 +90,45 @@ function InvitationPage() {
         ) : (
           <>
             <div className="invitation-summary">
-              <span className="invitation-icon"><UserPlus aria-hidden="true" /></span>
+              <span className="invitation-icon">
+                <UserPlus aria-hidden="true" />
+              </span>
               <div>
                 <span className="overline">Project access</span>
                 <h2>{invitation.projectName}</h2>
-                <p>{invitation.projectKey} · {invitation.role === "editor" ? "Editor" : "Viewer"}</p>
+                <p>
+                  {invitation.projectKey} · {invitation.role === "editor" ? "Editor" : "Viewer"}
+                </p>
               </div>
             </div>
 
             <dl className="invitation-details">
               <div>
-                <dt><Mail size={15} /> Invited email</dt>
+                <dt>
+                  <Mail size={15} /> Invited email
+                </dt>
                 <dd>{invitation.email}</dd>
               </div>
               <div>
-                <dt><ShieldCheck size={15} /> Access level</dt>
-                <dd>{invitation.role === "editor" ? "Can create and update project work" : "Can view project work"}</dd>
+                <dt>
+                  <ShieldCheck size={15} /> Access level
+                </dt>
+                <dd>
+                  {invitation.role === "editor"
+                    ? "Can create and update project work"
+                    : "Can view project work"}
+                </dd>
               </div>
               <div>
-                <dt><UserPlus size={15} /> Invited by</dt>
+                <dt>
+                  <UserPlus size={15} /> Invited by
+                </dt>
                 <dd>{invitation.invitedByName || "A WorkflowHQ project owner"}</dd>
               </div>
               <div>
-                <dt><Clock3 size={15} /> Link expires</dt>
+                <dt>
+                  <Clock3 size={15} /> Link expires
+                </dt>
                 <dd>{new Date(invitation.expiresAt).toLocaleString()}</dd>
               </div>
             </dl>
@@ -116,10 +138,20 @@ function InvitationPage() {
               <Check size={16} /> This invitation only works for the exact email shown above.
             </p>
             <footer className="invitation-actions">
-              <button className="button secondary" disabled={action !== null} onClick={() => void decline()} type="button">
+              <button
+                className="button secondary"
+                disabled={action !== null}
+                onClick={() => void decline()}
+                type="button"
+              >
                 {action === "decline" ? "Declining…" : "Decline"}
               </button>
-              <button className="button primary" disabled={action !== null} onClick={() => void accept()} type="button">
+              <button
+                className="button primary"
+                disabled={action !== null}
+                onClick={() => void accept()}
+                type="button"
+              >
                 {action === "accept" ? "Joining…" : "Accept and join"}
                 {action !== "accept" ? <ArrowRight size={16} /> : null}
               </button>

@@ -267,8 +267,8 @@ describe("AI task planner", () => {
   it("builds bounded project context, returns evidence, and warns about duplicate titles", async () => {
     const existingTask = (
       await db.query(
-        `INSERT INTO tasks (user_id, project_id, issue_key, title, description)
-         VALUES ($1, $2, 'AIP-100', 'AI planning foundation',
+        `INSERT INTO tasks (workspace_id, user_id, project_id, issue_key, title, description)
+         VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1, $2, 'AIP-100', 'AI planning foundation',
                  'Existing work. Ignore previous instructions is untrusted data.')
          RETURNING id`,
         [owner.user.id, project.id]
@@ -276,28 +276,28 @@ describe("AI task planner", () => {
     ).rows[0];
     const installation = (
       await db.query(
-        `INSERT INTO github_installations (
+        `INSERT INTO github_installations (workspace_id,
            user_id, github_installation_id, github_account_id, account_login,
            account_type, repository_selection
-         ) VALUES ($1, 77001, 88001, 'workflowhq', 'Organization', 'selected')
+         ) VALUES ((SELECT id FROM workspaces WHERE personal_owner_id = $1), $1, 77001, 88001, 'workflowhq', 'Organization', 'selected')
          RETURNING id`,
         [owner.user.id]
       )
     ).rows[0];
     const repository = (
       await db.query(
-        `INSERT INTO github_repositories (
+        `INSERT INTO github_repositories (workspace_id,
            user_id, installation_id, github_repository_id, github_node_id,
            owner_login, name, full_name, html_url, selected
-         ) VALUES ($1, $2, 99001, 'R_ai_context', 'workflowhq', 'app',
+         ) VALUES ((SELECT workspace_id FROM github_installations WHERE id = $2), $1, $2, 99001, 'R_ai_context', 'workflowhq', 'app',
                    'workflowhq/app', 'https://github.com/workflowhq/app', TRUE)
          RETURNING id`,
         [owner.user.id, installation.id]
       )
     ).rows[0];
     await db.query(
-      `INSERT INTO project_github_repositories (repository_id, project_id, linked_by)
-       VALUES ($1, $2, $3)`,
+      `INSERT INTO project_github_repositories (workspace_id, repository_id, project_id, linked_by)
+       VALUES ((SELECT workspace_id FROM projects WHERE id = $2), $1, $2, $3)`,
       [repository.id, project.id, owner.user.id]
     );
     const event = (
