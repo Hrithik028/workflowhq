@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { LoadingScreen } from "./LoadingExperience";
+import { DelayedLoadingScreen } from "./LoadingExperience";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -11,7 +11,7 @@ interface ProtectedRouteProps {
 function ProtectedRoute({ children, isAuthenticated, isChecking }: ProtectedRouteProps) {
   const location = useLocation();
   if (isChecking) {
-    return <LoadingScreen message="Restoring your workspace" />;
+    return <DelayedLoadingScreen key={location.key} message="Restoring your workspace" />;
   }
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}`;
