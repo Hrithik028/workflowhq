@@ -15,12 +15,60 @@ vi.mock("../api/workspace", () => ({ workspaceApi: workspaceMocks }));
 
 const workflow: ProjectWorkflow = {
   project: { id: 4, key: "WHQ", name: "WorkflowHQ" },
+  statuses: [
+    { status: "todo", label: "Backlog" },
+    { status: "in_progress", label: "In progress" },
+    { status: "completed", label: "Released" }
+  ],
+  transitions: [
+    { fromStatus: "todo", toStatus: "in_progress" },
+    { fromStatus: "todo", toStatus: "completed" },
+    { fromStatus: "in_progress", toStatus: "todo" },
+    { fromStatus: "in_progress", toStatus: "completed" },
+    { fromStatus: "completed", toStatus: "todo" },
+    { fromStatus: "completed", toStatus: "in_progress" }
+  ],
   rules: [
-    { id: 1, trigger: "commit_pushed", enabled: true, fromStatus: "todo", toStatus: "in_progress", updatedAt: "2026-09-03T00:00:00Z" },
-    { id: 2, trigger: "pull_request_opened", enabled: true, fromStatus: "todo", toStatus: "in_progress", updatedAt: "2026-09-03T00:00:00Z" },
-    { id: 3, trigger: "pull_request_merged", enabled: true, fromStatus: "in_progress", toStatus: "completed", updatedAt: "2026-09-03T00:00:00Z" },
-    { id: 4, trigger: "check_run_succeeded", enabled: false, fromStatus: "in_progress", toStatus: "completed", updatedAt: "2026-09-03T00:00:00Z" },
-    { id: 5, trigger: "deployment_succeeded", enabled: false, fromStatus: "in_progress", toStatus: "completed", updatedAt: "2026-09-03T00:00:00Z" }
+    {
+      id: 1,
+      trigger: "commit_pushed",
+      enabled: true,
+      fromStatus: "todo",
+      toStatus: "in_progress",
+      updatedAt: "2026-09-03T00:00:00Z"
+    },
+    {
+      id: 2,
+      trigger: "pull_request_opened",
+      enabled: true,
+      fromStatus: "todo",
+      toStatus: "in_progress",
+      updatedAt: "2026-09-03T00:00:00Z"
+    },
+    {
+      id: 3,
+      trigger: "pull_request_merged",
+      enabled: true,
+      fromStatus: "in_progress",
+      toStatus: "completed",
+      updatedAt: "2026-09-03T00:00:00Z"
+    },
+    {
+      id: 4,
+      trigger: "check_run_succeeded",
+      enabled: false,
+      fromStatus: "in_progress",
+      toStatus: "completed",
+      updatedAt: "2026-09-03T00:00:00Z"
+    },
+    {
+      id: 5,
+      trigger: "deployment_succeeded",
+      enabled: false,
+      fromStatus: "in_progress",
+      toStatus: "completed",
+      updatedAt: "2026-09-03T00:00:00Z"
+    }
   ]
 };
 
@@ -41,13 +89,16 @@ describe("ProjectWorkflowSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     workspaceMocks.getProjectWorkflow.mockResolvedValue(workflow);
-    workspaceMocks.updateProjectWorkflow.mockImplementation(async (_projectId, rules) => ({
-      ...workflow,
-      rules: workflow.rules.map((rule) => ({
-        ...rule,
-        ...rules.find((candidate: { trigger: string }) => candidate.trigger === rule.trigger)
-      }))
-    }));
+    workspaceMocks.updateProjectWorkflow.mockImplementation(
+      async (_projectId, rules, configuration) => ({
+        ...workflow,
+        ...configuration,
+        rules: workflow.rules.map((rule) => ({
+          ...rule,
+          ...rules.find((candidate: { trigger: string }) => candidate.trigger === rule.trigger)
+        }))
+      })
+    );
   });
 
   it("loads the owner rules and saves an enabled GitHub signal", async () => {
@@ -68,10 +119,27 @@ describe("ProjectWorkflowSettings", () => {
       4,
       expect.arrayContaining([
         expect.objectContaining({ trigger: "check_run_succeeded", enabled: true })
-      ])
+      ]),
+      expect.objectContaining({ statuses: workflow.statuses, transitions: workflow.transitions })
     );
-    expect(
-      await screen.findByText(/apply to future verified GitHub webhooks/i)
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/apply to future verified webhooks/i)).toBeInTheDocument();
+  });
+
+  it("saves custom stage labels and manual transition choices", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const name = await screen.findByRole("textbox", { name: "Name for todo" });
+    await user.clear(name);
+    await user.type(name, "Queued");
+    await user.click(screen.getByRole("checkbox", { name: "Queued → Released" }));
+    await user.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(workspaceMocks.updateProjectWorkflow).toHaveBeenCalledWith(
+      4,
+      expect.any(Array),
+      expect.objectContaining({
+        statuses: expect.arrayContaining([{ status: "todo", label: "Queued" }]),
+        transitions: expect.not.arrayContaining([{ fromStatus: "todo", toStatus: "completed" }])
+      })
+    );
   });
 });

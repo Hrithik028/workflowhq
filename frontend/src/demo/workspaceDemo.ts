@@ -449,6 +449,25 @@ const createDefaultWorkflowRules = (): ProjectWorkflowRule[] => [
 const workflowRulesByProject: Record<number, ProjectWorkflowRule[]> = Object.fromEntries(
   projects.map((project) => [project.id, createDefaultWorkflowRules()])
 );
+const defaultWorkflowStatuses = [
+  { status: "todo" as const, label: "Backlog" },
+  { status: "in_progress" as const, label: "In progress" },
+  { status: "completed" as const, label: "Released" }
+];
+const defaultWorkflowTransitions = defaultWorkflowStatuses.flatMap((from) =>
+  defaultWorkflowStatuses
+    .filter((to) => to.status !== from.status)
+    .map((to) => ({ fromStatus: from.status, toStatus: to.status }))
+);
+const workflowConfigurationsByProject = Object.fromEntries(
+  projects.map((project) => [
+    project.id,
+    {
+      statuses: defaultWorkflowStatuses.map((item) => ({ ...item })),
+      transitions: defaultWorkflowTransitions.map((item) => ({ ...item }))
+    }
+  ])
+);
 
 let labels: Label[] = [
   { id: 1, projectId: 1, name: "Launch blocker", color: "#cb5a43", createdAt: isoDaysAgo(17) },
@@ -622,6 +641,10 @@ export const demoWorkspaceApi: WorkspaceClient = {
       }
     ];
     workflowRulesByProject[project.id] = createDefaultWorkflowRules();
+    workflowConfigurationsByProject[project.id] = {
+      statuses: defaultWorkflowStatuses.map((item) => ({ ...item })),
+      transitions: defaultWorkflowTransitions.map((item) => ({ ...item }))
+    };
     addActivity({
       action: "project_created",
       entityType: "project",
@@ -688,6 +711,7 @@ export const demoWorkspaceApi: WorkspaceClient = {
     delete membersByProject[id];
     delete invitationsByProject[id];
     delete workflowRulesByProject[id];
+    delete workflowConfigurationsByProject[id];
     const removedLabelIds = new Set(
       labels.filter((label) => label.projectId === id).map((label) => label.id)
     );
@@ -1015,7 +1039,9 @@ export const demoWorkspaceApi: WorkspaceClient = {
     const project = projects.find((item) => item.id === projectId);
     if (!project) throw new Error("Project not found.");
     const email = input.email.trim().toLowerCase();
-    if ((membersByProject[projectId] || []).some((member) => member.email.toLowerCase() === email)) {
+    if (
+      (membersByProject[projectId] || []).some((member) => member.email.toLowerCase() === email)
+    ) {
       throw new Error("This email already belongs to a project member.");
     }
     const invitation: ProjectInvitation = {
@@ -1056,11 +1082,17 @@ export const demoWorkspaceApi: WorkspaceClient = {
     if (!project) throw new Error("Project not found.");
     return {
       project: { id: project.id, key: project.key, name: project.name },
-      rules: (workflowRulesByProject[projectId] || []).map((rule) => ({ ...rule }))
+      rules: (workflowRulesByProject[projectId] || []).map((rule) => ({ ...rule })),
+      statuses: (
+        workflowConfigurationsByProject[projectId]?.statuses || defaultWorkflowStatuses
+      ).map((item) => ({ ...item })),
+      transitions: (
+        workflowConfigurationsByProject[projectId]?.transitions || defaultWorkflowTransitions
+      ).map((item) => ({ ...item }))
     };
   },
 
-  async updateProjectWorkflow(projectId: number, rules) {
+  async updateProjectWorkflow(projectId: number, rules, configuration) {
     await delay();
     const project = projects.find((item) => item.id === projectId);
     if (!project) throw new Error("Project not found.");
@@ -1071,6 +1103,12 @@ export const demoWorkspaceApi: WorkspaceClient = {
       );
       return { id: existing?.id || nextWorkflowRuleId++, ...rule, updatedAt: timestamp };
     });
+    if (configuration) {
+      workflowConfigurationsByProject[projectId] = {
+        statuses: configuration.statuses.map((item) => ({ ...item })),
+        transitions: configuration.transitions.map((item) => ({ ...item }))
+      };
+    }
     addActivity({
       action: "project_workflow_updated",
       entityType: "project",
@@ -1080,7 +1118,11 @@ export const demoWorkspaceApi: WorkspaceClient = {
     });
     return {
       project: { id: project.id, key: project.key, name: project.name },
-      rules: workflowRulesByProject[projectId].map((rule) => ({ ...rule }))
+      rules: workflowRulesByProject[projectId].map((rule) => ({ ...rule })),
+      statuses: workflowConfigurationsByProject[projectId].statuses.map((item) => ({ ...item })),
+      transitions: workflowConfigurationsByProject[projectId].transitions.map((item) => ({
+        ...item
+      }))
     };
   },
 

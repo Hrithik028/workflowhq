@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   listTasks: vi.fn(),
   listProjects: vi.fn(),
   listSprints: vi.fn(),
+  getProjectWorkflow: vi.fn(),
   updateTask: vi.fn()
 }));
 vi.mock("../api/workspace", () => ({ workspaceApi: api }));
@@ -79,6 +80,21 @@ beforeEach(() => {
   }));
   api.listProjects.mockResolvedValue([{ id: 4, key: "WHQ", name: "WorkflowHQ", myRole: "owner" }]);
   api.listSprints.mockResolvedValue([{ id: 8, name: "Sprint 8", status: "active" }]);
+  api.getProjectWorkflow.mockResolvedValue({
+    statuses: [
+      { status: "todo", label: "Backlog" },
+      { status: "in_progress", label: "In progress" },
+      { status: "completed", label: "Released" }
+    ],
+    transitions: [
+      { fromStatus: "todo", toStatus: "in_progress" },
+      { fromStatus: "todo", toStatus: "completed" },
+      { fromStatus: "in_progress", toStatus: "todo" },
+      { fromStatus: "in_progress", toStatus: "completed" },
+      { fromStatus: "completed", toStatus: "todo" },
+      { fromStatus: "completed", toStatus: "in_progress" }
+    ]
+  });
   api.updateTask.mockImplementation(async (id, input) => {
     tasks = tasks.map((task) => (task.id === id ? { ...task, ...input } : task));
     return tasks.find((task) => task.id === id);
@@ -214,6 +230,21 @@ describe("Engineering board lanes", () => {
     fireEvent.dragStart(card, { dataTransfer: { setData: vi.fn() } });
     fireEvent.drop(screen.getByRole("button", { name: "Released lane" }));
     expect(api.updateTask).not.toHaveBeenCalled();
+  });
+  it("uses project stage names and disables forbidden move targets", async () => {
+    api.getProjectWorkflow.mockResolvedValue({
+      statuses: [
+        { status: "todo", label: "Queued" },
+        { status: "in_progress", label: "Building" },
+        { status: "completed", label: "Released" }
+      ],
+      transitions: [{ fromStatus: "todo", toStatus: "in_progress" }]
+    });
+    renderBoard();
+    expect(await screen.findByRole("button", { name: "Queued lane" })).toBeInTheDocument();
+    const select = screen.getByRole("combobox", { name: "Move WHQ-2 to" });
+    expect(within(select).getByRole("option", { name: "Released" })).toBeDisabled();
+    expect(within(select).getByRole("option", { name: "Building" })).toBeEnabled();
   });
   it("uses the selected lane, project, and sprint when adding an issue", async () => {
     renderBoard("/workflow?project=4&sprint=8&stage=released");

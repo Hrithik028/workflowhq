@@ -19,7 +19,15 @@ import PriorityIcon from "../components/PriorityIcon";
 import TaskModal from "../components/TaskModal";
 import { progressFor } from "../demo/engineeringMeta";
 import { demoWorkspaceApi } from "../demo/workspaceDemo";
-import type { Project, Sprint, SprintStatus, Task, TaskInput, TaskStatus } from "../types";
+import type {
+  Project,
+  ProjectWorkflow,
+  Sprint,
+  SprintStatus,
+  Task,
+  TaskInput,
+  TaskStatus
+} from "../types";
 import { formatDate, initialsFor } from "../utils/format";
 import { persistedProgressFor } from "../utils/taskProgress";
 
@@ -53,7 +61,9 @@ function EngineeringCard({
   busy,
   onMove,
   onDragStart,
-  onDragEnd
+  onDragEnd,
+  stages,
+  allowedTransitions
 }: {
   isDemo: boolean;
   task: Task;
@@ -62,6 +72,8 @@ function EngineeringCard({
   onMove: (task: Task, stage: BoardStage) => void;
   onDragStart: (event: DragEvent, task: Task) => void;
   onDragEnd: () => void;
+  stages: typeof stageMeta;
+  allowedTransitions: ProjectWorkflow["transitions"] | null;
 }) {
   const progress = visibleProgressFor(task, isDemo);
   return (
@@ -102,8 +114,18 @@ function EngineeringCard({
           disabled={!canMove || busy}
           onChange={(event) => onMove(task, event.target.value as BoardStage)}
         >
-          {stageMeta.map(({ key, label }) => (
-            <option key={key} value={key}>
+          {stages.map(({ key, label }) => (
+            <option
+              disabled={
+                allowedTransitions !== null &&
+                statusForStage[key] !== task.status &&
+                !allowedTransitions.some(
+                  (item) => item.fromStatus === task.status && item.toStatus === statusForStage[key]
+                )
+              }
+              key={key}
+              value={key}
+            >
               {label}
             </option>
           ))}
@@ -123,6 +145,7 @@ function WorkspaceEngineering() {
   const client = useMemo(() => (isDemo ? demoWorkspaceApi : workspaceApi), [isDemo]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [workflow, setWorkflow] = useState<ProjectWorkflow | null>(null);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -168,9 +191,12 @@ function WorkspaceEngineering() {
           sort: "updated_at" as const,
           order: "desc" as const
         };
-        const [taskResult, projectResult] = await Promise.all([
+        const [taskResult, projectResult, workflowResult] = await Promise.all([
           client.listTasks(query),
-          client.listProjects()
+          client.listProjects(),
+          projectId
+            ? client.getProjectWorkflow(Number(projectId)).catch(() => null)
+            : Promise.resolve(null)
         ]);
         const allTasks = [...taskResult.data];
         for (let page = 2; page <= taskResult.pagination.pages; page++) {
@@ -194,6 +220,7 @@ function WorkspaceEngineering() {
             : refreshed;
         });
         setProjects(projectResult);
+        setWorkflow(workflowResult);
         if (!background) setError("");
       } catch (loadError) {
         if (version === loadVersion.current)
@@ -290,6 +317,17 @@ function WorkspaceEngineering() {
     [sprintId, tasks]
   );
 
+  const boardStages = useMemo(
+    () =>
+      stageMeta.map((stage) => ({
+        ...stage,
+        label:
+          workflow?.statuses.find((item) => item.status === statusForStage[stage.key])?.label ||
+          stage.label
+      })),
+    [workflow]
+  );
+
   const displayedTasks = useMemo(
     () =>
       selectedStage
@@ -309,6 +347,16 @@ function WorkspaceEngineering() {
   const moveTask = async (task: Task, stage: BoardStage) => {
     if (moving.current.has(task.id) || isLoading || !canMove(task) || stageFor(task) === stage)
       return;
+    if (
+      workflow &&
+      task.projectId === Number(projectId) &&
+      !workflow.transitions.some(
+        (item) => item.fromStatus === task.status && item.toStatus === statusForStage[stage]
+      )
+    ) {
+      setError("This project does not allow that manual status change.");
+      return;
+    }
     moving.current.set(task.id, statusForStage[stage]);
     setMovingIds(new Set(moving.current.keys()));
     setError("");
@@ -335,7 +383,7 @@ function WorkspaceEngineering() {
       });
       setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setNotice(
-        `${task.issueKey} moved to ${stageMeta.find((item) => item.key === stage)!.label}.`
+        `${task.issueKey} moved to ${boardStages.find((item) => item.key === stage)!.label}.`
       );
     } catch (moveError) {
       setNotice("");
@@ -554,7 +602,7 @@ function WorkspaceEngineering() {
 
       <section className="engineering-swimlanes">
         <header className="engineering-stage-head">
-          {stageMeta.map(({ key, label, icon: Icon }) => (
+          {boardStages.map(({ key, label, icon: Icon }) => (
             <button
               type="button"
               aria-pressed={selectedStage === key}
@@ -589,7 +637,7 @@ function WorkspaceEngineering() {
               <MoreHorizontal size={17} />
             </header>
             <div className={`engineering-epic-grid${selectedStage ? " focused-lane" : ""}`}>
-              {stageMeta
+              {boardStages
                 .filter(({ key }) => !selectedStage || key === selectedStage)
                 .map(({ key, label }) => {
                   const laneItems = items.filter((task) => stageFor(task) === key);
@@ -612,6 +660,12 @@ function WorkspaceEngineering() {
                           onMove={(task, stage) => void moveTask(task, stage)}
                           onDragStart={startDrag}
                           onDragEnd={endDrag}
+                          stages={boardStages}
+                          allowedTransitions={
+                            workflow && item.projectId === Number(projectId)
+                              ? workflow.transitions
+                              : null
+                          }
                         />
                       ))}
                       {!laneItems.length ? (

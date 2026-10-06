@@ -3,6 +3,7 @@ const { logActivity } = require("./activity");
 const { AppError } = require("./errors");
 const { notifyUser } = require("./notifications");
 const { canAccessTask, getProjectRole } = require("./projectAccess");
+const { assertManualTransition } = require("./projectStatusWorkflow");
 
 const typeRank = {
   initiative: 5,
@@ -291,6 +292,9 @@ const updateTask = async (
   };
   await enforceTaskRules(db, { userId, fields: normalized });
   const projectChanged = Number(existing.project_id || 0) !== Number(normalized.projectId || 0);
+  if (!projectChanged) {
+    await assertManualTransition(db, normalized.projectId, existing.status, normalized.status);
+  }
   if (projectChanged && !normalized.projectId && Number(existing.user_id) !== Number(userId)) {
     throw new AppError(
       403,

@@ -15,20 +15,20 @@ const messageFor = (pathname: string) => {
   return "Preparing your workspace";
 };
 
-export function LoadingScreen({
-  message,
-  overlay = false
-}: {
+interface LoadingScreenProps {
   message: string;
   overlay?: boolean;
-}) {
+  inline?: boolean;
+}
+
+export function LoadingScreen({ message, overlay = false, inline = false }: LoadingScreenProps) {
   return (
     <div
-      className={`work-loading-screen${overlay ? " work-loading-overlay" : ""}`}
+      className={`work-loading-screen${overlay ? " work-loading-overlay" : inline ? " work-loading-inline" : ""}`}
       role="status"
       aria-live="polite"
     >
-      {!overlay && <PublicGlow className="work-loading-ribbon" size={125} />}
+      {!overlay && !inline && <PublicGlow className="work-loading-ribbon" size={125} />}
       <div className="work-loading-card">
         <div className="work-loading-identity">
           <span className="work-loading-mark" aria-hidden="true">
@@ -45,6 +45,17 @@ export function LoadingScreen({
   );
 }
 
+// Mount only while loading. Unmounting cancels the timer and immediately hides
+// the indicator, so separate quick requests never accumulate toward the delay.
+export function DelayedLoadingScreen(props: LoadingScreenProps) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return visible ? <LoadingScreen {...props} /> : null;
+}
+
 export function LoadingExperience({ disabled = false }: { disabled?: boolean }) {
   const location = useLocation();
   const isDisabled = disabled || location.pathname === "/";
@@ -53,17 +64,8 @@ export function LoadingExperience({ disabled = false }: { disabled?: boolean }) 
     requestActivity.getSnapshot,
     requestActivity.getSnapshot
   );
-  const isPending = pending > 0;
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(
-      () => setVisible(!isDisabled && isPending),
-      isPending ? 320 : 160
-    );
-    return () => window.clearTimeout(timer);
-  }, [isDisabled, isPending]);
-
-  if (!visible || isDisabled) return null;
-  return <LoadingScreen message={messageFor(location.pathname)} overlay />;
+  if (pending === 0 || isDisabled) return null;
+  return (
+    <DelayedLoadingScreen key={location.key} message={messageFor(location.pathname)} overlay />
+  );
 }

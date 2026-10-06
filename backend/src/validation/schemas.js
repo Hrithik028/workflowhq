@@ -213,12 +213,63 @@ const workflowRuleSchema = z
 const workflowSchemas = {
   params: z.object({ id: idSchema }),
   update: z
-    .object({ rules: z.array(workflowRuleSchema).length(5) })
+    .object({
+      rules: z.array(workflowRuleSchema).length(5),
+      statuses: z
+        .array(z.object({ status: statusSchema, label: z.string().trim().min(1).max(40) }).strict())
+        .length(3)
+        .optional(),
+      transitions: z
+        .array(z.object({ fromStatus: statusSchema, toStatus: statusSchema }).strict())
+        .max(6)
+        .optional()
+    })
     .strict()
-    .refine(
-      (value) => new Set(value.rules.map((rule) => rule.trigger)).size === value.rules.length,
-      { message: "Each workflow trigger must appear exactly once.", path: ["rules"] }
-    )
+    .superRefine((value, context) => {
+      if (new Set(value.rules.map((rule) => rule.trigger)).size !== value.rules.length) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Each workflow trigger must appear exactly once.",
+          path: ["rules"]
+        });
+      }
+      if (Boolean(value.statuses) !== Boolean(value.transitions)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Provide status names and transitions together.",
+          path: ["statuses"]
+        });
+      }
+      if (value.statuses) {
+        if (new Set(value.statuses.map((item) => item.status)).size !== 3) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Provide each status exactly once.",
+            path: ["statuses"]
+          });
+        }
+        if (new Set(value.statuses.map((item) => item.label.toLowerCase())).size !== 3) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Status names must be distinct.",
+            path: ["statuses"]
+          });
+        }
+      }
+      if (value.transitions) {
+        const keys = value.transitions.map((item) => `${item.fromStatus}:${item.toStatus}`);
+        if (
+          new Set(keys).size !== keys.length ||
+          value.transitions.some((item) => item.fromStatus === item.toStatus)
+        ) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Transitions must be distinct moves between different statuses.",
+            path: ["transitions"]
+          });
+        }
+      }
+    })
 };
 
 const labelColorSchema = z

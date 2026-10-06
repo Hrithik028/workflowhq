@@ -69,6 +69,12 @@ describe("project GitHub workflow rules", () => {
     expect(response.status).toBe(200);
     expect(response.body.data.project).toMatchObject({ id: projectId, key: "WHQ" });
     expect(response.body.data.rules).toHaveLength(5);
+    expect(response.body.data.statuses).toEqual([
+      { status: "todo", label: "Backlog" },
+      { status: "in_progress", label: "In progress" },
+      { status: "completed", label: "Released" }
+    ]);
+    expect(response.body.data.transitions).toHaveLength(6);
     expect(response.body.data.rules.map((rule) => [rule.trigger, rule.enabled])).toEqual([
       ["commit_pushed", true],
       ["pull_request_opened", true],
@@ -91,8 +97,9 @@ describe("project GitHub workflow rules", () => {
     ).rows[0];
 
     expect(response.status).toBe(200);
-    expect(response.body.data.rules.find((rule) => rule.trigger === "check_run_succeeded"))
-      .toMatchObject({ enabled: true, fromStatus: "in_progress", toStatus: "completed" });
+    expect(
+      response.body.data.rules.find((rule) => rule.trigger === "check_run_succeeded")
+    ).toMatchObject({ enabled: true, fromStatus: "in_progress", toStatus: "completed" });
     expect(activity.action).toBe("project_workflow_updated");
     expect(Number(activity.entity_id)).toBe(projectId);
     expect(activity.details.enabledTriggers).toContain("check_run_succeeded");
@@ -124,7 +131,7 @@ describe("project GitHub workflow rules", () => {
     expect(backward.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  it("keeps workflow configuration owner-only", async () => {
+  it("lets members read workflow configuration but keeps updates owner-only", async () => {
     const editor = await registerUser(app, "workflow-rule-editor");
     await request(app)
       .post(`/api/projects/${projectId}/members`)
@@ -139,7 +146,85 @@ describe("project GitHub workflow rules", () => {
       .set(auth(editor.token))
       .send({ rules: configuredRules });
 
-    expect(readAttempt.status).toBe(404);
+    expect(readAttempt.status).toBe(200);
     expect(writeAttempt.status).toBe(404);
+  });
+
+  it("saves project status names and blocks disallowed manual moves", async () => {
+    const configured = await request(app)
+      .put(`/api/projects/${projectId}/workflow`)
+      .set(auth(owner.token))
+      .send({
+        rules: configuredRules,
+        statuses: [
+          { status: "todo", label: "Backlog" },
+          { status: "in_progress", label: "Building" },
+          { status: "completed", label: "Released" }
+        ],
+        transitions: [
+          { fromStatus: "todo", toStatus: "in_progress" },
+          { fromStatus: "in_progress", toStatus: "completed" }
+        ]
+      });
+    expect(configured.status).toBe(200);
+    expect(configured.body.data.statuses.map((item) => item.label)).toEqual([
+      "Backlog",
+      "Building",
+      "Released"
+    ]);
+    expect(configured.body.data.transitions).toHaveLength(2);
+
+    const task = await request(app)
+      .post("/api/tasks")
+      .set(auth(owner.token))
+      .send({ title: "Enforce project workflow", projectId });
+    expect(task.status).toBe(201);
+
+    const blocked = await request(app)
+      .put(`/api/tasks/${task.body.data.id}`)
+      .set(auth(owner.token))
+      .send({ title: "Enforce project workflow", projectId, status: "completed" });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe("WORKFLOW_TRANSITION_NOT_ALLOWED");
+
+    const allowed = await request(app)
+      .put(`/api/tasks/${task.body.data.id}`)
+      .set(auth(owner.token))
+      .send({ title: "Enforce project workflow", projectId, status: "in_progress" });
+    expect(allowed.status).toBe(200);
+    expect(allowed.body.data.status).toBe("in_progress");
+  });
+
+  it("rejects duplicate names and transitions without changing saved configuration", async () => {
+    const statuses = [
+      { status: "todo", label: "Queue" },
+      { status: "in_progress", label: "Queue" },
+      { status: "completed", label: "Released" }
+    ];
+    const invalidNames = await request(app)
+      .put(`/api/projects/${projectId}/workflow`)
+      .set(auth(owner.token))
+      .send({ rules: configuredRules, statuses, transitions: [] });
+    const invalidMoves = await request(app)
+      .put(`/api/projects/${projectId}/workflow`)
+      .set(auth(owner.token))
+      .send({
+        rules: configuredRules,
+        statuses: statuses.map((item, index) =>
+          index === 1 ? { ...item, label: "Building" } : item
+        ),
+        transitions: [
+          { fromStatus: "todo", toStatus: "in_progress" },
+          { fromStatus: "todo", toStatus: "in_progress" }
+        ]
+      });
+    const read = await request(app)
+      .get(`/api/projects/${projectId}/workflow`)
+      .set(auth(owner.token));
+
+    expect(invalidNames.status).toBe(400);
+    expect(invalidMoves.status).toBe(400);
+    expect(read.body.data.statuses[0].label).toBe("Backlog");
+    expect(read.body.data.transitions).toHaveLength(6);
   });
 });

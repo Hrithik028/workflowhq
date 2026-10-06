@@ -292,9 +292,21 @@ export interface ProjectWorkflowRule {
   updatedAt: string;
 }
 
+export interface ProjectWorkflowStatus {
+  status: TaskStatus;
+  label: string;
+}
+
+export interface ProjectWorkflowTransition {
+  fromStatus: TaskStatus;
+  toStatus: TaskStatus;
+}
+
 export interface ProjectWorkflow {
   project: { id: number; key: string; name: string };
   rules: ProjectWorkflowRule[];
+  statuses: ProjectWorkflowStatus[];
+  transitions: ProjectWorkflowTransition[];
 }
 
 export interface GitHubInstallation {
@@ -806,7 +818,8 @@ export interface WorkspaceClient {
   getProjectWorkflow(projectId: number): Promise<ProjectWorkflow>;
   updateProjectWorkflow(
     projectId: number,
-    rules: Array<Pick<ProjectWorkflowRule, "trigger" | "enabled" | "fromStatus" | "toStatus">>
+    rules: Array<Pick<ProjectWorkflowRule, "trigger" | "enabled" | "fromStatus" | "toStatus">>,
+    configuration?: Pick<ProjectWorkflow, "statuses" | "transitions">
   ): Promise<ProjectWorkflow>;
   updateMemberRole(projectId: number, userId: number, role: ProjectRole): Promise<void>;
   removeMember(projectId: number, userId: number): Promise<void>;
