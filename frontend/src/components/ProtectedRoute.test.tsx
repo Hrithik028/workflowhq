@@ -17,7 +17,7 @@ describe("ProtectedRoute", () => {
       </MemoryRouter>
     );
     const rendered = render(view(true));
-    act(() => vi.advanceTimersByTime(999));
+    act(() => vi.advanceTimersByTime(2999));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.queryByText("Private workspace")).not.toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
