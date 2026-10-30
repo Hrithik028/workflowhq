@@ -1,5 +1,31 @@
 # Developer-beta release verification
 
+## Security and Render maintenance, October 30, 2026
+
+- Updated both lockfiles to patched dependency releases, including Vite 8.3.5,
+  backend Vitest/mocker 5.0.5, frontend Vitest/mocker 4.1.12, follow-redirects
+  1.16.2, body-parser 1.20.9, Zod 4.6.7, and the qs override 6.16.1.
+  Full dependency audits, including development dependencies, returned zero
+  vulnerabilities for both applications.
+- Added a Postgres pool error listener so a dropped idle connection is logged
+  without terminating Node or exposing database connection details. A subprocess
+  regression test emits the error and verifies that the process survives.
+- The backend container now replaces its startup shell with the Node server
+  after migration checks, allowing Render's shutdown signal to reach Node directly.
+- The warning email refers to the October 1 credential-vault deployment
+  (`5b0d55f`, deploy `dep-dauups3m8hqs739523gg`), which failed with exit status 1.
+  Its application logs are no longer available, so that historical failure's
+  root cause cannot be established from retained evidence. The pool handling is
+  a verified resilience fix, not proof of what caused the October 1 incident.
+- Before this maintenance was published, both Render services reported live
+  deployments of `ccf0ad7`. The API health endpoint returned HTTP 200 with
+  `status: ok` and `database: connected`; the frontend login route returned 200.
+- Local checks passed under Node 24.19.0: 246 backend tests, 107 frontend tests,
+  both linters, TypeScript checking, the production frontend build, the deferred
+  chunk guard, and the source release audit. The API tests and Vitest temporary
+  files required execution outside the Windows sandbox. The local Docker daemon
+  was unavailable; container builds remain a GitHub CI check.
+
 ## Evidence and remaining gates
 
 - On September 21, PRs #47 and #48 moved authenticator verification from every sign-in to
